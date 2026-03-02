@@ -120,12 +120,12 @@ st.markdown(f"""
     <hr style="margin-bottom: 2rem; opacity: 0.1;">
 """, unsafe_allow_html=True)
     
-    if presse_choisie:
-        conf = CONFIG_PRESSES[presse_choisie]
-        st.success(f"**{presse_choisie}** active")
-        st.info(f"📏 Limite : {conf['limite_longueur']} mm\n\n⭕ Diamètre : {conf['diametre']} mm")
-    else:
-        st.warning("Veuillez sélectionner une presse.")
+if presse_choisie:
+    conf = CONFIG_PRESSES[presse_choisie]
+    st.success(f"**{presse_choisie}** active")
+    st.info(f"📏 Limite : {conf['limite_longueur']} mm\n\n⭕ Diamètre : {conf['diametre']} mm")
+else:
+    st.warning("Veuillez sélectionner une presse.")
 
 col_logo, col_titre = st.columns([1, 4])
 with col_logo:
