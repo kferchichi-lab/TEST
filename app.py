@@ -105,7 +105,7 @@ if st.button("🧮 CALCULER LES VALEURS OPTIMALES"):
         long_lopin_mm = (poids_lopin / poids_lineique_billette) * 1000
 
         if long_lopin_mm > limite_max:
-            st.error(f"🚨 ALERTE SÉCURITÉ : {presse_choisie}")
+            st.error(f"🚨 Valeurs non valides pour la {presse_choisie}")
             st.markdown(
                 f"""
                 <div style="background-color: #ff4b4b; padding: 20px; border-radius: 10px; border: 2px solid white;">
