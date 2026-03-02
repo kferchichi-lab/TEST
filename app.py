@@ -127,16 +127,6 @@ if presse_choisie:
 else:
     st.warning("Veuillez sélectionner une presse.")
 
-col_logo, col_titre = st.columns([1, 4])
-with col_logo:
-    st.image("https://scontent.fnbe1-2.fna.fbcdn.net/v/t39.30808-6/408929007_749166663924252_578772537697061170_n.jpg?_nc_cat=101&ccb=1-7&_nc_sid=1d70fc&_nc_ohc=outSX1TrNzMQ7kNvwH8dLos&_nc_oc=AdnayidTjVde0oO8dBewwk-Vo1bwbpm9MvDcBijNWzBt6b_52O9jssFyIDcLrqtW-bk&_nc_zt=23&_nc_ht=scontent.fnbe1-2.fna&_nc_gid=mw-_AZkaw4Oh_IX1S6ObVQ&oh=00_AfuIu1RSs4hY2piAZBZvukecG5Pl97xctCOBml-nIqgrIQ&oe=69A62B8A", width=150)
-
-with col_titre:
-    # Petit espacement pour centrer verticalement avec le logo
-    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-    st.markdown("<h2 style='margin: 0;'>Tunisie Profilés d'Aluminium</h2>", unsafe_allow_html=True)
-    st.markdown("<h4 style='margin: 0; color: #555;'>Direction Maintenance et Travaux Neufs</h4>", unsafe_allow_html=True)
-
 st.markdown("<hr style='margin: 1.5rem 0;'>", unsafe_allow_html=True)
 
 # --- LOGIQUE PRINCIPALE ---
