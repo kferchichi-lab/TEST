@@ -122,7 +122,6 @@ if st.button("🧮 CALCULER LES VALEURS OPTIMALES"):
             )
         else:
             st.markdown(f"### 📋 Consignes Opérateur - {presse_choisie}")
-            st.info(f"📏 **VALEUR DU CULOT CALCULÉE : {long_culot_mm:.2f} mm**")
             res_col1, res_col2 = st.columns([1, 2])
             
             with res_col1:
