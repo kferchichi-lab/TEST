@@ -52,7 +52,7 @@ with st.sidebar:
     if presse_choisie:
         conf = CONFIG_PRESSES[presse_choisie]
         st.success(f"**{presse_choisie}** active")
-         st.info(f"📏 Limite : {conf['limite_longueur']} mm\n\n⭕ Diamètre : {conf['diametre']} mm")
+        st.info(f"📏 Limite : {conf['limite_longueur']} mm\n\n⭕ Diamètre : {conf['diametre']} mm")
     else:
         st.warning("Veuillez sélectionner une presse.")
 
