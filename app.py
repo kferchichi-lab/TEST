@@ -150,7 +150,7 @@ st.markdown(
     <div style="text-align: center; color: gray; font-size: 0.8em; border-top: 1px solid #eee; padding-top: 10px;">
         © 2026 TPR - Système d'Assistance Technique | {presse_choisie} <br>
         Développé pour l'assistance opérateur en extrusion <br>
-        DIRECTION MAINTENANCE ET TRAVAUX NEUFS - DMTN 
+        Direction Maintenance et Travaux Neufs - DMTN 
     </div>
     """, 
     unsafe_allow_html=True
