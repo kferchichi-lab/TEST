@@ -4,11 +4,11 @@ st.set_page_config(page_title="Calculateur Extrusion TPR", page_icon="📟", lay
 
 st.markdown("""
     <style>
-        /* Masque le bandeau Streamlit mais garde l'espace pour ne pas être 'collé' */
+        /* Masquage du header Streamlit */
         header {visibility: hidden; height: 0px;}
         [data-testid="stHeader"] {display: none;}
         
-        /* Ajout d'une marge propre en haut (2rem) pour décoller du bord */
+        /* Configuration de base pour PC */
         .block-container {
             padding-top: 2rem !important; 
             padding-bottom: 1rem !important;
@@ -16,7 +16,19 @@ st.markdown("""
             padding-right: 5rem !important;
         }
 
-        /* Empêche le logo d'être déformé */
+        /* AJUSTEMENTS POUR SMARTPHONES (Écrans < 768px) */
+        @media (max-width: 768px) {
+            .block-container {
+                padding-left: 1rem !important;
+                padding-right: 1rem !important;
+                padding-top: 1rem !important;
+            }
+            h2 { font-size: 1.2rem !important; }
+            h4 { font-size: 0.9rem !important; }
+            .stMetric { margin-bottom: 10px !important; }
+        }
+
+        /* Fix pour le logo */
         [data-testid="stImage"] img {
             max-width: 100%;
             height: auto;
@@ -24,16 +36,14 @@ st.markdown("""
         }
 
         /* Style des barres de visualisation */
-        .container-barre { width: 100%; background-color: #e0e0e0; border-radius: 5px; height: 25px; position: relative;}
+        .container-barre { width: 100%; background-color: #e0e0e0; border-radius: 5px; height: 20px; position: relative;}
         .barre-lopin { background-color: #808080; height: 100%; border-radius: 5px; transition: width 0.5s;}
-        .barre-limite { background-color: #1a4332; height: 10px; border-radius: 5px; margin-top: 5px;}
+        .barre-limite { background-color: #1a4332; height: 8px; border-radius: 5px; margin-top: 4px;}
         
-        /* Style du bouton Calculer */
-        div.stButton > button {width: 100%; font-weight: bold; background-color: #0047AB; color: white; border: none; height: 3em;}
-        div.stButton > button:hover {background-color: #003380; color: white;}
+        /* Style du bouton */
+        div.stButton > button {width: 100%; font-weight: bold; background-color: #0047AB; color: white; border: none; height: 3.5em; border-radius: 8px;}
     </style>
     """, unsafe_allow_html=True)
-
 CONFIG_PRESSES = {
     "Presse 4": {"diametre": 228, "limite_longueur": 1150},
     "Presse 6": {"diametre": 178, "limite_longueur": 890},
