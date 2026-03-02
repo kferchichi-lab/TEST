@@ -4,44 +4,94 @@ st.set_page_config(page_title="Calculateur Extrusion TPR", page_icon="📟", lay
 
 st.markdown("""
     <style>
-        /* Masquage du header Streamlit */
-        header {visibility: hidden; height: 0px;}
-        [data-testid="stHeader"] {display: none;}
+        /* On rend le header système visible pour la flèche mobile */
+        header {
+            visibility: visible !important;
+            height: 60px !important;
+        }
         
-        /* Configuration de base pour PC */
+        /* --- CONFIGURATION PC (Par défaut) --- */
         .block-container {
-            padding-top: 2rem !important; 
-            padding-bottom: 1rem !important;
+            padding-top: 5rem !important; /* On augmente ici pour éviter le crop PC */
+            padding-bottom: 2rem !important;
             padding-left: 5rem !important;
             padding-right: 5rem !important;
         }
-
-        /* AJUSTEMENTS POUR SMARTPHONES (Écrans < 768px) */
-        @media (max-width: 768px) {
-            .block-container {
-                padding-left: 1rem !important;
-                padding-right: 1rem !important;
-                padding-top: 1rem !important;
-            }
-            h2 { font-size: 1.2rem !important; }
-            h4 { font-size: 0.9rem !important; }
-            .stMetric { margin-bottom: 10px !important; }
+        /* --- LOGIQUE DE CENTRAGE PC --- */
+        .header-container {
+            text-align: center;
+            margin-bottom: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
 
-        /* Fix pour le logo */
+        .header-logo img {
+            transition: transform 0.3s ease;
+        }
+        .header-logo img:hover {
+            transform: scale(1.05);
+        }
+
+        /* --- CONFIGURATION SMARTPHONE --- */
+        @media (max-width: 768px) {
+            .block-container {
+                padding-top: 3.5rem !important; /* Un peu moins pour mobile pour garder votre 'très bon' rendu */
+                padding-left: 1.5rem !important;
+                padding-right: 1.5rem !important;
+            }
+            
+            [data-testid="stImage"] {
+                margin-top: 10px !important;
+            }
+        }
+
+        /* Sécurité pour l'image (Logo) */
         [data-testid="stImage"] img {
             max-width: 100%;
             height: auto;
             object-fit: contain !important;
         }
-
-        /* Style des barres de visualisation */
+       /* Style des barres de visualisation */
         .container-barre { width: 100%; background-color: #e0e0e0; border-radius: 5px; height: 20px; position: relative;}
         .barre-lopin { background-color: #808080; height: 100%; border-radius: 5px; transition: width 0.5s;}
         .barre-limite { background-color: #1a4332; height: 8px; border-radius: 5px; margin-top: 4px;}
         
-        /* Style du bouton */
-        div.stButton > button {width: 100%; font-weight: bold; background-color: #0047AB; color: white; border: none; height: 3.5em; border-radius: 8px;}
+       /* --- BOUTON CALCULER PREMIUM --- */
+        div.stButton > button {
+            width: 100%; 
+            height: 3.8em;
+            border-radius: 12px;
+            border: none;
+            
+            /* Dégradé de bleu professionnel */
+            background: linear-gradient(135deg, #0047AB 0%, #00264d 100%);
+            color: white !important;
+            font-size: 18px !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.5px;
+            
+            /* Ombre portée pour le relief */
+            box-shadow: 0 4px 15px rgba(0, 71, 171, 0.3);
+            transition: all 0.3s ease-in-out;
+            cursor: pointer;
+        }
+
+        /* --- EFFET AU SURVOL (HOVER) --- */
+        div.stButton > button:hover {
+            background: linear-gradient(135deg, #0056d6 0%, #0047AB 100%) !important;
+            color: white !important;
+            box-shadow: 0 6px 20px rgba(0, 71, 171, 0.5) !important;
+            transform: translateY(-2px); /* Le bouton remonte légèrement */
+            border: none !important;
+        }
+
+        /* --- EFFET AU CLIC (ACTIVE) --- */
+        div.stButton > button:active {
+            transform: translateY(1px) scale(0.98);
+            box-shadow: 0 2px 10px rgba(0, 71, 171, 0.2) !important;
+        }
     </style>
     """, unsafe_allow_html=True)
 CONFIG_PRESSES = {
@@ -58,6 +108,17 @@ with st.sidebar:
         index=None,
         placeholder="Choisir une presse..."
     )
+# --- EN-TÊTE CENTRÉ (LOGO + NOM + DIRECTION) ---
+st.markdown(f"""
+    <div class="header-container">
+        <div class="header-logo">
+            <img src="https://scontent.fnbe1-2.fna.fbcdn.net/v/t39.30808-6/408929007_749166663924252_578772537697061170_n.jpg?_nc_cat=101&ccb=1-7&_nc_sid=1d70fc&_nc_ohc=outSX1TrNzMQ7kNvwH8dLos&_nc_oc=AdnayidTjVde0oO8dBewwk-Vo1bwbpm9MvDcBijNWzBt6b_52O9jssFyIDcLrqtW-bk&_nc_zt=23&_nc_ht=scontent.fnbe1-2.fna&_nc_gid=mw-_AZkaw4Oh_IX1S6ObVQ&oh=00_AfuIu1RSs4hY2piAZBZvukecG5Pl97xctCOBml-nIqgrIQ&oe=69A62B8A" width="140">
+        </div>
+        <h1 style="color:#00264d; margin-top:15px; margin-bottom:5px;">Tunisie Profilés d'Aluminium</h1>
+        <p style="color:#64748b; font-size:1.2rem; margin-bottom:0;">Direction Maintenance et Travaux Neufs</p>
+    </div>
+    <hr style="margin-bottom: 2rem; opacity: 0.1;">
+""", unsafe_allow_html=True)
     
     if presse_choisie:
         conf = CONFIG_PRESSES[presse_choisie]
