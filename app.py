@@ -3,21 +3,22 @@ import streamlit as st
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(page_title="Calculateur Extrusion TPR", page_icon="📟", layout="wide")
 
-# --- CORRECTIF CSS POUR L'ENTÊTE ET LES BARRES ---
+# --- CORRECTIF CSS POUR LA MARGE SUPÉRIEURE ---
 st.markdown("""
     <style>
-        /* Supprime le bandeau de menu Streamlit et l'espace vide en haut */
+        /* Masque le bandeau Streamlit mais garde l'espace pour ne pas être 'collé' */
         header {visibility: hidden; height: 0px;}
         [data-testid="stHeader"] {display: none;}
         
-        /* Ajuste la marge supérieure pour coller au bord de l'écran */
+        /* Ajout d'une marge propre en haut (2rem) pour décoller du bord */
         .block-container {
-            padding-top: 0rem !important;
-            padding-bottom: 0rem !important;
-            margin-top: -30px;
+            padding-top: 2rem !important; 
+            padding-bottom: 1rem !important;
+            padding-left: 5rem !important;
+            padding-right: 5rem !important;
         }
 
-        /* Empêche l'image du logo d'être coupée */
+        /* Empêche le logo d'être déformé */
         [data-testid="stImage"] img {
             max-width: 100%;
             height: auto;
@@ -30,7 +31,7 @@ st.markdown("""
         .barre-limite { background-color: #1a4332; height: 10px; border-radius: 5px; margin-top: 5px;}
         
         /* Style du bouton Calculer */
-        div.stButton > button {width: 100%; font-weight: bold; background-color: #0047AB; color: white; border: none;}
+        div.stButton > button {width: 100%; font-weight: bold; background-color: #0047AB; color: white; border: none; height: 3em;}
         div.stButton > button:hover {background-color: #003380; color: white;}
     </style>
     """, unsafe_allow_html=True)
@@ -44,7 +45,7 @@ CONFIG_PRESSES = {
 
 # --- BARRE LATÉRALE ---
 with st.sidebar:
-    st.header("⚙️ Configuration Machine")
+    st.header("⚙️ Configuration")
     presse_choisie = st.selectbox(
         "Sélectionnez la Presse :",
         options=list(CONFIG_PRESSES.keys()),
@@ -55,32 +56,31 @@ with st.sidebar:
     if presse_choisie:
         conf = CONFIG_PRESSES[presse_choisie]
         st.success(f"**{presse_choisie}** active")
-        st.info(f"📏 Limite : {conf['limite_longueur']} mm\n\n⭕ Diamètre : {conf['diametre']} mm")
     else:
-        st.warning("Veuillez sélectionner une presse pour commencer.")
+        st.warning("Veuillez sélectionner une presse.")
 
-# --- EN-TÊTE (Alignement corrigé pour PC) ---
+# --- EN-TÊTE (Avec marge équilibrée) ---
 col_logo, col_titre = st.columns([1, 4])
 with col_logo:
-    # Logo TPR
-    st.image("https://scontent.fnbe1-2.fna.fbcdn.net/v/t39.30808-6/408929007_749166663924252_578772537697061170_n.jpg?_nc_cat=101&ccb=1-7&_nc_sid=1d70fc&_nc_ohc=outSX1TrNzMQ7kNvwH8dLos&_nc_oc=AdnayidTjVde0oO8dBewwk-Vo1bwbpm9MvDcBijNWzBt6b_52O9jssFyIDcLrqtW-bk&_nc_zt=23&_nc_ht=scontent.fnbe1-2.fna&_nc_gid=mw-_AZkaw4Oh_IX1S6ObVQ&oh=00_AfuIu1RSs4hY2piAZBZvukecG5Pl97xctCOBml-nIqgrIQ&oe=69A62B8A", width=160)
+    st.image("https://scontent.fnbe1-2.fna.fbcdn.net/v/t39.30808-6/408929007_749166663924252_578772537697061170_n.jpg?_nc_cat=101&ccb=1-7&_nc_sid=1d70fc&_nc_ohc=outSX1TrNzMQ7kNvwH8dLos&_nc_oc=AdnayidTjVde0oO8dBewwk-Vo1bwbpm9MvDcBijNWzBt6b_52O9jssFyIDcLrqtW-bk&_nc_zt=23&_nc_ht=scontent.fnbe1-2.fna&_nc_gid=mw-_AZkaw4Oh_IX1S6ObVQ&oh=00_AfuIu1RSs4hY2piAZBZvukecG5Pl97xctCOBml-nIqgrIQ&oe=69A62B8A", width=150)
 
 with col_titre:
-    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True) # Espace pour centrer
-    st.markdown("<h2 style='margin: 0; padding: 0;'>Tunisie Profilés d'Aluminium</h2>", unsafe_allow_html=True)
-    st.markdown("<h4 style='margin: 0; padding: 0; color: #555;'>Direction Maintenance et Travaux Neufs</h4>", unsafe_allow_html=True)
+    # Petit espacement pour centrer verticalement avec le logo
+    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+    st.markdown("<h2 style='margin: 0;'>Tunisie Profilés d'Aluminium</h2>", unsafe_allow_html=True)
+    st.markdown("<h4 style='margin: 0; color: #555;'>Direction Maintenance et Travaux Neufs</h4>", unsafe_allow_html=True)
 
-st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+st.markdown("<hr style='margin: 1.5rem 0;'>", unsafe_allow_html=True)
 
-# --- CORPS DE L'APPLICATION ---
+# --- LOGIQUE PRINCIPALE ---
 if not presse_choisie:
     st.title("📟 Calculateur d'Extrusion")
-    st.info("👈 Veuillez d'abord choisir une presse dans le menu latéral à gauche.")
+    st.info("👈 Sélectionnez une presse dans le menu à gauche pour commencer.")
     st.stop()
 
 st.title(f"📟 Calculateur - {presse_choisie}")
 
-# --- PARAMÈTRES D'ENTRÉE ---
+# --- ENTRÉES ---
 st.markdown("##### 📥 Paramètres d'entrée")
 col_in1, col_in2 = st.columns(2)
 
@@ -92,32 +92,27 @@ with col_in2:
     n_ecoulements = st.number_input("Nombre d'écoulements", min_value=1, step=1)
     long_demandee = st.number_input("Longueur écoulée demandée (m)", value=None, format="%.2f", placeholder="Ex: 47")
 
-st.write("") # Petit espace
+st.write("") 
 
-# --- CALCULS ET RÉSULTATS ---
-poids_lineique_billette = 110.180  # kg/m
+# --- CALCULS ---
+poids_lineique_billette = 110.180 
 
-if st.button("🧮 CALCULER LES VALEURS OPTIMALES"):
+if st.button("🧮 CALCULER"):
     if p_m and long_demandee:
         diametre_presse = CONFIG_PRESSES[presse_choisie]["diametre"]
         limite_max = CONFIG_PRESSES[presse_choisie]["limite_longueur"]
         
-        # Calcul du culot
         k = 0.1 if type_billette == "Primaire" else 0.16
         long_culot_mm = k * diametre_presse
-        
-        # Calcul du poids et de la longueur
         poids_lopin = ((p_m * n_ecoulements) * long_demandee) + (poids_lineique_billette * (long_culot_mm / 1000))
         long_lopin_mm = (poids_lopin / poids_lineique_billette) * 1000
 
         if long_lopin_mm > limite_max:
-            st.error(f"🚨 ALERTE SÉCURITÉ : {presse_choisie}")
+            st.error(f"🚨 ALERTE : Lopin trop long pour la {presse_choisie}")
             st.markdown(f"""
-                <div style="background-color: #ff4b4b; padding: 20px; border-radius: 10px; border: 2px solid white;">
-                    <h2 style="color: white; margin: 0; text-align: center;">⚠️ LOPIN TROP LONG ({long_lopin_mm:.2f} mm)</h2>
-                    <p style="color: white; text-align: center; font-size: 1.2em; margin-top: 10px;">
-                        La limite pour la <b>{presse_choisie}</b> est de <b>{limite_max} mm</b>.
-                    </p>
+                <div style="background-color: #ff4b4b; padding: 20px; border-radius: 10px; border: 2px solid white; color: white; text-align: center;">
+                    <h2 style="margin: 0;">⚠️ {long_lopin_mm:.2f} mm</h2>
+                    <p>La limite est de {limite_max} mm.</p>
                 </div>
             """, unsafe_allow_html=True)
         else:
@@ -135,15 +130,15 @@ if st.button("🧮 CALCULER LES VALEURS OPTIMALES"):
                 st.write(f"📊 **Lopin : {long_lopin_mm:.1f} mm**")
                 st.markdown(f'<div class="container-barre"><div class="barre-lopin" style="width: {pourcent}%;"></div></div>', unsafe_allow_html=True)
                 
-                st.write(f"🏁 **Capacité {presse_choisie} ({limite_max} mm)**")
+                st.write(f"🏁 **Limite {presse_choisie} ({limite_max} mm)**")
                 st.markdown('<div class="barre-limite" style="width: 100%;"></div>', unsafe_allow_html=True)
                 
-                st.success(f"✅ Calcul terminé avec succès.")
+                st.success(f"✅ Dimensions validées.")
     else:
-        st.warning("⚠️ Veuillez saisir le P/m et la Longueur avant de calculer.")
+        st.warning("⚠️ Remplissez les champs P/m et Longueur.")
 
 # --- PIED DE PAGE ---
-st.markdown("<div style='height: 50px;'></div>", unsafe_allow_html=True)
+st.markdown("<div style='height: 60px;'></div>", unsafe_allow_html=True)
 st.markdown(
     f"""
     <div style="text-align: center; color: gray; font-size: 0.8em; border-top: 1px solid #eee; padding-top: 10px;">
