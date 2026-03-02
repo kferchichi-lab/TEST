@@ -133,13 +133,13 @@ if st.button("🧮 CALCULER LES VALEURS OPTIMALES"):
             with res_col2:
                 st.write("\n")
                 pourcent = min((long_lopin_mm / limite_max) * 100, 100)
-                st.write(f"📊 **Lopin : {long_lopin_mm:.1f} mm**")
+                st.write(f"📊 **Poids du lopin : {long_lopin_mm:.1f} mm**")
                 st.markdown(f'<div class="container-barre"><div class="barre-lopin" style="width: {pourcent}%;"></div></div>', unsafe_allow_html=True)
                 
-                st.write(f"🏁 **Limite {presse_choisie} ({limite_max} mm)**")
+                st.write(f"🏁 **Longueur optimale du lopin {presse_choisie} ({limite_max} mm)**")
                 st.markdown('<div class="barre-limite" style="width: 100%;"></div>', unsafe_allow_html=True)
                 
-                st.success(f"✅ Dimensions validées.")
+                st.success(f"✅ Réglages validés pour la {presse_choisie}.")
     else:
         st.warning("⚠️ Information manquante : Remplissez les champs P/m et Longueur.")
 
