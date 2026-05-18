@@ -183,18 +183,18 @@ with tab_saisie:
 
 # --- SÉLECTION DE LA RAISON DÉTAILLÉE (DYNAMIQUE) ---
 # On récupère automatiquement la liste des sous-causes selon le choix ci-dessus
-                raisons_disponibles = DICTIONNAIRE_CAUSES[cause_principale]
+            raisons_disponibles = DICTIONNAIRE_CAUSES[cause_principale]
 
-                raison_detaillee = st.selectbox(
-                    "Raison détaillée :",
-                    options=raisons_disponibles
-                )
+            raison_detaillee = st.selectbox(
+                "Raison détaillée :",
+                options=raisons_disponibles
+            )
 
 # --- AVANT L'ENREGISTREMENT DANS LE CSV ---
 # Pour garder ton système de codes (R, O, H, T) propre, on peut fusionner les deux 
 # ou remplacer la colonne 'Cause' par la raison détaillée.
 # Exemple pour fusionner : 
-                cause_finale = f"{cause_principale} : {raison_detaillee}"
+            cause_finale = f"{cause_principale} : {raison_detaillee}"
 
             commentaire = st.text_area("Observations / Détails de l'incident")
             submitted = st.form_submit_button("ENREGISTRER L'INCIDENT")
