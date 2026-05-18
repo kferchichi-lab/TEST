@@ -2,280 +2,117 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime
-import plotly.express as px  # Pour les graphiques
-from io import BytesIO      # Pour l'export Excel
+
+# ==============================================================================
+# CONFIGURATION & CONSTANTES
+# ==============================================================================
+DB_FILE = "base_arrets_tpr.csv"  # Modifiez le nom selon votre fichier réel
 
 DICTIONNAIRE_CODES = {
-    "R": [
-        "Lopin déformé",
-        "2 morceaux du lopin non alignés",
-        "Conteneur encrassé",
-        "Autre problème de raclage"
-    ],
-    "O": [
-        "Face de contact entre conteneur et filière",
-        "Usure prématurée",
-        "Casse outillage",
-        "Changement de filière programmé"
-    ],
-    "H": [
-        "Pression de bridage insuffisante",
-        "Pression de chape instable",
-        "Fuite d'huile vérin",
-        "Problème de pompe"
-    ],
-    "T": [
-        "Température non homogène (Filière)",
-        "Surchauffe conteneur",
-        "Refroidissement lopin insuffisant"
-    ],
-    "A": [
-        "Attente matière",
-        "Pause opérateur",
-        "Panne électrique générale"
-    ]
+    "R": ["Lopin déformé", "2 morceaux du lopin non alignés", "Conteneur encrassé", "Autre problème de raclage"],
+    "O": ["Face de contact entre conteneur et filière", "Usure prématurée", "Casse outillage", "Changement de filière programmé"],
+    "H": ["Pression de bridage insuffisante", "Pression de chape instable", "Fuite d'huile vérin", "Problème de pompe"],
+    "T": ["Température non homogène (Filière)", "Surchauffe conteneur", "Refroidissement lopin insuffisant"],
+    "A": ["Attente matière", "Pause opérateur", "Panne électrique générale"]
 }
 
-# --- CONFIGURATION DE LA PAGE ---
-st.set_page_config(page_title="Suivi Arrêts TPR", page_icon="📝", layout="wide")
+st.set_page_config(layout="wide")
 
-# --- FICHIER DE BASE DE DONNÉES ---
-DB_FILE = "base_donnees_chapeaux.csv"
+# ==============================================================================
+# NAVIGATION PAR ONGLETS
+# ==============================================================================
+tab_saisie, tab_base, tab_stats = st.tabs(["📝 Saisie Arrêt", "📊 Historique Global", "📈 Statistiques & Graphiques"])
 
-# Fonction pour sauvegarder les données dans le fichier CSV
-def sauvegarder_donnees(data):
-    df = pd.DataFrame([data])
-    if not os.path.isfile(DB_FILE):
-        df.to_csv(DB_FILE, index=False, sep=";", encoding="utf-8-sig")
-    else:
-        df.to_csv(DB_FILE, mode='a', index=False, header=False, sep=";", encoding="utf-8-sig")
-
-# --- STYLE CSS ---
-st.markdown("""
-    <style>
-        header { visibility: visible !important; height: 60px !important; }
-        .block-container { padding-top: 2rem !important; }
-        .temp-header { color: #0047AB; font-weight: bold; margin-bottom: 5px; }*
-
-        <style>
-        /* On rend le header système visible pour la flèche mobile */
-        header {
-            visibility: visible !important;
-            height: 60px !important;
-        }
-        
-        /* --- CONFIGURATION PC (Par défaut) --- */
-        .block-container {
-            padding-top: 5rem !important; /* On augmente ici pour éviter le crop PC */
-            padding-bottom: 2rem !important;
-            padding-left: 5rem !important;
-            padding-right: 5rem !important;
-        }
-
-        /* --- CONFIGURATION SMARTPHONE --- */
-        @media (max-width: 768px) {
-            .block-container {
-                padding-top: 3.5rem !important; /* Un peu moins pour mobile pour garder votre 'très bon' rendu */
-                padding-left: 1.5rem !important;
-                padding-right: 1.5rem !important;
-            }
-            
-            [data-testid="stImage"] {
-                margin-top: 10px !important;
-            }
-        }
-
-        /* Sécurité pour l'image (Logo) */
-        [data-testid="stImage"] img {
-            max-width: 100%;
-            height: auto;
-            object-fit: contain !important;
-        }
-        
-/* Cible TOUS les types de boutons : Standard, Téléchargement et Formulaire */
-        div.stButton > button, 
-        div.stDownloadButton > button, 
-        div.stFormSubmitButton > button {
-            width: 100% !important; 
-            height: 3.5em !important; 
-            border-radius: 12px !important; 
-            border: none !important;
-            background: linear-gradient(135deg, #0047AB 0%, #00264d 100%) !important;
-            color: white !important; 
-            font-size: 16px !important; 
-            font-weight: 600 !important;
-            box-shadow: 0 4px 15px rgba(0, 71, 171, 0.3) !important;
-            transition: all 0.3s ease !important;
-        }
-
-        /* Effet au survol pour tous les boutons */
-        div.stButton > button:hover, 
-        div.stDownloadButton > button:hover, 
-        div.stFormSubmitButton > button:hover {
-            transform: translateY(-3px) !important;
-            box-shadow: 0 8px 25px rgba(0, 71, 171, 0.5) !important;
-            background: linear-gradient(135deg, #0056cc 0%, #003366 100%) !important;
-        }
-
-        /* Forcer la couleur du texte à l'intérieur des balises <p> de Streamlit */
-        div.stButton > button p, 
-        div.stDownloadButton > button p, 
-        div.stFormSubmitButton > button p {
-            color: white !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
-CONFIG_PRESSES = {
-    "Presse 4": {"diametre": 228},
-    "Presse 6": {"diametre": 178},
-    "Presse 7": {"diametre": 178},
-}
-
-# --- SIDEBAR : CHOIX ET RAPPELS ---
-with st.sidebar:
-    st.header("⚙️ Configuration Machine")
-    presse_choisie = st.selectbox("SÉLECTIONNER LA PRESSE :", options=list(CONFIG_PRESSES.keys()), index=None, placeholder="Choisir...")
-  
-    st.divider()
-    st.markdown("<div class='temp-header'>🌡️ RAPPEL TEMPÉRATURES</div>", unsafe_allow_html=True)
-    st.info("""
-    - **Conteneur :** 400 - 430°C
-    - **Filière :** 450°C
-    - **Lopin (Plate) :** 440 - 470°C
-    - **Lopin (Tubulaire) :** 470 - 510°C
-    """)
-    st.warning("⚠️ Tolérance : +/- 10°C")
-
-# --- LOGOS ET TITRE ---
-col_logo, col_titre = st.columns([1, 5])
-with col_logo:
-    st.image("https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6q1BtDSDgVnJZFo0hOBfQJoDS6OYiub-qfQ&s", width=150)
-with col_titre:
-    st.markdown("## Tunisie Profilés d'Aluminium")
-    st.markdown("#### Direction Maintenance et Travaux Neufs")
-st.divider()
-
-# --- NAVIGATION PAR ONGLETS ---
-tab_saisie, tab_base, tab_stats = st.tabs(["➕ Nouvelle Saisie", "📊 Consulter la Base de Données", "📈 Analyse Graphique"])
-
-# --- ONGLET 1 : FORMULAIRE DE SAISIE ---
+# ==============================================================================
+# ONGLET 1 : SAISIE D'UN ARRÊT (LISTES DYNAMIQUES HORS FORMULAIRE)
+# ==============================================================================
 with tab_saisie:
-    if not presse_choisie:
-        st.info("👈 Veuillez sélectionner une presse dans le menu à gauche pour accéder au formulaire.")
-    else:
-        st.subheader(f"📝 Saisie d'incident : {presse_choisie}")
-        with st.form("form_diagnostic", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                date_j = st.date_input("Date de l'arrêt", datetime.now())
-                poste = st.radio("Poste de travail", ["A", "B", "C"], horizontal=True)
-                ref_filiere = st.text_input("Référence Filière", placeholder="Ex: 52000")
-           
-            with col2:
-                num_lopin = st.text_input("Numéro du lopin", placeholder="Ex: 12")
-                duree = st.number_input("Durée de l'arrêt (minutes)", min_value=0, step=1)
-                # --- SÉLECTION DE LA CAUSE PRINCIPALE ---
-                def mettre_a_jour_raisons():
-                    if "cause_principale_key" in st.session_state:
-                        choix = st.session_state["cause_principale_key"]
-                        lettre = choix[0] # Récupère R, O, H, T ou A
-        # On force la nouvelle liste dans la session
-                        st.session_state["liste_raisons_dispo"] = DICTIONNAIRE_CODES.get(lettre, DICTIONNAIRE_CODES["A"])
+    st.subheader("📝 Enregistrement d'un Arrêt")
+    
+    # Sélecteurs dynamiques placés HORS du formulaire pour éviter le blocage de rafraîchissement
+    cause_principale = st.selectbox(
+        "Nature de la Cause (Générale) :",
+        options=[
+            "R - Raclage du conteneur",
+            "O - Outillage",
+            "H - Problème Hydraulique",
+            "T - Problème de Température",
+            "A - Autres"
+        ],
+        key="cause_gnerale_select"
+    )
 
-# 3. INITIALISATION (Au tout premier chargement de la page)
-                    if "liste_raisons_dispo" not in st.session_state:
-                        st.session_state["liste_raisons_dispo"] = DICTIONNAIRE_CODES["R"]
-                
-                
-                
-                
-                
-                cause_principale = st.selectbox(
-                    "Nature de la Cause (Générale) :",
-                    options=[
-                        "R - Raclage du conteneur",
-                        "O - Outillage",
-                        "H - Problème Hydraulique",
-                        "T - Problème de Température",
-                        "A - Autres"
-                    ],
-                    key="cause_gnerale_select", # Clé unique pour stabiliser le composant
-                    on_change=mettre_a_jour_raisons # Déclenche la fonction instantanément
-                )
-# --- SÉLECTION DE LA RAISON DÉTAILLÉE (DYNAMIQUE) ---
-# On récupère automatiquement la liste des sous-causes selon le choix ci-dessus
+    code_lettre = cause_principale[0]
+    raisons_disponibles = DICTIONNAIRE_CODES.get(code_lettre, DICTIONNAIRE_CODES["A"])
 
-            code_lettre = cause_principale[0]
+    raison_detaillee = st.selectbox(
+        "Raison détaillée :",
+        options=raisons_disponibles,
+        key=f"raison_detaillee_{code_lettre}"
+    )
+
+    cause_finale = f"{cause_principale} : {raison_detaillee}"
+
+    # Formulaire contenant le reste des inputs et le bouton de soumission réglementaire
+    with st.form(key="formulaire_saisie"):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            presse = st.selectbox("Presse :", ["Presse 4", "Presse 6", "Presse 7"])
+            poste = st.selectbox("Poste :", ["A", "B", "C"])
+        with col2:
+            filiere = st.text_input("Référence Filière :", placeholder="Ex: 52000")
+            lopin = st.number_input("Numéro Lopin :", min_value=1, step=1)
+        with col3:
+            duree = st.number_input("Durée de l'arrêt (Minutes) :", min_value=1, step=1)
             
-            raisons_disponibles = DICTIONNAIRE_CODES.get(code_lettre, DICTIONNAIRE_CODES["A"])
-
-            raison_detaillee = st.selectbox(
-                "Raison détaillée :",
-                options=raisons_disponibles
-            )
-
-# --- AVANT L'ENREGISTREMENT DANS LE CSV ---
-# Pour garder ton système de codes (R, O, H, T) propre, on peut fusionner les deux 
-# ou remplacer la colonne 'Cause' par la raison détaillée.
-# Exemple pour fusionner : 
-            cause_finale = f"{cause_principale} : {raison_detaillee}"
-
-            commentaire = st.text_area("Observations / Détails de l'incident")
-            submitted = st.form_submit_button("ENREGISTRER L'INCIDENT")
-
-        if submitted:
-            if not ref_filiere or not num_lopin:
-                st.error("Veuillez remplir les champs obligatoires (Filière et Lopin).")
-            else:
-                    # Préparation de la ligne de données
-                nouvelle_entree = {
-                "Date": date_j.strftime("%d/%m/%Y"),
-                "Heure_Saisie": datetime.now().strftime("%H:%M:%S"),
-                "Presse": presse_choisie,
+        bouton_validation = st.form_submit_button(label="💾 Enregistrer l'arrêt")
+        
+        if bouton_validation:
+            nouvelle_entree = {
+                "Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "Presse": presse,
                 "Poste": poste,
-                "Filiere": ref_filiere,
-                "Lopin": num_lopin,
+                "Filiere": filiere,
+                "Lopin": lopin,
                 "Duree_Min": duree,
-                "Cause": cause,
-                "Observations": commentaire
-                }
-            sauvegarder_donnees(nouvelle_entree)
-            st.success(f"✅ Incident enregistré pour la {presse_choisie}")
-                 
-# --- ONGLET 2 : CONSULTATION DE LA BASE ---
+                "Cause": cause_finale
+            }
+            df_nouveau = pd.DataFrame([nouvelle_entree])
+            
+            if not os.path.isfile(DB_FILE):
+                df_nouveau.to_csv(DB_FILE, index=False, sep=";")
+            else:
+                df_nouveau.to_csv(DB_FILE, mode='a', header=False, index=False, sep=";")
+                
+            st.success("L'arrêt a été enregistré avec succès !")
 
+# ==============================================================================
+# ONGLET 2 : HISTORIQUE GLOBAL (NETTOYÉ ET EXPORTABLE)
+# ==============================================================================
 with tab_base:
     st.subheader("📊 Historique Global des Arrêts")
     if os.path.isfile(DB_FILE):
         df_affichage = pd.read_csv(DB_FILE, sep=";")
-        df_affichage['Date'] = df_affichage['Date'].astype(str).str[:10]
-
         
-        colonnes_visibles = ['Date', 'Presse', 'Poste', 'Filiere', 'Lopin', 'Duree_Min', 'Cause']
+        # Nettoyage visuel de la date (Heure masquée)
+        df_affichage['Date'] = pd.to_datetime(df_affichage['Date'], errors='coerce').dt.strftime('%d/%m/%Y')
+        
+        colonnes_visibles = ['Date', 'Presse', 'Poste', 'Filiere', 'Lopin', 'Cause']
         df_pour_affichage = df_affichage[[c for c in colonnes_visibles if c in df_affichage.columns]]
-        # Sécurité : On force la colonne Duree_Min en numérique (évite le bug des gros chiffres)
-        df_affichage['Duree_Min'] = pd.to_numeric(df_affichage['Duree_Min'], errors='coerce').fillna(0).astype(int)
-        # Filtres interactifs
+
         col_f1, col_f2 = st.columns(2)
         with col_f1:
-            filtre_presse = st.multiselect("Filtrer par Presse :", options=df_affichage["Presse"].unique())
+            filtre_presse = st.multiselect("Filtrer par Presse :", options=df_affichage["Presse"].unique(), key="f_presse")
         with col_f2:
-            filtre_cause = st.multiselect("Filtrer par Cause :", options=df_affichage["Cause"].unique())
-       
+            filtre_cause = st.multiselect("Filtrer par Cause :", options=df_affichage["Cause"].unique(), key="f_cause")
+        
         if filtre_presse:
-            df_affichage = df_affichage[df_affichage["Presse"].isin(filtre_presse)]
+            df_pour_affichage = df_pour_affichage[df_pour_affichage["Presse"].isin(filtre_presse)]
         if filtre_cause:
-            df_affichage = df_affichage[df_affichage["Cause"].isin(filtre_cause)]
-           
-        # Affichage du tableau (Le Grand Tableau)
-        df_pour_affichage.columns = ['Date', 'Presse', 'Poste', 'Filière', 'Lopin', 'Durée (Min)', 'Cause de l\'arrêt']
+            df_pour_affichage = df_pour_affichage[df_pour_affichage["Cause"].isin(filtre_cause)]
             
-        # Affichage du tableau propre, sans index, sur toute la largeur
         st.dataframe(df_pour_affichage, use_container_width=True, hide_index=True)
-
-       
-        # Bouton d'export Excel
+        
         csv = df_affichage.to_csv(index=False, sep=";").encode('utf-8-sig')
         st.download_button(
             label="📥 Télécharger la base complète pour Excel",
@@ -286,115 +123,77 @@ with tab_base:
     else:
         st.info("Aucune donnée n'a encore été enregistrée.")
 
-
-# --- ONGLET 3 : ANALYSE GRAPHIQUE ---
+# ==============================================================================
+# ONGLET 3 : STATISTIQUES & GRAPHIQUES (CENTRAGE HTML, SOMME FIXÉE & HOVER PLOTLY)
+# ==============================================================================
 with tab_stats:
+    import plotly.express as px
+    
+    st.subheader("📈 Analyse Statistique des Temps d'Arrêt")
     if os.path.isfile(DB_FILE):
         df_stats = pd.read_csv(DB_FILE, sep=";")
-        st.subheader("Analyse des causes par Presse")
         
-        # Sélecteur pour le graphique
-        presse_filtre = st.multiselect("Sélectionner les presses à analyser :", options=df_stats["Presse"].unique(), default=df_stats["Presse"].unique())
+        # Résolution du bug de concaténation de texte : conversion mathématique forcée
+        df_stats['Duree_Min'] = pd.to_numeric(df_stats['Duree_Min'], errors='coerce').fillna(0)
+        
+        presse_filtre = st.multiselect("Sélectionner la ou les Presses :", options=sorted(df_stats["Presse"].unique()), default=df_stats["Presse"].unique())
         
         if presse_filtre:
-            df_filtered = df_stats[df_stats["Presse"].isin(presse_filtre)]
+            df_filtered = df_stats[df_stats["Presse"].isin(presse_filtre)].copy()
+            df_filtered['Code Cause'] = df_filtered['Cause'].str[0]
             
-            # Création du graphique en cercle (Pie Chart)
-            # On groupe par 'Cause' et on compte les occurrences
-            fig = px.pie(df_filtered, names='Cause', title=f"Répartition des causes - {', '.join(presse_filtre)}",
-                         hole=0.4, # Pour en faire un Donut chart (plus moderne)
-                         color_discrete_sequence=px.colors.qualitative.Pastel)
+            # Groupement mathématique pour nettoyer les segments des barres Plotly
+            df_grouped = df_filtered.groupby(['Presse', 'Code Cause'])['Duree_Min'].sum().reset_index()
+            tableau_somme = df_filtered.groupby('Code Cause')['Duree_Min'].sum().reset_index().sort_values(by='Duree_Min', ascending=False)
             
-            fig.update_traces(
-                textposition='inside', 
-                textinfo='percent'  # <--- On a supprimé '+label' pour n'avoir que le %
-            )
-    
-    # Ajustement de la légende pour qu'elle soit bien lisible à droite
-            fig.update_layout(
-                legend=dict(
-                    orientation="v",
-                    yanchor="middle",
-                    y=0.5,
-                    xanchor="left",
-                    x=1.05
-                )
-            )
-    
-            st.plotly_chart(fig, use_container_width=True)
+            tableau_somme['Duree_Min'] = tableau_somme['Duree_Min'].astype(int)
+            total_general = int(tableau_somme['Duree_Min'].sum())
             
-            # Optionnel : Répartition du temps d'arrêt
-            st.divider()
-            df_temp = df_filtered.copy()
-    
-    # On extrait juste la première lettre (le Code : T, H, O, R) pour l'affichage
-            df_temp['Code_Cause'] = df_temp['Cause'].str[0] 
-
-            st.subheader("Total des minutes d'arrêt par cause")
-    
+            # --- SECTION TABLEAU HTML CENTRÉ & EFFET HOVER ---
+            col_vide, col_tab, col_espace, col_metrique = st.columns([0.5, 3, 0.5, 2])
+            
+            with col_tab:
+                html_table = f"""
+                <style>
+                    .custom-table {{ width: 100%; border-collapse: collapse; font-family: sans-serif; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }}
+                    .custom-table th {{ background-color: #f8f9fb; color: #0047AB; text-align: center !important; padding: 12px; border-bottom: 2px solid #0047AB; font-weight: bold; }}
+                    .custom-table td {{ text-align: center !important; padding: 10px; border-bottom: 1px solid #eee; color: #333; transition: all 0.2s ease; }}
+                    .custom-table tr:hover td {{ background-color: #eef4ff !important; color: #0047AB !important; cursor: pointer; font-weight: bold; }}
+                    .custom-table tr:last-child td {{ border-bottom: none; }}
+                </style>
+                <table class="custom-table">
+                    <thead><tr><th>Code Cause</th><th>Temps Total (Minutes)</th></tr></thead>
+                    <tbody>
+                """
+                for _, row in tableau_somme.iterrows():
+                    html_table += f"<tr><td>{row['Code Cause']}</td><td>{int(row['Duree_Min'])}</td></tr>"
+                html_table += "</tbody></table>"
+                st.markdown(html_table, unsafe_allow_html=True)
+                
+            with col_metrique:
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.metric(label="TOTAL GÉNÉRAL DES ARRÊTS", value=f"{total_general} min")
+                
+            # --- SECTION GRAPH_BARRES UNIFORMES AVEC COULEURS & HOVER ---
+            st.markdown("<br>", unsafe_allow_html=True)
             fig2 = px.bar(
-                df_temp, 
-                x='Code_Cause', # On utilise le code court ici
+                df_grouped, 
+                x='Code Cause', 
                 y='Duree_Min', 
                 color='Presse', 
                 barmode='group',
-                title="Durée totale des arrêts par code de cause (min)",
-                labels={'Code_Cause': 'Cause (Code)', 'Duree_Min': 'Minutes'},
-                color_discrete_map={ # Optionnel : fixer les couleurs pour plus de clarté
-                    "Presse 4": "#E63946", 
-                    "Presse 6": "#457B9D", 
-                    "Presse 7": "#2A9D8F"
-                }
+                title="Durée totale des arrêts par cause (min)",
+                labels={'Code Cause': 'Cause (Code)', 'Duree_Min': 'Minutes'},
+                color_discrete_map={"Presse 4": "#E63946", "Presse 6": "#457B9D", "Presse 7": "#2A9D8F"}
             )
-            fig2.update_traces(marker_line_color='white', marker_line_width=1, opacity=0.9)
-    # On force l'affichage des codes sans inclinaison
-            fig2.update_layout(xaxis_tickangle=0)
-    
+            fig2.update_traces(
+                hoverinfo="all",
+                hovertemplate="<b>Presse:</b> %{fullData.name}<br><b>Temps:</b> %{y} min<extra></extra>",
+                marker_line_width=1,
+                marker_line_color="white",
+                marker_opacity=0.85
+            )
+            fig2.update_layout(hovermode="closest", xaxis_tickangle=0)
             st.plotly_chart(fig2, use_container_width=True)
-
-            # --- EXTRACTION DU CODE ---
-            # On crée une nouvelle colonne 'Code' en prenant le 1er caractère
-            df_filtered['Code'] = df_filtered['Cause'].str[0]
-            
-            # Groupement par Code
-            tableau_somme = df_filtered.groupby('Code')['Duree_Min'].sum().reset_index()
-            
-            # Tri par durée décroissante
-            tableau_somme = tableau_somme.sort_values(by='Duree_Min', ascending=False)
-            
-            # Renommer pour l'affichage
-            tableau_somme.columns = ['Code Cause', 'Temps Total (Minutes)']
-            
-            # Affichage du tableau (hide_index=True pour enlever les chiffres 0, 1, 2 à gauche)
-
-            col_vide, col_tab, col_espace, col_metrique = st.columns([1, 2, 0.5, 2])
-
-            with col_tab:
-                st.dataframe(
-                    tableau_somme, 
-                    use_container_width=False, 
-                    hide_index=True,
-                    width=400  # Vous pouvez ajuster cette valeur (en pixels) selon votre besoin
-                )
-
-            with col_metrique:
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                total_general = tableau_somme['Temps Total (Minutes)'].sum()
-                st.metric("TOTAL GÉNÉRAL", f"{total_general} min")
-    
-    # Petit rappel des codes en dessous pour l'utilisateur
-            st.info("**Rappel des codes :** **T** : Problème de Température | **H** : Problème Hydraulique | **O** : Outillage | **R** : Raclage | **A** : Autres..")
     else:
-        st.info("Enregistrez des données pour voir les graphiques.")
-
-# --- FOOTER ---
-st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
-st.markdown(
-    f"""
-    <div style="text-align: center; color: gray; font-size: 0.8em; border-top: 1px solid #eee; padding-top: 10px;">
-        © 2026 TPR - Système de Suivi Maintenance <br>
-        Direction Maintenance et Travaux Neufs - DMTN 
-    </div>
-    """, 
-    unsafe_allow_html=True
-)
+        st.info("Aucune donnée disponible pour générer des graphiques.")
