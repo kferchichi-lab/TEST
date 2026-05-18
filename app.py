@@ -175,14 +175,26 @@ with tab_saisie:
             with col2:
                 num_lopin = st.text_input("Numéro du lopin", placeholder="Ex: 12")
                 duree = st.number_input("Durée de l'arrêt (minutes)", min_value=0, step=1)
-                cause = st.selectbox("Cause identifiée (Code)", [
-                    "T - Problème de Température non homogène (Filière, conteneur, lopin)",
-                    "H - Problème Hydraulique (Pression de bridage, de chape…)",
-                    "O - Outillage : face de contact entre conteneur et filière (Usure, casse…)",
-                    "R - Raclage du conteneur : Lopin déformé, 2 morceaux du lopin non alignés..",
-                    "A - Autres..", 
-                ])
+                # --- SÉLECTION DE LA CAUSE PRINCIPALE ---
+                cause_principale = st.selectbox(
+                    "Nature de la Cause (Générale) :",
+                    options=list(DICTIONNAIRE_CAUSES.keys())
+                )
 
+# --- SÉLECTION DE LA RAISON DÉTAILLÉE (DYNAMIQUE) ---
+# On récupère automatiquement la liste des sous-causes selon le choix ci-dessus
+                raisons_disponibles = DICTIONNAIRE_CAUSES[cause_principale]
+
+                raison_detaillee = st.selectbox(
+                    "Raison détaillée :",
+                    options=raisons_disponibles
+                )
+
+# --- AVANT L'ENREGISTREMENT DANS LE CSV ---
+# Pour garder ton système de codes (R, O, H, T) propre, on peut fusionner les deux 
+# ou remplacer la colonne 'Cause' par la raison détaillée.
+# Exemple pour fusionner : 
+                cause_finale = f"{cause_principale} : {raison_detaillee}"
 
             commentaire = st.text_area("Observations / Détails de l'incident")
             submitted = st.form_submit_button("ENREGISTRER L'INCIDENT")
