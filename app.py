@@ -200,7 +200,7 @@ with tab_saisie:
                         "T - Problème de Température",
                         "A - Autres"
                     ],
-                    key="cause_gnerale_select" # Clé unique pour stabiliser le composant
+                    key="cause_gnerale_select", # Clé unique pour stabiliser le composant
                     on_change=mettre_a_jour_raisons # Déclenche la fonction instantanément
                 )
 # --- SÉLECTION DE LA RAISON DÉTAILLÉE (DYNAMIQUE) ---
