@@ -104,4 +104,103 @@ with tab_saisie:
 with tab_base:
     st.subheader("📊 Historique Global des Arrêts")
     if os.path.isfile(DB_FILE):
-        df_affichage = pd.read_csv(DB_
+        df_affichage = pd.read_csv(DB_FILE, sep=";")
+        
+        df_affichage['Date'] = pd.to_datetime(df_affichage['Date'], errors='coerce').dt.strftime('%d/%m/%Y')
+        
+        colonnes_visibles = ['Date', 'Presse', 'Poste', 'Filiere', 'Lopin', 'Cause']
+        df_pour_affichage = df_affichage[[c for c in colonnes_visibles if c in df_affichage.columns]]
+
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            filtre_presse = st.multiselect("Filtrer par Presse :", options=df_affichage["Presse"].unique(), key="f_presse")
+        with col_f2:
+            filtre_cause = st.multiselect("Filtrer par Cause :", options=df_affichage["Cause"].unique(), key="f_cause")
+        
+        if filtre_presse:
+            df_pour_affichage = df_pour_affichage[df_pour_affichage["Presse"].isin(filtre_presse)]
+        if filtre_cause:
+            df_pour_affichage = df_pour_affichage[df_pour_affichage["Cause"].isin(filtre_cause)]
+            
+        st.dataframe(df_pour_affichage, use_container_width=True, hide_index=True)
+        
+        csv = df_affichage.to_csv(index=False, sep=";").encode('utf-8-sig')
+        st.download_button(
+            label="📥 Télécharger la base complète pour Excel",
+            data=csv,
+            file_name=f"base_arrets_TPR_{datetime.now().strftime('%d_%m_%Y')}.csv",
+            mime="text/csv",
+        )
+    else:
+        st.info("Aucune donnée n'a encore été enregistrée.")
+
+# ==============================================================================
+# ONGLET 3 : STATISTIQUES & GRAPHIQUES
+# ==============================================================================
+with tab_stats:
+    import plotly.express as px
+    
+    st.subheader("📈 Analyse Statistique des Temps d'Arrêt")
+    if os.path.isfile(DB_FILE):
+        df_stats = pd.read_csv(DB_FILE, sep=";")
+        
+        df_stats['Duree_Min'] = pd.to_numeric(df_stats['Duree_Min'], errors='coerce').fillna(0)
+        
+        presse_filtre = st.multiselect("Sélectionner la ou les Presses :", options=sorted(df_stats["Presse"].unique()), default=df_stats["Presse"].unique())
+        
+        if presse_filtre:
+            df_filtered = df_stats[df_stats["Presse"].isin(presse_filtre)].copy()
+            df_filtered['Code Cause'] = df_filtered['Cause'].str[0]
+            
+            df_grouped = df_filtered.groupby(['Presse', 'Code Cause'])['Duree_Min'].sum().reset_index()
+            tableau_somme = df_filtered.groupby('Code Cause')['Duree_Min'].sum().reset_index().sort_values(by='Duree_Min', ascending=False)
+            
+            tableau_somme['Duree_Min'] = tableau_somme['Duree_Min'].astype(int)
+            total_general = int(tableau_somme['Duree_Min'].sum())
+            
+            col_vide, col_tab, col_espace, col_metrique = st.columns([0.5, 3, 0.5, 2])
+            
+            with col_tab:
+                html_table = f"""
+                <style>
+                    .custom-table {{ width: 100%; border-collapse: collapse; font-family: sans-serif; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }}
+                    .custom-table th {{ background-color: #f8f9fb; color: #0047AB; text-align: center !important; padding: 12px; border-bottom: 2px solid #0047AB; font-weight: bold; }}
+                    .custom-table td {{ text-align: center !important; padding: 10px; border-bottom: 1px solid #eee; color: #333; transition: all 0.2s ease; }}
+                    .custom-table tr:hover td {{ background-color: #eef4ff !important; color: #0047AB !important; cursor: pointer; font-weight: bold; }}
+                    .custom-table tr:last-child td {{ border-bottom: none; }}
+                </style>
+                <table class="custom-table">
+                    <thead><tr><th>Code Cause</th><th>Temps Total (Minutes)</th></tr></thead>
+                    <tbody>
+                """
+                for _, row in tableau_somme.iterrows():
+                    html_table += f"<tr><td>{row['Code Cause']}</td><td>{int(row['Duree_Min'])}</td></tr>"
+                html_table += "</tbody></table>"
+                st.markdown(html_table, unsafe_allow_html=True)
+                
+            with col_metrique:
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.metric(label="TOTAL GÉNÉRAL DES ARRÊTS", value=f"{total_general} min")
+                
+            st.markdown("<br>", unsafe_allow_html=True)
+            fig2 = px.bar(
+                df_grouped, 
+                x='Code Cause', 
+                y='Duree_Min', 
+                color='Presse', 
+                barmode='group',
+                title="Durée totale des arrêts par cause (min)",
+                labels={'Code Cause': 'Cause (Code)', 'Duree_Min': 'Minutes'},
+                color_discrete_map={"Presse 4": "#E63946", "Presse 6": "#457B9D", "Presse 7": "#2A9D8F"}
+            )
+            fig2.update_traces(
+                hoverinfo="all",
+                hovertemplate="<b>Presse:</b> %{fullData.name}<br><b>Temps:</b> %{y} min<extra></extra>",
+                marker_line_width=1,
+                marker_line_color="white",
+                marker_opacity=0.85
+            )
+            fig2.update_layout(hovermode="closest", xaxis_tickangle=0)
+            st.plotly_chart(fig2, use_container_width=True)
+    else:
+        st.info("Aucune donnée disponible pour générer des graphiques.")
