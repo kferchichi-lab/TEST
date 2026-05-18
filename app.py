@@ -5,31 +5,31 @@ from datetime import datetime
 import plotly.express as px  # Pour les graphiques
 from io import BytesIO      # Pour l'export Excel
 
-DICTIONNAIRE_CAUSES = {
-    "R - Raclage du conteneur": [
+DICTIONNAIRE_CODES = {
+    "R": [
         "Lopin déformé",
         "2 morceaux du lopin non alignés",
         "Conteneur encrassé",
         "Autre problème de raclage"
     ],
-    "O - Outillage": [
+    "O": [
         "Face de contact entre conteneur et filière",
         "Usure prématurée",
         "Casse outillage",
         "Changement de filière programmé"
     ],
-    "H - Problème Hydraulique": [
+    "H": [
         "Pression de bridage insuffisante",
         "Pression de chape instable",
         "Fuite d'huile vérin",
         "Problème de pompe"
     ],
-    "T - Problème de Température": [
+    "T": [
         "Température non homogène (Filière)",
         "Surchauffe conteneur",
         "Refroidissement lopin insuffisant"
     ],
-    "Autres": [
+    "A": [
         "Attente matière",
         "Pause opérateur",
         "Panne électrique générale"
@@ -178,12 +178,20 @@ with tab_saisie:
                 # --- SÉLECTION DE LA CAUSE PRINCIPALE ---
                 cause_principale = st.selectbox(
                     "Nature de la Cause (Générale) :",
-                    options=list(DICTIONNAIRE_CAUSES.keys())
+                    options=[
+                        "R - Raclage du conteneur",
+                        "O - Outillage",
+                        "H - Problème Hydraulique",
+                        "T - Problème de Température",
+                        "A - Autres"
+                    ]
                 )
-
 # --- SÉLECTION DE LA RAISON DÉTAILLÉE (DYNAMIQUE) ---
 # On récupère automatiquement la liste des sous-causes selon le choix ci-dessus
-            raisons_disponibles = DICTIONNAIRE_CAUSES[cause_principale]
+
+            code_lettre = cause_principale[0]
+            
+            raisons_disponibles = DICTIONNAIRE_CODES.get(code_lettre, DICTIONNAIRE_CODES["A"])
 
             raison_detaillee = st.selectbox(
                 "Raison détaillée :",
