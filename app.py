@@ -176,6 +176,21 @@ with tab_saisie:
                 num_lopin = st.text_input("Numéro du lopin", placeholder="Ex: 12")
                 duree = st.number_input("Durée de l'arrêt (minutes)", min_value=0, step=1)
                 # --- SÉLECTION DE LA CAUSE PRINCIPALE ---
+                def mettre_a_jour_raisons():
+                    if "cause_principale_key" in st.session_state:
+                        choix = st.session_state["cause_principale_key"]
+                        lettre = choix[0] # Récupère R, O, H, T ou A
+        # On force la nouvelle liste dans la session
+                        st.session_state["liste_raisons_dispo"] = DICTIONNAIRE_CODES.get(lettre, DICTIONNAIRE_CODES["A"])
+
+# 3. INITIALISATION (Au tout premier chargement de la page)
+                    if "liste_raisons_dispo" not in st.session_state:
+                        st.session_state["liste_raisons_dispo"] = DICTIONNAIRE_CODES["R"]
+                
+                
+                
+                
+                
                 cause_principale = st.selectbox(
                     "Nature de la Cause (Générale) :",
                     options=[
@@ -186,6 +201,7 @@ with tab_saisie:
                         "A - Autres"
                     ],
                     key="cause_gnerale_select" # Clé unique pour stabiliser le composant
+                    on_change=mettre_a_jour_raisons # Déclenche la fonction instantanément
                 )
 # --- SÉLECTION DE LA RAISON DÉTAILLÉE (DYNAMIQUE) ---
 # On récupère automatiquement la liste des sous-causes selon le choix ci-dessus
