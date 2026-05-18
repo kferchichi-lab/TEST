@@ -184,7 +184,8 @@ with tab_saisie:
                         "H - Problème Hydraulique",
                         "T - Problème de Température",
                         "A - Autres"
-                    ]
+                    ],
+                    key="cause_gnerale_select" # Clé unique pour stabiliser le composant
                 )
 # --- SÉLECTION DE LA RAISON DÉTAILLÉE (DYNAMIQUE) ---
 # On récupère automatiquement la liste des sous-causes selon le choix ci-dessus
