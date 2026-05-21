@@ -485,7 +485,7 @@ with tab_stats:
                     pdf.cell(0, 5, "Direction Maintenance et Travaux Neufs - Confidentiel", 0, 0, 'C')
                     
                     # Envoi vers le bouton Streamlit
-                    pdf_output = pdf.output(dest='S')
+                    pdf_output = bytes(pdf.output())
                     
                 st.success("✅ Le rapport PDF a été généré avec succès !")
                 st.download_button(
