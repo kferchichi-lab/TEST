@@ -34,9 +34,8 @@ st.markdown("""
     <style>
         header { visibility: visible !important; height: 60px !important; }
         .block-container { padding-top: 2rem !important; }
-        .temp-header { color: #0047AB; font-weight: bold; margin-bottom: 5px; }*
+        .temp-header { color: #0047AB; font-weight: bold; margin-bottom: 5px; }
 
-        <style>
         /* On rend le header système visible pour la flèche mobile */
         header {
             visibility: visible !important;
@@ -71,7 +70,7 @@ st.markdown("""
             object-fit: contain !important;
         }
         
-/* Cible TOUS les types de boutons : Standard, Téléchargement et Formulaire */
+        /* Cible TOUS les types de boutons : Standard, Téléchargement et Formulaire */
         div.stButton > button, 
         div.stDownloadButton > button, 
         div.stFormSubmitButton > button {
@@ -174,8 +173,8 @@ with tab_saisie:
                 raisons_choisies = []
 
                 for raison in raisons_disponibles:
-                    if st.checkbox(raison, key=f"cb_{code_lettre}_{raison}"):
-                        raisons_choisies.append(raison)
+                    if st.checkbox(reason := raison, key=f"cb_{code_lettre}_{raison}"):
+                        raisons_choisies.append(reason)
 
                 raisons_finales_texte = ", ".join(raisons_choisies) if raisons_choisies else "Non spécifié"
                 cause_finale = f"{cause_principale} : {raisons_finales_texte}"
@@ -205,6 +204,7 @@ with tab_saisie:
                 }
                 sauvegarder_donnees(nouvelle_entree)
                 st.success(f"✅ Incident enregistré pour la {presse_choisie}")
+
 with tab_base:
     st.subheader("📊 Historique Global des Arrêts")
     if os.path.isfile(DB_FILE):
@@ -282,6 +282,7 @@ with tab_base:
         )
     else:
         st.info("Aucune donnée n'a encore été enregistrée.")
+
 with tab_stats:
     if os.path.isfile(DB_FILE):
         df_stats = pd.read_csv(DB_FILE, sep=";")
@@ -344,7 +345,6 @@ with tab_stats:
             
             # --- CODE POUR LE GRAPH EN BARRES (fig2) ---
             df_temp = df_filtered.copy()
-            # On réutilise la colonne Code_Lettre qu'on a déjà nettoyée et sécurisée
             df_temp['Code_Cause'] = df_temp['Code_Lettre']
 
             st.subheader("Total des minutes d'arrêt par cause")
@@ -387,103 +387,106 @@ with tab_stats:
                 st.metric("TOTAL GÉNÉRAL", f"{total_general} min")
     
             st.info("**Rappel des codes :** **T** : Problème de Température | **H** : Problème Hydraulique | **O** : Outillage | **R** : Raclage | **A** : Autres..")
-    else:
-        st.info("Enregistrez des données pour voir les graphiques.")
-    # ==========================================
-            #   BOUTON DE GÉNÉRATION DU RAPPORT PDF
-            # ==========================================
-        st.write("### 📄 Rapport d'Activité")
             
-        if st.button("📊 Générer le Rapport PDF Analytique", key="btn_pdf"):
-            with st.spinner("Création du rapport PDF en cours..."):
+            # =========================================================================
+            #   💥 INTÉGRATION ET SÉCURISATION DU RAPPORT PDF (DANS L'ONGLET STATS)
+            # =========================================================================
+            st.write("### 📄 Rapport d'Activité PDF")
+            
+            if st.button("📊 Générer le Rapport PDF Analytique", key="btn_pdf"):
+                with st.spinner("Création du rapport PDF en cours..."):
                     
-                    # --- ÉTAPE 1 : Générer le graphique camembert pour le PDF avec Matplotlib ---
-                df_pie = df_filtered.groupby('Cause_Standard').size().reset_index(name='Nombre')
+                    # --- ÉTAPE A : Graphique Camembert (Matplotlib) ---
+                    df_pie = df_filtered.groupby('Cause_Standard').size().reset_index(name='Nombre')
                     
-                fig_pdf1, ax_pdf1 = plt.subplots(figsize=(6, 4))
-                ax_pdf1.pie(
-                    df_pie['Nombre'], 
-                    labels=df_pie['Cause_Standard'], 
-                    autopct='%1.1f%%', 
-                    startangle=90,
-                    colors=['#4ed0db', '#fcd170', '#ff9f73', '#d0a2f7', '#70a1ff']
-                )
-                ax_pdf1.axis('equal')
-                plt.title("Répartition des Causes d'Arrêt")
+                    fig_pdf1, ax_pdf1 = plt.subplots(figsize=(6, 4))
+                    ax_pdf1.pie(
+                        df_pie['Nombre'], 
+                        labels=df_pie['Cause_Standard'], 
+                        autopct='%1.1f%%', 
+                        startangle=90,
+                        colors=['#4ed0db', '#fcd170', '#ff9f73', '#d0a2f7', '#70a1ff']
+                    )
+                    ax_pdf1.axis('equal')
+                    plt.title("Répartition des Causes d'Arrêt", fontsize=12, fontweight='bold', pad=10)
                     
-                    # Sauvegarde l'image en mémoire tampon (sans écrire sur le disque)
-                img_buf1 = io.BytesIO()
-                plt.savefig(img_buf1, format='png', bbox_inches='tight', dpi=150)
-                img_buf1.seek(0)
-                plt.close()
+                    img_buf1 = io.BytesIO()
+                    plt.savefig(img_buf1, format='png', bbox_inches='tight', dpi=150)
+                    img_buf1.seek(0)
+                    plt.close()
 
-                    # --- ÉTAPE 2 : Générer le graphique en barres pour le PDF ---
-                df_bar = df_filtered.groupby('Presse')['Duree_Min'].sum().reset_index()
+                    # --- ÉTAPE B : Graphique en Barres par Code Cause (Matplotlib) ---
+                    # Groupement correct par 'Code_Lettre' pour correspondre parfaitement à l'écran fig2
+                    df_bar_pdf = df_filtered.groupby(['Code_Lettre', 'Presse'])['Duree_Min'].sum().unstack().fillna(0)
                     
-                fig_pdf2, ax_pdf2 = plt.subplots(figsize=(7, 3.5))
-                ax_pdf2.bar(df_bar['Presse'], df_bar['Duree_Min'], color='#4ed0db')
-                ax_pdf2.set_ylabel("Minutes cumulées")
-                ax_pdf2.set_title("Durée Totale des Arrêts par Presse")
+                    fig_pdf2, ax_pdf2 = plt.subplots(figsize=(7, 3.5))
+                    df_bar_pdf.plot(kind='bar', ax=ax_pdf2, width=0.6, edgecolor='black', alpha=0.9)
                     
-                img_buf2 = io.BytesIO()
-                plt.savefig(img_buf2, format='png', bbox_inches='tight', dpi=150)
-                img_buf2.seek(0)
-                plt.close()
+                    ax_pdf2.set_ylabel("Minutes cumulées", fontsize=10)
+                    ax_pdf2.set_xlabel("Cause (Code)", fontsize=10)
+                    ax_pdf2.set_title("Durée Totale des Arrêts par Code de Cause (min)", fontsize=12, fontweight='bold', pad=10)
+                    plt.xticks(rotation=0)
+                    plt.grid(axis='y', linestyle='--', alpha=0.5)
+                    
+                    img_buf2 = io.BytesIO()
+                    plt.savefig(img_buf2, format='png', bbox_inches='tight', dpi=150)
+                    img_buf2.seek(0)
+                    plt.close()
 
-                    # --- ÉTAPE 3 : Construction du document PDF ---
-                pdf = FPDF()
-                pdf.add_page()
+                    # --- ÉTAPE C : Génération de l'objet FPDF ---
+                    pdf = FPDF()
+                    pdf.add_page()
                     
-                    # En-tête du document
-                pdf.set_fill_color(30, 39, 44) # Couleur sombre professionnelle
-                pdf.rect(0, 0, 210, 35, 'F')
-                   
-                pdf.set_text_color(255, 255, 255)
-                pdf.set_font("Arial", 'B', 16)
-                pdf.cell(0, 12, "RAPPORT ANALYTIQUE DES INCIDENTS", ln=True, align='C')
-                pdf.set_font("Arial", 'I', 10)
-                pdf.cell(0, 5, "Suivi de la Performance de Production & Maintenance - TPR", ln=True, align='C')
-                   
-                pdf.ln(15)
-                pdf.set_text_color(0, 0, 0)
-                   
-                    # Métadonnées du rapport
-                pdf.set_font("Arial", 'B', 11)
-                pdf.cell(40, 7, "Date d'extraction :", 0)
-                pdf.set_font("Arial", '', 11)
-                pdf.cell(60, 7, datetime.now().strftime('%d/%m/%Y à %H:%M'), 0, True)
+                    # Design du bandeau supérieur
+                    pdf.set_fill_color(30, 39, 44) 
+                    pdf.rect(0, 0, 210, 35, 'F')
                     
-                pdf.set_font("Arial", 'B', 11)
-                pdf.cell(40, 7, "Filtre Presse :", 0)
-                pdf.set_font("Arial", '', 11)
-                pdf.cell(60, 7, ", ".join(presse_filtre), 0, True)
+                    pdf.set_text_color(255, 255, 255)
+                    pdf.set_font("Arial", 'B', 16)
+                    pdf.cell(0, 12, "RAPPORT ANALYTIQUE DES INCIDENTS", ln=True, align='C')
+                    pdf.set_font("Arial", 'I', 10)
+                    pdf.cell(0, 5, "Suivi de la Performance de Production & Maintenance - TPR", ln=True, align='C')
                     
-                pdf.line(10, 55, 200, 55)
-                pdf.ln(8)
+                    pdf.ln(15)
+                    pdf.set_text_color(0, 0, 0)
                     
-                    # Section 1 : Graphique Camembert
-                pdf.set_font("Arial", 'B', 13)
-                pdf.cell(0, 8, "1. Répartition Proportionnelle des Défaillances", ln=True)
-                pdf.ln(2)
-                pdf.image(img_buf1, x=35, w=140)
-                pdf.ln(10)
+                    # Informations contextuelles
+                    pdf.set_font("Arial", 'B', 11)
+                    pdf.cell(40, 7, "Date de génération :", 0)
+                    pdf.set_font("Arial", '', 11)
+                    pdf.cell(60, 7, datetime.now().strftime('%d/%m/%Y à %H:%M'), 0, True)
                     
-                    # Section 2 : Graphique en Barres
-                pdf.set_font("Arial", 'B', 13)
-                pdf.cell(0, 8, "2. Durée Cumulée des Arrêts par Équipement", ln=True)
-                pdf.ln(2)
-                pdf.image(img_buf2, x=25, w=160)
+                    pdf.set_font("Arial", 'B', 11)
+                    pdf.cell(40, 7, "Filtre Presse(s) :", 0)
+                    pdf.set_font("Arial", '', 11)
+                    pdf.cell(60, 7, ", ".join(presse_filtre), 0, True)
                     
-                    # Pied de page discret
-                pdf.set_y(-20)
-                pdf.set_font("Arial", 'I', 8)
-                pdf.set_text_color(120, 120, 120)
-                pdf.cell(0, 10, "Document technique automatisé TPR - Confidentiel", 0, 0, 'C')
+                    pdf.line(10, 55, 200, 55)
+                    pdf.ln(8)
                     
-                    # Sortie du PDF en mémoire
-                pdf_output = pdf.output(dest='S')
+                    # Ajout Section 1 : Camembert
+                    pdf.set_font("Arial", 'B', 13)
+                    pdf.cell(0, 8, "1. Répartition Proportionnelle des Défaillances", ln=True)
+                    pdf.ln(2)
+                    pdf.image(img_buf1, x=35, w=140)
+                    pdf.ln(10)
                     
-                # Bouton de téléchargement dynamique qui apparaît une fois le PDF prêt
+                    # Ajout Section 2 : Barres cumulées
+                    pdf.set_font("Arial", 'B', 13)
+                    pdf.cell(0, 8, "2. Analyse Quantifiée des Temps d'Arrêt (Minutes)", ln=True)
+                    pdf.ln(2)
+                    pdf.image(img_buf2, x=20, w=170)
+                    
+                    # Note technique de fin
+                    pdf.set_y(-25)
+                    pdf.set_font("Arial", 'I', 8)
+                    pdf.set_text_color(120, 120, 120)
+                    pdf.cell(0, 5, "Rapport technique automatisé TPR - Généré en temps réel", 0, 1, 'C')
+                    pdf.cell(0, 5, "Direction Maintenance et Travaux Neufs - Confidentiel", 0, 0, 'C')
+                    
+                    # Envoi vers le bouton Streamlit
+                    pdf_output = pdf.output(dest='S')
+                    
                 st.success("✅ Le rapport PDF a été généré avec succès !")
                 st.download_button(
                     label="📥 Télécharger le fichier PDF",
@@ -491,6 +494,8 @@ with tab_stats:
                     file_name=f"Rapport_Incidents_TPR_{datetime.now().strftime('%d_%m_%Y')}.pdf",
                     mime="application/pdf"
                 )
+    else:
+        st.info("Enregistrez des données pour voir les graphiques.")
 
 st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
 st.markdown(
