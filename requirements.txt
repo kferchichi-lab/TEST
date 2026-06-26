@@ -1,7 +1,7 @@
 streamlit
-pandas
 plotly
-xlsxwriter
-matplotlib
-fpdf2
-WeasyPrint
+pandas
+qrcode
+pillow
+gspread
+pytz
