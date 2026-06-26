@@ -1,4 +1,6 @@
 import streamlit as st
+import gspread
+from google.oauth2.service_account import Credentials
 import plotly.express as px
 import pandas as pd
 import datetime
