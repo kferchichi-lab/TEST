@@ -239,31 +239,47 @@ if not acces_autorise and role == "Visiteur":
         if format_email_valide(email_saisi):
             st.session_state.email_visiteur = email_saisi
             
-            # Fuseau horaire
+            # Gestion du fuseau horaire
             tz_local = pytz.timezone('Africa/Tunis') 
             maintenant = datetime.datetime.now(tz_local).strftime("%d/%m/%Y %H:%M")
             
             if conn_logs:
                 try:
-                    # Requête d'insertion
-                    query = f"INSERT INTO Logs (Date, Email) VALUES ('{maintenant}', '{email_saisi}');"
-                    conn_logs.query(query)
+                    # 1. Charger l'historique existant depuis l'onglet 'Logs'
+                    # ttl=0 évite le cache pour avoir les dernières données des autres visiteurs
+                    try:
+                        df_existant = conn_logs.query("SELECT * FROM Logs;", ttl=0)
+                    except Exception:
+                        # Si l'onglet est totalement vide ou introuvable, on initialise un DataFrame propre
+                        df_existant = pd.DataFrame(columns=["Date", "Email"])
                     
-                    # Forcer la réinitialisation du cache de connexion
+                    # 2. Créer la nouvelle ligne du visiteur actuel
+                    nouvelle_ligne = pd.DataFrame([{"Date": maintenant, "Email": email_saisi}])
+                    
+                    # 3. Fusionner l'ancien historique avec la nouvelle ligne
+                    if not df_existant.empty:
+                        df_mis_a_jour = pd.concat([df_existant, nouvelle_ligne], ignore_index=True)
+                    else:
+                        df_mis_a_jour = nouvelle_ligne
+                    
+                    # 4. Écrire le tableau complet mis à jour dans Google Sheets
+                    # La méthode .update() écrase proprement l'onglet 'Logs' avec les nouvelles données
+                    conn_logs.update(worksheet="Logs", data=df_mis_a_jour)
+                    
+                    # Réinitialiser le cache global de la connexion pour le rechargement
                     if hasattr(conn_logs, 'reset'):
                         conn_logs.reset()
+                        
                 except Exception as e:
-                    # EN CAS D'ERREUR : On affiche l'erreur en rouge pour comprendre le problème
-                    st.error(f"⚠️ Erreur technique d'enregistrement dans Sheets : {e}")
-                    
-                    # Sauvegarde de secours locale
-                    if "historique_secours" not in st.session_state:
-                        st.session_state.historique_secours = []
-                    st.session_state.historique_secours.append({"Date": maintenant, "Email": email_saisi})
-                    st.stop() # On arrête pour que vous puissiez lire l'erreur
+                    # Si Google Sheets refuse l'écriture (ex: problème de droits), on l'affiche explicitement
+                    st.error(f"⚠️ Erreur technique d'écriture dans Google Sheets : {e}")
+                    st.stop()
             
             st.success("Accès accordé.")
             st.rerun()
+        else:
+            st.error("Veuillez saisir une adresse e-mail valide.")
+            st.stop()
 # ==========================================
 # 5. EN-TÊTE DE PAGE CENTRALISÉ (CORRIGÉ & AJUSTÉ)
 # ==========================================
