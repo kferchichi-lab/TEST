@@ -558,12 +558,14 @@ if acces_autorise:
             df_logs = pd.DataFrame()
             
             # 1. Tentative de lecture depuis Google Sheets
+
             if conn_logs:
                 try:
-                    # On force ttl=0 pour contourner le cache Streamlit et charger en temps réel
+        # Le ttl=0 force Streamlit à interroger Google Sheets à CHAQUE CLIC sur l'onglet
                     df_logs = conn_logs.query("SELECT * FROM Logs;", ttl=0)
                 except Exception:
                     pass
+            
             
             # 2. Récupération des logs de secours de la session actuelle
             logs_locaux = st.session_state.get("historique_secours", [])
