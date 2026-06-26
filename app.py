@@ -239,23 +239,32 @@ if not acces_autorise and role == "Visiteur":
         if format_email_valide(email_saisi):
             st.session_state.email_visiteur = email_saisi
             
-            # --- CORRECTION DU FUSEAU HORAIRE ---
-            # 1. Définir le fuseau horaire local (Exemple : 'Africa/Tunis' ou 'Europe/Paris')
+            # Fuseau horaire Tunisie/Europe fixe
             tz_local = pytz.timezone('Africa/Tunis') 
-            
-            # 2. Capturer l'instant présent et lui appliquer le fuseau horaire local
             maintenant = datetime.datetime.now(tz_local).strftime("%d/%m/%Y %H:%M")
-            # ------------------------------------
-
+            
+            # Enregistrement dans la base de données Google Sheets
             if conn_logs:
                 try:
+                    # Option SQL standard (Assurez-vous que la feuille s'appelle exactement 'Logs')
+                    # et possède deux colonnes nommées "Date" et "Email" sur la première ligne
                     query = f"INSERT INTO Logs (Date, Email) VALUES ('{maintenant}', '{email_saisi}');"
                     conn_logs.query(query)
-                except Exception:
-                    pass
+                    
+                    # Forcer le rafraîchissement du cache de la connexion pour voir le nouveau visiteur immédiatement
+                    if hasattr(conn_logs, 'reset'):
+                        conn_logs.reset()
+                except Exception as e:
+                    # En cas d'échec SQL, on garde quand même une trace locale pour la session en cours
+                    if "historique_secours" not in st.session_state:
+                        st.session_state.historique_secours = []
+                    st.session_state.historique_secours.append({"Date": maintenant, "Email": email_saisi})
+            
             st.success("Accès accordé.")
             st.rerun()
-
+        else:
+            st.error("Veuillez saisir une adresse e-mail valide.")
+            st.stop()
 # ==========================================
 # 5. EN-TÊTE DE PAGE CENTRALISÉ (CORRIGÉ & AJUSTÉ)
 # ==========================================
@@ -529,29 +538,51 @@ if acces_autorise:
             with st.expander("🛠️ Panneau d'administration (Gestion du Planning)"):
                 st.markdown(f"Pour ajouter ou modifier des dates d'échéances de contrôle : [Modifier le calendrier Google Sheets]({URL_GOOGLE_SHEET})")
 
-    # --- PARTIE 3 : ACCÈS RESTREINT RESPONSABLE (ONGLET LOGS) ---
+    # --- PARTIE 3 : ACCÈS RESTREINT RESPONSABLE (ONGLET LOGS CORRIGÉ) ---
     if tab3 and role == "Responsable" and password_correct:
         with tab3:
-            st.markdown("<p style='font-size: 1.2rem; font-weight: 700; color: #1E3A8A; margin-bottom:10px;'>👥 Registre des accès à la plateforme</p>", unsafe_allow_html=True)
-            st.markdown("<p style='color: #64748B; font-size: 14px;'>Historique en temps réel des utilisateurs ayant consulté l'application.</p>", unsafe_allow_html=True)
+            st.markdown("<p style='font-size: 1.2rem; font-weight: 700; color: #1E3A8A; margin-bottom:10px;'>👥 Registre historique des accès visiteurs</p>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #64748B; font-size: 14px;'>Historique global et permanent des utilisateurs connectés à la plateforme.</p>", unsafe_allow_html=True)
             
-            df_logs = None
+            df_logs = pd.DataFrame()
+            
+            # 1. Tentative de lecture depuis Google Sheets
             if conn_logs:
                 try:
-                    df_logs = conn_logs.query("SELECT * FROM Logs;")
+                    # On force ttl=0 pour contourner le cache Streamlit et charger en temps réel
+                    df_logs = conn_logs.query("SELECT * FROM Logs;", ttl=0)
                 except Exception:
                     pass
-                    
-            if df_logs is not None and not df_logs.empty:
-                st.dataframe(df_logs, hide_index=True, use_container_width=True)
+            
+            # 2. Récupération des logs de secours de la session actuelle
+            logs_locaux = st.session_state.get("historique_secours", [])
+            df_locale = pd.DataFrame(logs_locaux)
+            
+            # 3. Fusion et affichage des données
+            if not df_logs.empty and not df_locale.empty:
+                # On combine les données du Sheets et les données locales sans doublons
+                df_total = pd.concat([df_logs, df_locale]).drop_duplicates().reset_index(drop=True)
+            elif not df_logs.empty:
+                df_total = df_logs
+            elif not df_locale.empty:
+                df_total = df_locale
             else:
+                # Si tout est vide, on affiche au moins le visiteur actuel
                 tz_local = pytz.timezone('Africa/Tunis')
-                maintenant_secours = datetime.datetime.now(tz_local).strftime("%d/%m/%Y %H:%M")
-                
-                data_secours = {
-                    "Date & Heure d'accès": [maintenant_secours],
-                    "Utilisateur": [st.session_state.get("email_visiteur", "aucun_visiteur@gmail.com")]
-                }
-                st.dataframe(pd.DataFrame(data_secours), hide_index=True, use_container_width=True)
-    else:
-        pass
+                df_total = pd.DataFrame({
+                    "Date": [datetime.datetime.now(tz_local).strftime("%d/%m/%Y %H:%M")],
+                    "Email": [st.session_state.get("email_visiteur", "aucun_visiteur@gmail.com")]
+                })
+            
+            # Formater l'affichage du tableau
+            st.dataframe(
+                df_total, 
+                column_config={
+                    "Date": st.column_config.TextColumn("📅 Date & Heure d'accès"),
+                    "Email": st.column_config.TextColumn("📧 Utilisateur (E-mail saisi)")
+                },
+                hide_index=True, 
+                use_container_width=True
+            )
+            
+            st.info("💡 Note : Pour que la sauvegarde soit 100% permanente même après la fermeture de l'application, vérifiez que votre fichier Google Sheets contient bien un onglet nommé exactement **'Logs'** avec deux colonnes entêtées **'Date'** et **'Email'**.")
