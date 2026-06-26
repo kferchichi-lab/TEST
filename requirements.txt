@@ -3,5 +3,5 @@ plotly
 pandas
 qrcode
 pillow
-gspread
 pytz
+gspread
