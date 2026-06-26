@@ -235,6 +235,10 @@ if not acces_autorise and role == "Visiteur":
     # Importez pytz au tout début de votre fichier si ce n'est pas déjà fait :
 # import pytz
 
+    # Mettez ces imports tout au haut de votre fichier app.py :
+# import gspread
+# from google.oauth2.service_account import Credentials
+
     if st.button("Valider l'accès", type="primary"):
         if format_email_valide(email_saisi):
             st.session_state.email_visiteur = email_saisi
@@ -242,34 +246,37 @@ if not acces_autorise and role == "Visiteur":
             tz_local = pytz.timezone('Africa/Tunis') 
             maintenant = datetime.datetime.now(tz_local).strftime("%d/%m/%Y %H:%M")
             
-            if conn_logs:
-                try:
-                    # 1. Tenter de lire l'historique
-                    try:
-                        df_existant = conn_logs.query("SELECT * FROM Logs;", ttl=0)
-                    except Exception as err_lecture:
-                        # Si l'onglet est vide ou introuvable, on crée la structure
-                        df_existant = pd.DataFrame(columns=["Date", "Email"])
-                    
-                    # 2. Ajouter la ligne
-                    nouvelle_ligne = pd.DataFrame([{"Date": maintenant, "Email": email_saisi}])
-                    if not df_existant.empty:
-                        df_mis_a_jour = pd.concat([df_existant, nouvelle_ligne], ignore_index=True)
-                    else:
-                        df_mis_a_jour = nouvelle_ligne
-                    
-                    # 3. Forcer l'écriture
-                    conn_logs.update(worksheet="Logs", data=df_mis_a_jour)
-                    
-                    if hasattr(conn_logs, 'reset'):
-                        conn_logs.reset()
-                        
-                except Exception as e:
-                    # !!! CE BLOC VA TOUT VOUS DIRE !!!
-                    st.error("❌ ÉCHEC CRITIQUE DE LA CONNEXION GOOGLE SHEETS")
-                    st.info("Voici l'erreur exacte retournée par Google. Lisez-la attentivement :")
-                    st.code(str(e)) # Affiche l'erreur dans un encadré gris facile à lire
-                    st.stop() # Bloque l'application ici pour vous laisser lire
+            # --- CODE DE SAUVEGARDE ULTRA-SÉCURISÉ VIA GSPREAD ---
+            try:
+                # 1. Configurer les accès avec les secrets Streamlit existants
+                scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+                creds = Credentials.from_service_account_info(st.secrets["connections"]["gsheets"], scopes=scopes)
+                client_gspread = gspread.authorize(creds)
+                
+                # 2. Ouvrir explicitement le fichier Google Sheets via son URL
+                # (Vérifiez que URL_GOOGLE_SHEET contient bien le lien de votre feuille)
+                feuille_complete = client_gspread.open_by_url(URL_GOOGLE_SHEET)
+                
+                # 3. Sélectionner l'onglet 'Logs'
+                onglet_logs = feuille_complete.worksheet("Logs")
+                
+                # 4. Ajouter la ligne directement à la fin du tableau
+                onglet_logs.append_row([maintenant, email_saisi])
+                
+                # Réinitialiser le cache de la connexion de lecture pour forcer la mise à jour
+                if conn_logs and hasattr(conn_logs, 'reset'):
+                    conn_logs.reset()
+
+            except gspread.exceptions.WorksheetNotFound:
+                st.error("❌ L'onglet nommé exactement 'Logs' n'existe pas dans votre fichier Google Sheets. Créez-le.")
+                st.stop()
+            except gspread.exceptions.APIError as api_err:
+                st.error(f"❌ Problème d'autorisation Google. Avez-vous bien partagé le Sheets avec l'adresse du Service Account ? Erreur : {api_err}")
+                st.stop()
+            except Exception as e:
+                st.error(f"❌ Erreur technique d'écriture : {e}")
+                st.stop()
+            # -----------------------------------------------------
             
             st.success("Accès accordé.")
             st.rerun()
