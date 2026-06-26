@@ -239,41 +239,37 @@ if not acces_autorise and role == "Visiteur":
         if format_email_valide(email_saisi):
             st.session_state.email_visiteur = email_saisi
             
-            # Gestion du fuseau horaire
             tz_local = pytz.timezone('Africa/Tunis') 
             maintenant = datetime.datetime.now(tz_local).strftime("%d/%m/%Y %H:%M")
             
             if conn_logs:
                 try:
-                    # 1. Charger l'historique existant depuis l'onglet 'Logs'
-                    # ttl=0 évite le cache pour avoir les dernières données des autres visiteurs
+                    # 1. Tenter de lire l'historique
                     try:
                         df_existant = conn_logs.query("SELECT * FROM Logs;", ttl=0)
-                    except Exception:
-                        # Si l'onglet est totalement vide ou introuvable, on initialise un DataFrame propre
+                    except Exception as err_lecture:
+                        # Si l'onglet est vide ou introuvable, on crée la structure
                         df_existant = pd.DataFrame(columns=["Date", "Email"])
                     
-                    # 2. Créer la nouvelle ligne du visiteur actuel
+                    # 2. Ajouter la ligne
                     nouvelle_ligne = pd.DataFrame([{"Date": maintenant, "Email": email_saisi}])
-                    
-                    # 3. Fusionner l'ancien historique avec la nouvelle ligne
                     if not df_existant.empty:
                         df_mis_a_jour = pd.concat([df_existant, nouvelle_ligne], ignore_index=True)
                     else:
                         df_mis_a_jour = nouvelle_ligne
                     
-                    # 4. Écrire le tableau complet mis à jour dans Google Sheets
-                    # La méthode .update() écrase proprement l'onglet 'Logs' avec les nouvelles données
+                    # 3. Forcer l'écriture
                     conn_logs.update(worksheet="Logs", data=df_mis_a_jour)
                     
-                    # Réinitialiser le cache global de la connexion pour le rechargement
                     if hasattr(conn_logs, 'reset'):
                         conn_logs.reset()
                         
                 except Exception as e:
-                    # Si Google Sheets refuse l'écriture (ex: problème de droits), on l'affiche explicitement
-                    st.error(f"⚠️ Erreur technique d'écriture dans Google Sheets : {e}")
-                    st.stop()
+                    # !!! CE BLOC VA TOUT VOUS DIRE !!!
+                    st.error("❌ ÉCHEC CRITIQUE DE LA CONNEXION GOOGLE SHEETS")
+                    st.info("Voici l'erreur exacte retournée par Google. Lisez-la attentivement :")
+                    st.code(str(e)) # Affiche l'erreur dans un encadré gris facile à lire
+                    st.stop() # Bloque l'application ici pour vous laisser lire
             
             st.success("Accès accordé.")
             st.rerun()
