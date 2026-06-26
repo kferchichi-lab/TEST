@@ -245,36 +245,28 @@ if not acces_autorise and role == "Visiteur":
         if format_email_valide(email_saisi):
             st.session_state.email_visiteur = email_saisi
             
+            # Gestion du fuseau horaire
             tz_local = pytz.timezone('Africa/Tunis') 
             maintenant = datetime.datetime.now(tz_local).strftime("%d/%m/%Y %H:%M")
             
-            # --- FORÇAGE DIRECT VIA GSPREAD ---
             try:
-                # 1. On récupère l'URL cachée qu'on vient de renommer
+                # Récupération de l'URL dans les secrets
                 url_directe = st.secrets["connections"]["gsheets"]["url_de_secours"]
                 
-                # 2. Connexion brute à l'API Google
+                # Authentification Google directe
                 scopes = ["https://www.googleapis.com/auth/spreadsheets"]
                 creds = Credentials.from_service_account_info(st.secrets["connections"]["gsheets"], scopes=scopes)
                 client_gspread = gspread.authorize(creds)
                 
-                # 3. Ouverture forcée du fichier et de l'onglet
+                # Ouverture et ajout immédiat de la ligne
                 feuille_complete = client_gspread.open_by_url(url_directe)
                 onglet_logs = feuille_complete.worksheet("Logs")
-                
-                # 4. Écriture immédiate de la ligne
                 onglet_logs.append_row([maintenant, email_saisi])
                 
-                # On efface le cache de lecture de Streamlit pour forcer l'affichage
-                if conn_logs and hasattr(conn_logs, 'reset'):
-                    conn_logs.reset()
-
             except Exception as e:
-                # Si Google bloque, l'application S'ARRÊTE obligatoirement et affiche l'erreur
-                st.error("❌ LE SYSTÈME A BLOQUÉ L'ÉCRITURE")
+                st.error("❌ Erreur critique lors de l'enregistrement")
                 st.code(str(e))
                 st.stop()
-            # -----------------------------------
             
             st.success("Accès accordé.")
             st.rerun()
@@ -555,32 +547,46 @@ if acces_autorise:
                 st.markdown(f"Pour ajouter ou modifier des dates d'échéances de contrôle : [Modifier le calendrier Google Sheets]({URL_GOOGLE_SHEET})")
 
     # --- PARTIE 3 : ACCÈS RESTREINT RESPONSABLE (ONGLET LOGS CORRIGÉ) ---
+    # --- PARTIE 3 : ACCÈS RESTREINT RESPONSABLE (SUIVI DES VISITES CORRIGÉ) ---
     if tab3 and role == "Responsable" and password_correct:
         with tab3:
-            st.markdown("### 👥 Registre historique des accès visiteurs")
+            st.markdown("<p style='font-size: 1.2rem; font-weight: 700; color: #1E3A8A; margin-bottom:10px;'>👥 Registre historique des accès visiteurs</p>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #64748B; font-size: 14px;'>Historique global et permanent mis à jour en temps réel.</p>", unsafe_allow_html=True)
             
-            df_logs = pd.DataFrame()
-            
-            if conn_logs:
-                try:
-                    # On force la lecture directe en utilisant l'URL renommée
-                    url_lecture = st.secrets["connections"]["gsheets"]["url_de_secours"]
-                    df_logs = conn_logs.query(f"SELECT * FROM `{url_lecture}`", ttl=0)
-                except Exception:
-                    # Si la requête SQL échoue, on utilise gspread aussi pour lire de secours
-                    try:
-                        scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-                        creds = Credentials.from_service_account_info(st.secrets["connections"]["gsheets"], scopes=scopes)
-                        client_gspread = gspread.authorize(creds)
-                        url_lecture = st.secrets["connections"]["gsheets"]["url_de_secours"]
-                        onglet_logs = client_gspread.open_by_url(url_lecture).worksheet("Logs")
-                        data_brute = onglet_logs.get_all_records()
-                        df_logs = pd.DataFrame(data_brute)
-                    except Exception:
-                        pass
-            
-            # Affichage du tableau (le reste de votre code tab3 inchangé)
-            st.dataframe(df_logs, use_container_width=True, hide_index=True)
+            try:
+                # Lecture directe sans cache via gspread
+                url_directe = st.secrets["connections"]["gsheets"]["url_de_secours"]
+                scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+                creds = Credentials.from_service_account_info(st.secrets["connections"]["gsheets"], scopes=scopes)
+                client_gspread = gspread.authorize(creds)
+                
+                onglet_logs = client_gspread.open_by_url(url_directe).worksheet("Logs")
+                
+                # Récupérer toutes les données de la feuille
+                donnees_brutes = onglet_logs.get_all_records()
+                
+                if donnees_brutes:
+                    df_total = pd.DataFrame(donnees_brutes)
+                else:
+                    df_total = pd.DataFrame(columns=["Date", "Email"])
+                    
+            except Exception as e:
+                st.warning("Impossible de charger l'historique en temps réel. Affichage du profil actuel.")
+                df_total = pd.DataFrame({
+                    "Date": [datetime.datetime.now(pytz.timezone('Africa/Tunis')).strftime("%d/%m/%Y %H:%M")],
+                    "Email": [st.session_state.get("email_visiteur", "aucun")]
+                })
+
+            # Affichage propre et unique du tableau (sans l'en-tête vide Streamlit)
+            st.dataframe(
+                df_total, 
+                column_config={
+                    "Date": st.column_config.TextColumn("📅 Date & Heure d'accès"),
+                    "Email": st.column_config.TextColumn("📧 Utilisateur (E-mail saisi)")
+                },
+                hide_index=True, 
+                use_container_width=True
+            )
             
             
             # 2. Récupération des logs de secours de la session actuelle
