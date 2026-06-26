@@ -246,37 +246,33 @@ if not acces_autorise and role == "Visiteur":
             tz_local = pytz.timezone('Africa/Tunis') 
             maintenant = datetime.datetime.now(tz_local).strftime("%d/%m/%Y %H:%M")
             
-            # --- CODE DE SAUVEGARDE ULTRA-SÉCURISÉ VIA GSPREAD ---
+            # --- FORÇAGE DIRECT VIA GSPREAD ---
             try:
-                # 1. Configurer les accès avec les secrets Streamlit existants
+                # 1. On récupère l'URL cachée qu'on vient de renommer
+                url_directe = st.secrets["connections"]["gsheets"]["url_de_secours"]
+                
+                # 2. Connexion brute à l'API Google
                 scopes = ["https://www.googleapis.com/auth/spreadsheets"]
                 creds = Credentials.from_service_account_info(st.secrets["connections"]["gsheets"], scopes=scopes)
                 client_gspread = gspread.authorize(creds)
                 
-                # 2. Ouvrir explicitement le fichier Google Sheets via son URL
-                # (Vérifiez que URL_GOOGLE_SHEET contient bien le lien de votre feuille)
-                feuille_complete = client_gspread.open_by_url(URL_GOOGLE_SHEET)
-                
-                # 3. Sélectionner l'onglet 'Logs'
+                # 3. Ouverture forcée du fichier et de l'onglet
+                feuille_complete = client_gspread.open_by_url(url_directe)
                 onglet_logs = feuille_complete.worksheet("Logs")
                 
-                # 4. Ajouter la ligne directement à la fin du tableau
+                # 4. Écriture immédiate de la ligne
                 onglet_logs.append_row([maintenant, email_saisi])
                 
-                # Réinitialiser le cache de la connexion de lecture pour forcer la mise à jour
+                # On efface le cache de lecture de Streamlit pour forcer l'affichage
                 if conn_logs and hasattr(conn_logs, 'reset'):
                     conn_logs.reset()
 
-            except gspread.exceptions.WorksheetNotFound:
-                st.error("❌ L'onglet nommé exactement 'Logs' n'existe pas dans votre fichier Google Sheets. Créez-le.")
-                st.stop()
-            except gspread.exceptions.APIError as api_err:
-                st.error(f"❌ Problème d'autorisation Google. Avez-vous bien partagé le Sheets avec l'adresse du Service Account ? Erreur : {api_err}")
-                st.stop()
             except Exception as e:
-                st.error(f"❌ Erreur technique d'écriture : {e}")
+                # Si Google bloque, l'application S'ARRÊTE obligatoirement et affiche l'erreur
+                st.error("❌ LE SYSTÈME A BLOQUÉ L'ÉCRITURE")
+                st.code(str(e))
                 st.stop()
-            # -----------------------------------------------------
+            # -----------------------------------
             
             st.success("Accès accordé.")
             st.rerun()
@@ -559,19 +555,30 @@ if acces_autorise:
     # --- PARTIE 3 : ACCÈS RESTREINT RESPONSABLE (ONGLET LOGS CORRIGÉ) ---
     if tab3 and role == "Responsable" and password_correct:
         with tab3:
-            st.markdown("<p style='font-size: 1.2rem; font-weight: 700; color: #1E3A8A; margin-bottom:10px;'>👥 Registre historique des accès visiteurs</p>", unsafe_allow_html=True)
-            st.markdown("<p style='color: #64748B; font-size: 14px;'>Historique global et permanent des utilisateurs connectés à la plateforme.</p>", unsafe_allow_html=True)
+            st.markdown("### 👥 Registre historique des accès visiteurs")
             
             df_logs = pd.DataFrame()
             
-            # 1. Tentative de lecture depuis Google Sheets
-
             if conn_logs:
                 try:
-        # Le ttl=0 force Streamlit à interroger Google Sheets à CHAQUE CLIC sur l'onglet
-                    df_logs = conn_logs.query("SELECT * FROM Logs;", ttl=0)
+                    # On force la lecture directe en utilisant l'URL renommée
+                    url_lecture = st.secrets["connections"]["gsheets"]["url_de_secours"]
+                    df_logs = conn_logs.query(f"SELECT * FROM `{url_lecture}`", ttl=0)
                 except Exception:
-                    pass
+                    # Si la requête SQL échoue, on utilise gspread aussi pour lire de secours
+                    try:
+                        scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+                        creds = Credentials.from_service_account_info(st.secrets["connections"]["gsheets"], scopes=scopes)
+                        client_gspread = gspread.authorize(creds)
+                        url_lecture = st.secrets["connections"]["gsheets"]["url_de_secours"]
+                        onglet_logs = client_gspread.open_by_url(url_lecture).worksheet("Logs")
+                        data_brute = onglet_logs.get_all_records()
+                        df_logs = pd.DataFrame(data_brute)
+                    except Exception:
+                        pass
+            
+            # Affichage du tableau (le reste de votre code tab3 inchangé)
+            st.dataframe(df_logs, use_container_width=True, hide_index=True)
             
             
             # 2. Récupération des logs de secours de la session actuelle
