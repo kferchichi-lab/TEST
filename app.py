@@ -239,32 +239,31 @@ if not acces_autorise and role == "Visiteur":
         if format_email_valide(email_saisi):
             st.session_state.email_visiteur = email_saisi
             
-            # Fuseau horaire Tunisie/Europe fixe
+            # Fuseau horaire
             tz_local = pytz.timezone('Africa/Tunis') 
             maintenant = datetime.datetime.now(tz_local).strftime("%d/%m/%Y %H:%M")
             
-            # Enregistrement dans la base de données Google Sheets
             if conn_logs:
                 try:
-                    # Option SQL standard (Assurez-vous que la feuille s'appelle exactement 'Logs')
-                    # et possède deux colonnes nommées "Date" et "Email" sur la première ligne
+                    # Requête d'insertion
                     query = f"INSERT INTO Logs (Date, Email) VALUES ('{maintenant}', '{email_saisi}');"
                     conn_logs.query(query)
                     
-                    # Forcer le rafraîchissement du cache de la connexion pour voir le nouveau visiteur immédiatement
+                    # Forcer la réinitialisation du cache de connexion
                     if hasattr(conn_logs, 'reset'):
                         conn_logs.reset()
                 except Exception as e:
-                    # En cas d'échec SQL, on garde quand même une trace locale pour la session en cours
+                    # EN CAS D'ERREUR : On affiche l'erreur en rouge pour comprendre le problème
+                    st.error(f"⚠️ Erreur technique d'enregistrement dans Sheets : {e}")
+                    
+                    # Sauvegarde de secours locale
                     if "historique_secours" not in st.session_state:
                         st.session_state.historique_secours = []
                     st.session_state.historique_secours.append({"Date": maintenant, "Email": email_saisi})
+                    st.stop() # On arrête pour que vous puissiez lire l'erreur
             
             st.success("Accès accordé.")
             st.rerun()
-        else:
-            st.error("Veuillez saisir une adresse e-mail valide.")
-            st.stop()
 # ==========================================
 # 5. EN-TÊTE DE PAGE CENTRALISÉ (CORRIGÉ & AJUSTÉ)
 # ==========================================
