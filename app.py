@@ -210,11 +210,6 @@ with st.sidebar:
 def format_email_valide(email):
     return re.match(r"[^@]+@[^@]+\.[^@]+", email) is not None
 
-try:
-    conn_logs = st.connection("gsheets", type=st.connections.SQLConnection)
-except Exception:
-    conn_logs = None
-
 # Variable de contrôle des accès
 acces_autorise = False
 
@@ -234,13 +229,6 @@ if not acces_autorise and role == "Visiteur":
     
     email_saisi = st.text_input("Adresse e-mail :", placeholder="exemple@domain.com")
     
-    # Importez pytz au tout début de votre fichier si ce n'est pas déjà fait :
-# import pytz
-
-    # Mettez ces imports tout au haut de votre fichier app.py :
-# import gspread
-# from google.oauth2.service_account import Credentials
-
     if st.button("Valider l'accès", type="primary"):
         if format_email_valide(email_saisi):
             st.session_state.email_visiteur = email_saisi
@@ -273,10 +261,10 @@ if not acces_autorise and role == "Visiteur":
         else:
             st.error("Veuillez saisir une adresse e-mail valide.")
             st.stop()
+
 # ==========================================
-# 5. EN-TÊTE DE PAGE CENTRALISÉ (CORRIGÉ & AJUSTÉ)
+# 5. EN-TÊTE DE PAGE CENTRALISÉ
 # ==========================================
-# Nettoyage CSS pour forcer le conteneur Streamlit sous-jacent à se centrer
 st.markdown("""
     <style>
     /* Force le centrage des blocs de texte markdown dans la zone principale */
@@ -286,7 +274,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Bloc En-tête Haute Précision
 st.markdown(
     """
     <div style="width: 100%; text-align: center; margin: 10px auto 35px auto; display: block;">
@@ -364,12 +351,9 @@ if acces_autorise:
         return url
 
     # --- PARTIE 1 : INTERFACE DES RAPPORTS ---
-  # --- PARTIE 1 : INTERFACE DES RAPPORTS ---
     with tab1:
-        # Injection CSS locale pour aligner les titres des filtres au centre
         st.markdown("""
             <style>
-            /* Centre le titre du bloc de conteneur de filtres */
             .filter-title {
                 text-align: center !important;
                 font-weight: 600; 
@@ -378,7 +362,6 @@ if acces_autorise:
                 margin-bottom: 15px;
                 width: 100%;
             }
-            /* Force le centrage des labels au-dessus de chaque selectbox Streamlit */
             div[data-testid="stSelectbox"] label p {
                 text-align: center !important;
                 width: 100%;
@@ -388,7 +371,6 @@ if acces_autorise:
         """, unsafe_allow_html=True)
 
         with st.container(border=True):
-            # Utilisation d'une classe HTML personnalisée pour centrer le titre principal du bloc
             st.markdown("<p class='filter-title'>Filtres de recherche avancés</p>", unsafe_allow_html=True)
             
             c1, c2, c3, c4 = st.columns(4)
@@ -489,7 +471,7 @@ if acces_autorise:
                     )
                     st.plotly_chart(fig_site, use_container_width=True, config={'displayModeBar': False})
 
-                # GRAPH 2 : Répartition par Domaine (Barres avec nombres à droite)
+                # GRAPH 2 : Répartition par Domaine
                 with chart_col2:
                     st.markdown("""
                         <div style="background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #E2E8F0; margin-bottom: 15px;">
@@ -546,16 +528,14 @@ if acces_autorise:
             with st.expander("🛠️ Panneau d'administration (Gestion du Planning)"):
                 st.markdown(f"Pour ajouter ou modifier des dates d'échéances de contrôle : [Modifier le calendrier Google Sheets]({URL_GOOGLE_SHEET})")
 
-    # --- PARTIE 3 : ACCÈS RESTREINT RESPONSABLE (ONGLET LOGS CORRIGÉ) ---
-    # --- PARTIE 3 : ACCÈS RESTREINT RESPONSABLE (SUIVI DES VISITES CORRIGÉ) ---
-    # --- PARTIE 3 : ACCÈS RESTREINT RESPONSABLE (VERSION NETTOYÉE & CORRIGÉE) ---
+    # --- PARTIE 3 : ACCÈS RESTREINT RESPONSABLE (SUIVI DES VISITES CORRIGÉ & SANS RESIDUS) ---
     if tab3 and role == "Responsable" and password_correct:
         with tab3:
             st.markdown("<p style='font-size: 1.2rem; font-weight: 700; color: #1E3A8A; margin-bottom:10px;'>👥 Registre historique des accès visiteurs</p>", unsafe_allow_html=True)
             st.markdown("<p style='color: #64748B; font-size: 14px;'>Historique global et permanent mis à jour en temps réel.</p>", unsafe_allow_html=True)
             
             try:
-                # Lecture directe sans cache via gspread
+                # 1. Connexion directe brute à Google Sheets via gspread (Bypass du cache Streamlit)
                 url_directe = st.secrets["connections"]["gsheets"]["url_de_secours"]
                 scopes = ["https://www.googleapis.com/auth/spreadsheets"]
                 creds = Credentials.from_service_account_info(st.secrets["connections"]["gsheets"], scopes=scopes)
@@ -563,7 +543,7 @@ if acces_autorise:
                 
                 onglet_logs = client_gspread.open_by_url(url_directe).worksheet("Logs")
                 
-                # Récupérer toutes les données de la feuille
+                # 2. Récupérer toutes les données de la feuille
                 donnees_brutes = onglet_logs.get_all_records()
                 
                 if donnees_brutes:
@@ -572,42 +552,14 @@ if acces_autorise:
                     df_total = pd.DataFrame(columns=["Date", "Email"])
                     
             except Exception as e:
-                # En cas de problème réseau, on affiche une structure vide propre pour éviter le plantage
-                df_total = pd.DataFrame(columns=["Date", "Email"])
-            
-            # Affichage final unique du tableau global
-            st.dataframe(
-                df_total, 
-                column_config={
-                    "Date": st.column_config.TextColumn("📅 Date & Heure d'accès"),
-                    "Email": st.column_config.TextColumn("📧 Utilisateur (E-mail saisi)")
-                },
-                hide_index=True, 
-                use_container_width=True
-            )
-            
-            
-            # 2. Récupération des logs de secours de la session actuelle
-            logs_locaux = st.session_state.get("historique_secours", [])
-            df_locale = pd.DataFrame(logs_locaux)
-            
-            # 3. Fusion et affichage des données
-            if not df_logs.empty and not df_locale.empty:
-                # On combine les données du Sheets et les données locales sans doublons
-                df_total = pd.concat([df_logs, df_locale]).drop_duplicates().reset_index(drop=True)
-            elif not df_logs.empty:
-                df_total = df_logs
-            elif not df_locale.empty:
-                df_total = df_locale
-            else:
-                # Si tout est vide, on affiche au moins le visiteur actuel
+                # En cas de problème réseau, structure de secours propre avec le visiteur actuel
                 tz_local = pytz.timezone('Africa/Tunis')
                 df_total = pd.DataFrame({
                     "Date": [datetime.datetime.now(tz_local).strftime("%d/%m/%Y %H:%M")],
                     "Email": [st.session_state.get("email_visiteur", "aucun_visiteur@gmail.com")]
                 })
             
-            # Formater l'affichage du tableau
+            # 3. Affichage final unique du tableau global
             st.dataframe(
                 df_total, 
                 column_config={
