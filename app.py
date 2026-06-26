@@ -1,509 +1,557 @@
 import streamlit as st
+import plotly.express as px
 import pandas as pd
-import os
-from datetime import datetime
-import plotly.express as px  # Pour les graphiques
-from io import BytesIO      # Pour l'export Excel
-import io
-import matplotlib.pyplot as plt
-# Assurez-vous d'avoir fpdf2 installé (ajoutez-le à votre fichier requirements.txt : fpdf2)
-from fpdf import FPDF
+import datetime
+import pytz
+import re
 
+st.set_page_config(
+    page_title="Contrôle Réglementaire",
+    page_icon="🛡️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-DB_FILE = "base_donnees_chapeaux.csv"
+# ==========================================
+# INITIALISATION DES VARIABLES GLOBALES & SECURITÉ
+# ==========================================
+if "email_visiteur" not in st.session_state:
+    st.session_state.email_visiteur = None
 
-DICTIONNAIRE_CODES = {
-    "R": ["Lopin déformé", "2 morceaux du lopin non alignés", "Conteneur encrassé", "Autre problème de raclage"],
-    "O": ["Face de contact entre conteneur et filière", "Usure prématurée du grain", "Casse outillage", "Mauvais centrage"],
-    "H": ["Pression de bridage insuffisante", "Pression de chape instable", "Fuite d'huile vérin", "Problème de pompe", "Pression d'extrusion instable"],
-    "T": ["Température non homogène du conteneur", "Température de filière inadéquate", "Refroidissement du lopin"],
-    "A": ["Attente matière", "Pause opérateur", "Panne électrique générale"]
-}
+# Déclaration initiale essentielle pour éviter les plantages NameError
+tab3 = None 
 
-st.set_page_config(page_title="Suivi Arrêts TPR", page_icon="📝", layout="wide")
+# ==========================================
+# STYLE PREMIUM OPTIMISÉ (INTERFACE & ONGLETS LISIBLES)
+# ==========================================
+st.html("""
+<style>
+    /* 1. Style du grand conteneur des filtres */
+    [data-testid="stVVerticalBlockBorderBordered"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        border-left: 5px solid #1E3A8A !important; /* Ligne signature bleue à gauche */
+        border-radius: 12px !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02) !important;
+        padding: 20px !important;
+    }
 
+    /* 2. Titres des filtres (Site, Année, etc.) */
+    .stSelectbox label p {
+        color: #475569 !important;
+        font-weight: 600 !important;
+        font-size: 13px !important;
+        letter-spacing: 0.5px;
+        margin-bottom: 6px !important;
+    }
 
-def sauvegarder_donnees(data):
-    df = pd.DataFrame([data])
-    if not os.path.isfile(DB_FILE):
-        df.to_csv(DB_FILE, index=False, sep=";", encoding="utf-8-sig")
-    else:
-        df.to_csv(DB_FILE, mode='a', index=False, header=False, sep=";", encoding="utf-8-sig")
+    /* 3. LE BOUTON DU FILTRE (SELECTBOX) */
+    div[data-baseweb="select"] {
+        background-color: #F8FAFC !important;
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 8px !important;
+        transition: all 0.25s ease-in-out !important;
+    }
+
+    div[data-baseweb="select"] > div {
+        border: none !important;
+        background-color: transparent !important;
+    }
+
+    /* Effet survol sur les filtres */
+    div[data-baseweb="select"]:hover {
+        border-color: #0EA5E9 !important;
+        background-color: #FFFFFF !important;
+        box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12) !important;
+        cursor: pointer;
+    }
+
+    div[data-baseweb="select"] span {
+        color: #0F172A !important;
+        font-weight: 500 !important;
+    }
+
+    /* --- 4. STYLE AMÉLIORÉ ET TRÈS LISIBLE POUR LES ONGLETS (TABS) --- */
+    div[data-testid="stTabs"] button {
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        color: #64748B !important;             /* Texte gris discret pour l'onglet inactif */
+        background-color: #F8FAFC !important;  /* Fond très clair pour l'onglet inactif */
+        padding: 10px 24px !important;
+        margin-right: 8px !important;
+        border-radius: 8px 8px 0px 0px !important;
+        border: 1px solid #E2E8F0 !important;
+        border-bottom: none !important;
+        transition: all 0.2s ease !important;
+    }
+
+    /* Onglet survolé avec la souris */
+    div[data-testid="stTabs"] button:hover {
+        color: #1E3A8A !important;             /* Le texte s'illumine en bleu nuit corporate */
+        background-color: #F1F5F9 !important;
+    }
+
+    /* 🎯 ONGLET ACTIF (SÉLECTIONNÉ) : Style Premium Lumineux */
+    div[data-testid="stTabs"] button[aria-selected="true"] {
+        color: #1E3A8A !important;             /* Texte Bleu Nuit très foncé et parfaitement lisible */
+        background-color: #E0F2FE !important;  /* Fond Bleu Ciel très doux/pastel (Excellent contraste) */
+        border-color: #bae6fd !important;
+        border-bottom: none !important;
+        box-shadow: inset 0 3px 0px #0EA5E9 !important; /* Petite ligne supérieure bleu vif style moderne */
+    }
+
+    /* Supprimer définitivement la barre rouge par défaut de Streamlit */
+    div[data-testid="stTabs"] [data-baseweb="tab-highlight-bar"] {
+        background-color: transparent !important;
+    }
+</style>
+""")
 
 st.markdown("""
     <style>
-        header { visibility: visible !important; height: 60px !important; }
-        .block-container { padding-top: 2rem !important; }
-        .temp-header { color: #0047AB; font-weight: bold; margin-bottom: 5px; }
+    /* Importation d'une typographie moderne */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stSidebarView"] {
+        font-family: 'Inter', sans-serif !important;
+        background-color: #F8FAFC !important; /* Fond gris très clair ultra-moderne */
+    }
 
-        /* On rend le header système visible pour la flèche mobile */
-        header {
-            visibility: visible !important;
-            height: 60px !important;
-        }
-        
-        /* --- CONFIGURATION PC (Par défaut) --- */
-        .block-container {
-            padding-top: 5rem !important; /* On augmente ici pour éviter le crop PC */
-            padding-bottom: 2rem !important;
-            padding-left: 5rem !important;
-            padding-right: 5rem !important;
-        }
+    /* Style des formulaires et des encadrés */
+    [data-testid="stForm"], .stCornerRadius {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
+        border-radius: 12px !important;
+    }
+    
+    /* Boutons personnalisés */
+    .stButton>button {
+        background-color: #1E3A8A !important;
+        color: white !important;
+        border-radius: 8px !important;
+        border: none !important;
+        font-weight: 500 !important;
+        padding: 10px 24px !important;
+        box-shadow: 0 2px 4px rgba(30, 58, 138, 0.2);
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-        /* --- CONFIGURATION SMARTPHONE --- */
-        @media (max-width: 768px) {
-            .block-container {
-                padding-top: 3.5rem !important; /* Un peu moins pour mobile pour garder votre 'très bon' rendu */
-                padding-left: 1.5rem !important;
-                padding-right: 1.5rem !important;
-            }
-            
-            [data-testid="stImage"] {
-                margin-top: 10px !important;
-            }
-        }
+# ==========================================
+# ⚠️ LIEN DE SYNCHRONISATION GOOGLE SHEETS
+# ==========================================
+URL_GOOGLE_SHEET = "https://docs.google.com/spreadsheets/d/1ZK6VWg_gcCO70nt6DTyYogDeNeQUgovFmwWQufMVO-M/edit?gid=0#gid=0"
 
-        /* Sécurité pour l'image (Logo) */
-        [data-testid="stImage"] img {
-            max-width: 100%;
-            height: auto;
-            object-fit: contain !important;
-        }
-        
-        /* Cible TOUS les types de boutons : Standard, Téléchargement et Formulaire */
-        div.stButton > button, 
-        div.stDownloadButton > button, 
-        div.stFormSubmitButton > button {
-            width: 100% !important; 
-            height: 3.5em !important; 
-            border-radius: 12px !important; 
-            border: none !important;
-            background: linear-gradient(135deg, #0047AB 0%, #00264d 100%) !important;
-            color: white !important; 
-            font-size: 16px !important; 
-            font-weight: 600 !important;
-            box-shadow: 0 4px 15px rgba(0, 71, 171, 0.3) !important;
-            transition: all 0.3s ease !important;
-        }
+@st.cache_data(ttl=5)
+def charger_donnees_sheet(nom_onglet):
+    try:
+        base_url = URL_GOOGLE_SHEET.split("/edit")[0]
+        csv_url = f"{base_url}/gviz/tq?tqx=out:csv&sheet={nom_onglet}"
+        df = pd.read_csv(csv_url)
+        df = df.dropna(how='all')
+        return df
+    except Exception as e:
+        st.error(f"Erreur de connexion à l'onglet '{nom_onglet}'.")
+        return pd.DataFrame()
 
-        /* Effet au survol pour tous les boutons */
-        div.stButton > button:hover, 
-        div.stDownloadButton > button:hover, 
-        div.stFormSubmitButton > button:hover {
-            transform: translateY(-3px) !important;
-            box-shadow: 0 8px 25px rgba(0, 71, 171, 0.5) !important;
-            background: linear-gradient(135deg, #0056cc 0%, #003366 100%) !important;
-        }
+df_rapports = charger_donnees_sheet("Rapports")
+df_planning = charger_donnees_sheet("Planning")
 
-        /* Forcer la couleur du texte à l'intérieur des balises <p> de Streamlit */
-        div.stButton > button p, 
-        div.stDownloadButton > button p, 
-        div.stFormSubmitButton > button p {
-            color: white !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
-CONFIG_PRESSES = {
-    "Presse 4": {"diametre": 228},
-    "Presse 6": {"diametre": 178},
-    "Presse 7": {"diametre": 178},
+SOUS_EQUIPEMENTS = {
+    "Installations électriques": [],
+    "Equipements de levage": ["Transpalette", "Table élévatrice", "Potence", "Pont roulant", "Plateforme de travail", "Nacelle", "Gerbeur", "Chariot élévateur", "Palan électrique", "Ascenseur"],
+    "Sécurité incendie": [],
+    "Installations de gaz": ["Industrielle", "Chaudière"],
+    "Appareil pression de gaz": []
 }
 
+# ==========================================
+# BARRE LATÉRALE (SIDEBAR DESIGN)
+# ==========================================
 with st.sidebar:
-    st.header("⚙️ Configuration Machine")
-    presse_choisie = st.selectbox("SÉLECTIONNER LA PRESSE :", options=list(CONFIG_PRESSES.keys()), index=None, placeholder="Choisir...")
-  
+    st.markdown("<br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 4, 1]) 
+    with col2:
+        st.image("https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6q1BtDSDgVnJZFo0hOBfQJoDS6OYiub-qfQ&s", use_container_width=True)
+    
+    st.markdown(
+        """
+        <div style="text-align: center; margin-top: 15px; margin-bottom: 25px;">
+            <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; color: #0F172A; letter-spacing: -0.5px;">
+                Tunisie Profilés d'Aluminium
+            </h3>
+            <p style="font-size: 0.85rem; color: #64748B; margin: 0; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">
+                Direction Maintenance & TN
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
     st.divider()
-    st.markdown("<div class='temp-header'>🌡️ RAPPEL TEMPÉRATURES</div>", unsafe_allow_html=True)
-    st.info("""
-    - **Conteneur :** 400 - 430°C
-    - **Filière :** 450°C
-    - **Lopin (Plate) :** 440 - 470°C
-    - **Lopin (Tubulaire) :** 470 - 510°C
-    """)
-    st.warning("⚠️ Tolérance : +/- 10°C")
-
-col_logo, col_titre = st.columns([1, 5])
-with col_logo:
-    st.image("https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6q1BtDSDgVnJZFo0hOBfQJoDS6OYiub-qfQ&s", width=150)
-with col_titre:
-    st.markdown("## Tunisie Profilés d'Aluminium")
-    st.markdown("#### Direction Maintenance et Travaux Neufs")
-st.divider()
-
-tab_saisie, tab_base, tab_stats = st.tabs(["➕ Nouvelle Saisie", "📊 Consulter la Base de Données", "📈 Analyse Graphique"])
-
-with tab_saisie:
-    if not presse_choisie:
-        st.info("👈 Veuillez sélectionner une presse dans le menu à gauche pour accéder au formulaire.")
-    else:
-        st.subheader(f"📝 Saisie d'incident : {presse_choisie}")
-        
-
-        col1, col2 = st.columns(2)
-        with col1:
-            date_j = st.date_input("Date de l'arrêt", datetime.now())
-            poste = st.radio("Poste de travail", ["A", "B", "C"], horizontal=True)
-            ref_filiere = st.text_input("Référence Filière", placeholder="Ex: 52000")
-       
-        with col2:
-            num_lopin = st.text_input("Numéro du lopin", placeholder="Ex: 12")
-            duree = st.number_input("Durée de l'arrêt (minutes)", min_value=0, step=1)
-            
-            cause_principale = st.selectbox(
-                "Nature de la Cause (Générale) :",
-                options=[
-                    "R - Raclage du conteneur",
-                    "O - Outillage",
-                    "H - Problème Hydraulique",
-                    "T - Problème de Température",
-                    "A - Autres"
-                ],
-                index=None,  
-                placeholder="--- Choisir une cause générale ---", 
-                key="cause_gnerale_select"
-            )
-            raisons_finales_texte = "Non spécifié"
-            if cause_principale is not None:
-                code_lettre = cause_principale[0]
-                raisons_disponibles = DICTIONNAIRE_CODES.get(code_lettre, DICTIONNAIRE_CODES["A"])
-
-                st.write("**Sélectionnez la ou les raisons détaillées :**")
-                raisons_choisies = []
-
-                for raison in raisons_disponibles:
-                    if st.checkbox(reason := raison, key=f"cb_{code_lettre}_{raison}"):
-                        raisons_choisies.append(reason)
-
-                raisons_finales_texte = ", ".join(raisons_choisies) if raisons_choisies else "Non spécifié"
-                cause_finale = f"{cause_principale} : {raisons_finales_texte}"
-            else:
-                st.info("💡 Veuillez sélectionner une nature de cause pour voir les raisons détaillées.")
-
-        commentaire = st.text_area("Observations / Détails de l'incident")
-        
-        with st.form("form_validation", clear_on_submit=True):
-            submitted = st.form_submit_button("ENREGISTRER L'INCIDENT")
-        if submitted:
-            if not ref_filiere or not num_lopin:
-                st.error("Veuillez remplir les champs obligatoires (Filière et Lopin).")
-            elif raisons_finales_texte == "Non spécifié":
-                st.warning("⚠️ Veuillez cocher au moins une raison détaillée avant d'enregistrer.")
-            else:
-                nouvelle_entree = {
-                    "Date": date_j.strftime("%d/%m/%Y"),
-                    "Heure_Saisie": datetime.now().strftime("%H:%M:%S"),
-                    "Presse": presse_choisie,
-                    "Poste": poste,
-                    "Filiere": ref_filiere,
-                    "Lopin": num_lopin,
-                    "Duree_Min": duree,
-                    "Cause": cause_finale, 
-                    "Observations": commentaire
-                }
-                sauvegarder_donnees(nouvelle_entree)
-                st.success(f"✅ Incident enregistré pour la {presse_choisie}")
-
-with tab_base:
-    st.subheader("📊 Historique Global des Arrêts")
-    if os.path.isfile(DB_FILE):
-        # 1. Chargement de la base
-        df_affichage = pd.read_csv(DB_FILE, sep=";")
-        
-        # Sécurité : On s'assure que la colonne Cause existe et ne contient pas de lignes vides
-        if "Cause" in df_affichage.columns:
-            df_affichage['Cause'] = df_affichage['Cause'].fillna("A - Autres")
-            
-            # 2. CRÉATION D'UNE COLONNE DE RÉFÉRENCE PROPRE (Standardisation stricte)
-            mapping_filtres = {
-                "R": "R - Raclage du conteneur",
-                "O": "O - Outillage",
-                "H": "H - Problème Hydraulique",
-                "T": "T - Problème de Température",
-                "A": "A - Autres"
-            }
-            # On prend la première lettre, on la met en majuscule, et on applique le nom propre
-            df_affichage['Cause_Filtre_Standard'] = df_affichage['Cause'].str[0].str.upper().map(mapping_filtres).fillna("A - Autres")
-        else:
-            df_affichage['Cause'] = "A - Autres"
-            df_affichage['Cause_Filtre_Standard'] = "A - Autres"
-
-        # Formatage de la date
-        if 'Date' in df_affichage.columns:
-            df_affichage['Date'] = df_affichage['Date'].astype(str).str[:10]
-        if 'Duree_Min' in df_affichage.columns:
-            df_affichage['Duree_Min'] = pd.to_numeric(df_affichage['Duree_Min'], errors='coerce').fillna(0).astype(int)
-
-        # 3. INTERFACE DES FILTRES
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            options_presse = df_affichage["Presse"].unique() if "Presse" in df_affichage.columns else []
-            filtre_presse = st.multiselect("Filtrer par Presse :", options=options_presse)
-        with col_f2:
-            # Ici, on affiche UNIQUEMENT les 5 causes propres et uniques triées
-            options_cause = sorted(df_affichage["Cause_Filtre_Standard"].unique())
-            filtre_cause = st.multiselect("Filtrer par Cause :", options=options_cause)
-       
-        # 4. APPLICATION APPRENDRE ET FILTRAGE DU DATAFRAME
-        df_filtre = df_affichage.copy()
-        
-        if filtre_presse:
-            df_filtre = df_filtre[df_filtre["Presse"].isin(filtre_presse)]
-        if filtre_cause:
-            # On applique le filtre sur notre colonne standardisée cachée
-            df_filtre = df_filtre[df_filtre["Cause_Filtre_Standard"].isin(filtre_cause)]
-           
-        # 5. SÉLECTION ET RENOMMAGE DES COLONNES POUR L'AFFICHAGE
-        colonnes_visibles = ['Date', 'Presse', 'Poste', 'Filiere', 'Lopin', 'Duree_Min', 'Cause']
-        # On ne garde que les colonnes existantes
-        colonnes_existantes = [c for c in colonnes_visibles if c in df_filtre.columns]
-        
-        df_pour_affichage = df_filtre[colonnes_existantes].copy()
-        
-        # Renommage propre pour le tableau final de l'utilisateur
-        traductions = {
-            'Date': 'Date', 'Presse': 'Presse', 'Poste': 'Poste', 
-            'Filiere': 'Filière', 'Lopin': 'Lopin', 
-            'Duree_Min': 'Durée (Min)', 'Cause': "Cause de l'arrêt"
-        }
-        df_pour_affichage.rename(columns=traductions, inplace=True)
-            
-        # Affichage du tableau final filtré
-        st.dataframe(df_pour_affichage, use_container_width=True, hide_index=True)
-
-        # 6. BOUTON DE TÉLÉCHARGEMENT
-        csv = df_pour_affichage.to_csv(index=False, sep=";").encode('utf-8-sig')
-        st.download_button(
-            label="📥 Télécharger la base complète pour Excel",
-            data=csv,
-            file_name=f"base_arrets_TPR_{datetime.now().strftime('%d_%m_%Y')}.csv",
-            mime="text/csv",
-        )
-    else:
-        st.info("Aucune donnée n'a encore été enregistrée.")
-
-with tab_stats:
-    if os.path.isfile(DB_FILE):
-        df_stats = pd.read_csv(DB_FILE, sep=";")
-        st.subheader("Analyse des causes par Presse")
-        
-        presse_filtre = st.multiselect("Sélectionner les presses à analyser :", options=df_stats["Presse"].unique(), default=df_stats["Presse"].unique())
-        
-        if presse_filtre:
-            df_filtered = df_stats[df_stats["Presse"].isin(presse_filtre)].copy()
-            
-            # 1. Sécurité pour les valeurs vides
-            df_filtered['Cause'] = df_filtered['Cause'].fillna("A")
-            
-            # 2. On extrait UNIQUEMENT la première lettre (R, O, H, T, A) et on enlève les espaces
-            df_filtered['Code_Lettre'] = df_filtered['Cause'].str[0].str.upper()
-            
-            # 3. On crée un dictionnaire de traduction pour avoir des noms parfaits et uniques
-            mapping_noms = {
-                "R": "R - Raclage du conteneur",
-                "O": "O - Outillage",
-                "H": "H - Problème Hydraulique",
-                "T": "T - Problème de Température",
-                "A": "A - Autres"
-            }
-            
-            # 4. On applique le nom standardisé (si la lettre n'est pas dedans, on met "A - Autres")
-            df_filtered['Cause_Standard'] = df_filtered['Code_Lettre'].map(mapping_noms).fillna("A - Autres")
-            
-            # 5. Sécurité d'affichage
-            if df_filtered.empty:
-                st.warning("⚠️ Aucune donnée valide trouvée pour les filtres sélectionnés.")
-            else:
-                # On utilise 'Cause_Standard' pour le graphique de répartition
-                fig = px.pie(
-                    df_filtered, 
-                    names='Cause_Standard', # <-- Colonne parfaitement standardisée
-                    title=f"Répartition des causes - {', '.join(presse_filtre)}",
-                    hole=0.4, 
-                    color_discrete_sequence=px.colors.qualitative.Pastel
-                )
-                
-                fig.update_traces(
-                    textposition='inside', 
-                    textinfo='percent'  
-                )
-        
-                fig.update_layout(
-                    legend=dict(
-                        orientation="v",
-                        yanchor="middle",
-                        y=0.5,
-                        xanchor="left",
-                        x=1.05
-                    )
-                )
-        
-                st.plotly_chart(fig, use_container_width=True)
-
-            st.divider()
-            
-            # --- CODE POUR LE GRAPH EN BARRES (fig2) ---
-            df_temp = df_filtered.copy()
-            df_temp['Code_Cause'] = df_temp['Code_Lettre']
-
-            st.subheader("Total des minutes d'arrêt par cause")
     
-            fig2 = px.bar(
-                df_temp, 
-                x='Code_Cause', 
-                y='Duree_Min', 
-                color='Presse', 
-                barmode='group',
-                title="Durée totale des arrêts par code de cause (min)",
-                labels={'Code_Cause': 'Cause (Code)', 'Duree_Min': 'Minutes'},
-                color_discrete_map={ 
-                    "Presse 4": "#E63946", 
-                    "Presse 6": "#457B9D", 
-                    "Presse 7": "#2A9D8F"
-                }
-            )
-            fig2.update_traces(marker_line_color='white', marker_line_width=1, opacity=0.9)
-            fig2.update_layout(xaxis_tickangle=0)    
-            st.plotly_chart(fig2, use_container_width=True)
+    st.markdown("<p style='font-weight: 600; color: #334155; margin-bottom: 0;'>🔐 Espace sécurisé</p>", unsafe_allow_html=True)
+    role = st.selectbox("Profil utilisateur :", ["Visiteur", "Responsable"], label_visibility="collapsed")
     
-            df_filtered['Code'] = df_filtered['Cause'].str[0]
-            tableau_somme = df_filtered.groupby('Code')['Duree_Min'].sum().reset_index()
-            tableau_somme = tableau_somme.sort_values(by='Duree_Min', ascending=False)          
-            tableau_somme.columns = ['Code Cause', 'Temps Total (Minutes)']
-            col_vide, col_tab, col_espace, col_metrique = st.columns([1, 2, 0.5, 2])
+    password_correct = False
+    if role == "Responsable":
+        password = st.text_input("Code d'accès :", type="password", placeholder="•••")
+        if password == "admin123*":
+            password_correct = True
+            st.success("Accès administrateur validé")
+        elif password:
+            st.error("Code d'accès incorrect")
 
-            with col_tab:
-                st.dataframe(
-                    tableau_somme, 
-                    use_container_width=False, 
-                    hide_index=True,
-                    width=400  
-                )
+# ==========================================
+# RECAPTURE DES LOGS ET E-MAIL VISITEUR
+# ==========================================
+def format_email_valide(email):
+    return re.match(r"[^@]+@[^@]+\.[^@]+", email) is not None
 
-            with col_metrique:
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                total_general = tableau_somme['Temps Total (Minutes)'].sum()
-                st.metric("TOTAL GÉNÉRAL", f"{total_general} min")
+try:
+    conn_logs = st.connection("gsheets", type=st.connections.SQLConnection)
+except Exception:
+    conn_logs = None
+
+# Variable de contrôle des accès
+acces_autorise = False
+
+if role == "Responsable" and password_correct:
+    acces_autorise = True
+elif role == "Visiteur" and st.session_state.email_visiteur:
+    acces_autorise = True
+
+# Si c'est un visiteur et qu'il n'a pas encore entré son mail -> On affiche le formulaire de blocage
+if not acces_autorise and role == "Visiteur":
+    st.markdown("""
+        <div style="background: white; padding: 20px; border-radius: 12px; border-left: 5px solid #0EA5E9; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 20px;">
+            <h4 style="margin:0; color: #1E3A8A;">🔑 Accès sécurisé aux rapports de contrôle réglementaire</h4>
+            <p style="color: #64748B; font-size: 13px;">Veuillez renseigner votre adresse e-mail professionnelle pour consulter les rapports de contrôle et les plannings du site.</p>
+        </div>
+    """, unsafe_allow_html=True)
     
-            st.info("**Rappel des codes :** **T** : Problème de Température | **H** : Problème Hydraulique | **O** : Outillage | **R** : Raclage | **A** : Autres..")
+    email_saisi = st.text_input("Adresse e-mail :", placeholder="exemple@domain.com")
+    
+    # Importez pytz au tout début de votre fichier si ce n'est pas déjà fait :
+# import pytz
+
+    if st.button("Valider l'accès", type="primary"):
+        if format_email_valide(email_saisi):
+            st.session_state.email_visiteur = email_saisi
             
-            # =========================================================================
-            #   💥 INTÉGRATION ET SÉCURISATION DU RAPPORT PDF (DANS L'ONGLET STATS)
-            # =========================================================================
-            st.write("### 📄 Rapport d'Activité PDF")
+            # --- CORRECTION DU FUSEAU HORAIRE ---
+            # 1. Définir le fuseau horaire local (Exemple : 'Africa/Tunis' ou 'Europe/Paris')
+            tz_local = pytz.timezone('Africa/Tunis') 
             
-            if st.button("📊 Générer le Rapport PDF Analytique", key="btn_pdf"):
-                with st.spinner("Création du rapport PDF en cours..."):
-                    
-                    # --- ÉTAPE A : Graphique Camembert (Matplotlib) ---
-                    df_pie = df_filtered.groupby('Cause_Standard').size().reset_index(name='Nombre')
-                    
-                    fig_pdf1, ax_pdf1 = plt.subplots(figsize=(6, 4))
-                    ax_pdf1.pie(
-                        df_pie['Nombre'], 
-                        labels=df_pie['Cause_Standard'], 
-                        autopct='%1.1f%%', 
-                        startangle=90,
-                        colors=['#4ed0db', '#fcd170', '#ff9f73', '#d0a2f7', '#70a1ff']
-                    )
-                    ax_pdf1.axis('equal')
-                    plt.title("Répartition des Causes d'Arrêt", fontsize=12, fontweight='bold', pad=10)
-                    
-                    img_buf1 = io.BytesIO()
-                    plt.savefig(img_buf1, format='png', bbox_inches='tight', dpi=150)
-                    img_buf1.seek(0)
-                    plt.close()
+            # 2. Capturer l'instant présent et lui appliquer le fuseau horaire local
+            maintenant = datetime.datetime.now(tz_local).strftime("%d/%m/%Y %H:%M")
+            # ------------------------------------
 
-                    # --- ÉTAPE B : Graphique en Barres par Code Cause (Matplotlib) ---
-                    # Groupement correct par 'Code_Lettre' pour correspondre parfaitement à l'écran fig2
-                    df_bar_pdf = df_filtered.groupby(['Code_Lettre', 'Presse'])['Duree_Min'].sum().unstack().fillna(0)
-                    
-                    fig_pdf2, ax_pdf2 = plt.subplots(figsize=(7, 3.5))
-                    df_bar_pdf.plot(kind='bar', ax=ax_pdf2, width=0.6, edgecolor='black', alpha=0.9)
-                    
-                    ax_pdf2.set_ylabel("Minutes cumulées", fontsize=10)
-                    ax_pdf2.set_xlabel("Cause (Code)", fontsize=10)
-                    ax_pdf2.set_title("Durée Totale des Arrêts par Code de Cause (min)", fontsize=12, fontweight='bold', pad=10)
-                    plt.xticks(rotation=0)
-                    plt.grid(axis='y', linestyle='--', alpha=0.5)
-                    
-                    img_buf2 = io.BytesIO()
-                    plt.savefig(img_buf2, format='png', bbox_inches='tight', dpi=150)
-                    img_buf2.seek(0)
-                    plt.close()
+            if conn_logs:
+                try:
+                    query = f"INSERT INTO Logs (Date, Email) VALUES ('{maintenant}', '{email_saisi}');"
+                    conn_logs.query(query)
+                except Exception:
+                    pass
+            st.success("Accès accordé.")
+            st.rerun()
 
-                    # --- ÉTAPE C : Génération de l'objet FPDF ---
-                    pdf = FPDF()
-                    pdf.add_page()
-                    
-                    # Design du bandeau supérieur
-                    pdf.set_fill_color(30, 39, 44) 
-                    pdf.rect(0, 0, 210, 35, 'F')
-                    
-                    pdf.set_text_color(255, 255, 255)
-                    pdf.set_font("Arial", 'B', 16)
-                    pdf.cell(0, 12, "RAPPORT ANALYTIQUE DES INCIDENTS", ln=True, align='C')
-                    pdf.set_font("Arial", 'I', 10)
-                    pdf.cell(0, 5, "Suivi de la Performance de Production & Maintenance - TPR", ln=True, align='C')
-                    
-                    pdf.ln(15)
-                    pdf.set_text_color(0, 0, 0)
-                    
-                    # Informations contextuelles
-                    pdf.set_font("Arial", 'B', 11)
-                    pdf.cell(40, 7, "Date de génération :", 0)
-                    pdf.set_font("Arial", '', 11)
-                    pdf.cell(60, 7, datetime.now().strftime('%d/%m/%Y à %H:%M'), 0, True)
-                    
-                    pdf.set_font("Arial", 'B', 11)
-                    pdf.cell(40, 7, "Filtre Presse(s) :", 0)
-                    pdf.set_font("Arial", '', 11)
-                    pdf.cell(60, 7, ", ".join(presse_filtre), 0, True)
-                    
-                    pdf.line(10, 55, 200, 55)
-                    pdf.ln(8)
-                    
-                    # Ajout Section 1 : Camembert
-                    pdf.set_font("Arial", 'B', 13)
-                    pdf.cell(0, 8, "1. Répartition Proportionnelle des Défaillances", ln=True)
-                    pdf.ln(2)
-                    pdf.image(img_buf1, x=35, w=140)
-                    pdf.ln(10)
-                    
-                    # Ajout Section 2 : Barres cumulées
-                    pdf.set_font("Arial", 'B', 13)
-                    pdf.cell(0, 8, "2. Analyse Quantifiée des Temps d'Arrêt (Minutes)", ln=True)
-                    pdf.ln(2)
-                    pdf.image(img_buf2, x=20, w=170)
-                    
-                    # Note technique de fin
-                    pdf.set_y(-25)
-                    pdf.set_font("Arial", 'I', 8)
-                    pdf.set_text_color(120, 120, 120)
-                    pdf.cell(0, 5, "Rapport technique automatisé TPR - Généré en temps réel", 0, 1, 'C')
-                    pdf.cell(0, 5, "Direction Maintenance et Travaux Neufs - Confidentiel", 0, 0, 'C')
-                    
-                    # Envoi vers le bouton Streamlit
-                    pdf_output = bytes(pdf.output())
-                    
-                st.success("✅ Le rapport PDF a été généré avec succès !")
-                st.download_button(
-                    label="📥 Télécharger le fichier PDF",
-                    data=pdf_output,
-                    file_name=f"Rapport_Incidents_TPR_{datetime.now().strftime('%d_%m_%Y')}.pdf",
-                    mime="application/pdf"
-                )
-    else:
-        st.info("Enregistrez des données pour voir les graphiques.")
+# ==========================================
+# 5. EN-TÊTE DE PAGE CENTRALISÉ (CORRIGÉ & AJUSTÉ)
+# ==========================================
+# Nettoyage CSS pour forcer le conteneur Streamlit sous-jacent à se centrer
+st.markdown("""
+    <style>
+    /* Force le centrage des blocs de texte markdown dans la zone principale */
+    .stMarkdown div p, .stMarkdown div h1 {
+        text-align: center !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
+# Bloc En-tête Haute Précision
 st.markdown(
-    f"""
-    <div style="text-align: center; color: gray; font-size: 0.8em; border-top: 1px solid #eee; padding-top: 10px;">
-        © 2026 TPR - Système de Suivi Maintenance <br>
-        Direction Maintenance et Travaux Neufs - DMTN 
+    """
+    <div style="width: 100%; text-align: center; margin: 10px auto 35px auto; display: block;">
+        <h1 style="text-align: center; font-size: 2.6rem; font-weight: 800; color: #0F172A; margin: 0 0 6px 0; padding: 0; letter-spacing: -1px; line-height: 1.2;">
+            Tableau de Bord Réglementaire
+        </h1>
+        <p style="text-align: center; font-size: 1.05rem; color: #64748B; margin: 0 auto; padding: 0; font-weight: 400; line-height: 1.5; max-width: 800px;">
+            Suivi de conformité en temps réel — Synchronisé avec Direction Maintenance
+        </p>
     </div>
-    """, 
+    """,
     unsafe_allow_html=True
 )
+
+# SEULEMENT SI L'ACCÈS EST VALIDÉ (EMAIL SAISI OU ADMIN)
+if acces_autorise:
+
+    val_total_rapports = len(df_rapports) if not df_rapports.empty else 0
+    val_controles_planifies = len(df_planning) if not df_planning.empty else 0
+
+    if not df_planning.empty and "Statut" in df_planning.columns:
+        val_alertes = len(df_planning[df_planning["Statut"].astype(str).str.strip().str.lower() == "non conforme"])
+    else:
+        val_alertes = 0
+
+    kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
+    with kpi_col1:
+        st.markdown(f"""
+            <div style="background: white; padding: 22px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border-left: 5px solid #1E3A8A;">
+                <p style="margin:0; font-size: 12px; color: #64748B; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Total Rapports Archivés</p>
+                <p style="margin:8px 0 0 0; font-size: 34px; color: #0F172A; font-weight: 700; line-height: 1;">{val_total_rapports}</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+    with kpi_col2:
+        st.markdown(f"""
+            <div style="background: white; padding: 22px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border-left: 5px solid #0EA5E9;">
+                <p style="margin:0; font-size: 12px; color: #64748B; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Contrôles Planifiés</p>
+                <p style="margin:8px 0 0 0; font-size: 34px; color: #0F172A; font-weight: 700; line-height: 1;">{val_controles_planifies}</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+    with kpi_col3:
+        couleur_alerte = "#EF4444" if val_alertes > 0 else "#10B981"
+        st.markdown(f"""
+            <div style="background: white; padding: 22px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border-left: 5px solid {couleur_alerte};">
+                <p style="margin:0; font-size: 12px; color: #64748B; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Alertes Non-Conformité</p>
+                <p style="margin:8px 0 0 0; font-size: 34px; color: {couleur_alerte}; font-weight: 700; line-height: 1;">{val_alertes}</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ==========================================
+    # NAVIGATION PRINCIPALE ET CONTENU DYNAMIQUE
+    # ==========================================
+    liste_onglets = ["📋 Rapports de contrôle archivés", "📅 Suivi de performance & Planification"]
+
+    if role == "Responsable" and password_correct:
+        liste_onglets.append("👥 Suivi des visites")
+
+    onglets = st.tabs(liste_onglets)
+    tab1 = onglets[0]
+    tab2 = onglets[1]
+    if len(onglets) > 2:
+        tab3 = onglets[2]
+
+    def convertir_en_lien_direct(url):
+        try:
+            if "drive.google.com" in str(url) and "/file/d/" in str(url):
+                id_fichier = str(url).split("/file/d/")[1].split("/")[0]
+                return f"https://drive.google.com/uc?export=download&id={id_fichier}"
+        except Exception:
+            pass
+        return url
+
+    # --- PARTIE 1 : INTERFACE DES RAPPORTS ---
+  # --- PARTIE 1 : INTERFACE DES RAPPORTS ---
+    with tab1:
+        # Injection CSS locale pour aligner les titres des filtres au centre
+        st.markdown("""
+            <style>
+            /* Centre le titre du bloc de conteneur de filtres */
+            .filter-title {
+                text-align: center !important;
+                font-weight: 600; 
+                color: #1E293B; 
+                margin-top: 0; 
+                margin-bottom: 15px;
+                width: 100%;
+            }
+            /* Force le centrage des labels au-dessus de chaque selectbox Streamlit */
+            div[data-testid="stSelectbox"] label p {
+                text-align: center !important;
+                width: 100%;
+                display: block;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
+        with st.container(border=True):
+            # Utilisation d'une classe HTML personnalisée pour centrer le titre principal du bloc
+            st.markdown("<p class='filter-title'>Filtres de recherche avancés</p>", unsafe_allow_html=True)
+            
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                f_site = st.selectbox("Site", ["Tous", "SGB", "MEG"])
+            with c2:
+                f_annee = st.selectbox("Année de l'exercice", ["Tous", "2025", "2026"])
+            with c3:
+                f_cat = st.selectbox("Domaine technique", ["Tous"] + list(SOUS_EQUIPEMENTS.keys()))
+            with c4:
+                opts = ["Tous"] + SOUS_EQUIPEMENTS[f_cat] if f_cat != "Tous" else ["Tous"] + [i for sub in SOUS_EQUIPEMENTS.values() for i in sub]
+                f_sous_eq = st.selectbox("Sous-équipement", opts)
+       
+        st.markdown("<br><p style='font-size: 1.2rem; font-weight: 700; color: #0F172A; margin-bottom:10px;'>📂 Documents rattachés</p>", unsafe_allow_html=True)
+        
+        df_f = df_rapports.copy()
+        if not df_f.empty:
+            col_site = [c for c in df_f.columns if "site" in c.lower()]
+            col_ex = [c for c in df_f.columns if "exerc" in c.lower() or "ann" in c.lower()]
+            col_cat = [c for c in df_f.columns if "cat" in c.lower()]
+            col_seq = [c for c in df_f.columns if "sous" in c.lower()]
+            col_lien = [c for c in df_f.columns if "lien" in c.lower() or "pdf" in c.lower()]
+            col_date = [c for c in df_f.columns if "date" in c.lower() or "contr" in c.lower()]
+
+            if f_site != "Tous" and col_site:
+                df_f = df_f[df_f[col_site[0]].astype(str).str.strip() == f_site]
+            if f_annee != "Tous" and col_ex:
+                df_f = df_f[pd.to_numeric(df_f[col_ex[0]], errors='coerce') == int(f_annee)]
+            if f_cat != "Tous" and col_cat:
+                df_f = df_f[df_f[col_cat[0]].astype(str).str.strip() == f_cat]
+            if f_sous_eq != "Tous" and col_seq:
+                df_f = df_f[df_f[col_seq[0]].astype(str).str.strip() == f_sous_eq]
+
+        if not df_f.empty:
+            if col_lien:
+                df_f[col_lien[0]] = df_f[col_lien[0]].apply(convertir_en_lien_direct)
+            if col_date:
+                df_f[col_date[0]] = pd.to_datetime(df_f[col_date[0]], dayfirst=True, errors='coerce')
+
+            nom_col_ex = col_ex[0] if col_ex else "Exercice"
+            nom_col_date = col_date[0] if col_date else "Date de dernier contrôle"
+            nom_col_lien = col_lien[0] if col_lien else "Lien PDF"
+
+            st.dataframe(
+                df_f,
+                column_config={
+                    nom_col_lien: st.column_config.LinkColumn(
+                        "Action", 
+                        display_text="📥 Télécharger PDF",
+                        help="Télécharger directement le rapport officiel validé"
+                    ),
+                    nom_col_ex: st.column_config.NumberColumn("Exercice", format="%d"),
+                    nom_col_date: st.column_config.DateColumn("Date de dernier contrôle", format="DD/MM/YYYY")
+                },
+                hide_index=True,
+                use_container_width=True
+            )
+        else:
+            st.warning("Aucun rapport ne correspond aux critères sélectionnés.")
+
+        # 📊 GRAPHIQUES PLACÉS EN DESSOUS DU TABLEAU DES RAPPORTS
+        st.markdown("<br><hr style='margin: 20px 0; border-color: #E2E8F0;'><p style='font-size: 1.2rem; font-weight: 700; color: #0F172A; margin-bottom:15px;'>📊 Analyses globales de l'archive</p>", unsafe_allow_html=True)
+        if not df_rapports.empty:
+            col_site_chart = [c for c in df_rapports.columns if "site" in c.lower()]
+            col_cat_chart = [c for c in df_rapports.columns if "cat" in c.lower()]
+            
+            if col_site_chart and col_cat_chart:
+                df_site_count = df_rapports[col_site_chart[0]].value_counts().reset_index()
+                df_site_count.columns = ['Site', 'Nombre']
+                
+                df_cat_count = df_rapports[col_cat_chart[0]].value_counts().reset_index()
+                df_cat_count.columns = ['Domaine', 'Nombre']
+
+                chart_col1, chart_col2 = st.columns(2)
+                
+                # GRAPH 1 : Répartition par Site (Donut)
+                with chart_col1:
+                    st.markdown("""
+                        <div style="background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #E2E8F0; margin-bottom: 15px;">
+                            <p style="margin:0; font-size: 14px; color: #1E3A8A; font-weight: 600;">🏭 Volume de rapports par Site</p>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    fig_site = px.pie(
+                        df_site_count, 
+                        values='Nombre', 
+                        names='Site', 
+                        hole=0.6,
+                        color_discrete_sequence=['#1E3A8A', '#0EA5E9', '#94A3B8']
+                    )
+                    fig_site.update_traces(textposition='inside', textinfo='percent+label')
+                    fig_site.update_layout(
+                        margin=dict(t=10, b=10, l=10, r=10),
+                        height=220,
+                        showlegend=False,
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)'
+                    )
+                    st.plotly_chart(fig_site, use_container_width=True, config={'displayModeBar': False})
+
+                # GRAPH 2 : Répartition par Domaine (Barres avec nombres à droite)
+                with chart_col2:
+                    st.markdown("""
+                        <div style="background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #E2E8F0; margin-bottom: 15px;">
+                            <p style="margin:0; font-size: 14px; color: #1E3A8A; font-weight: 600;">📈 Rapports par Domaine Technique</p>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    fig_cat = px.bar(
+                        df_cat_count.sort_values(by='Nombre', ascending=True), 
+                        x='Nombre', 
+                        y='Domaine', 
+                        orientation='h',
+                        text='Nombre',
+                        color_discrete_sequence=['#1E3A8A']
+                    )
+                    fig_cat.update_traces(textposition='outside', cliponaxis=False)
+                    fig_cat.update_layout(
+                        margin=dict(t=5, b=5, l=10, r=40),
+                        height=220,
+                        xaxis_title=None,
+                        yaxis_title=None,
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)'
+                    )
+                    fig_cat.update_xaxes(showgrid=True, gridcolor='#E2E8F0')
+                    st.plotly_chart(fig_cat, use_container_width=True, config={'displayModeBar': False})
+
+        if role == "Responsable" and password_correct:
+            st.markdown("<br>", unsafe_allow_html=True)
+            with st.expander("🛠️ Panneau d'administration (Accès Base de Données)"):
+                st.markdown(f"En tant que responsable, vous pouvez modifier directement le registre : [Ouvrir le Google Sheets externe]({URL_GOOGLE_SHEET})")
+
+    # --- PARTIE 2 : MAÎTRISE & PLANNING ---
+    with tab2:
+        st.markdown("<p style='font-size: 1.2rem; font-weight: 700; color: #0F172A; margin-bottom:10px;'>📅 Planification des contrôles obligatoires</p>", unsafe_allow_html=True)
+        
+        if not df_planning.empty:
+            col_prochain = [c for c in df_planning.columns if "prochain" in c.lower() or "échéan" in c.lower()]
+            nom_col_prochain = col_prochain[0] if col_prochain else "Prochain contrôle"
+            
+            st.dataframe(
+                df_planning,
+                column_config={
+                    nom_col_prochain: st.column_config.DateColumn("Échéance contrôle", format="DD/MM/YYYY"),
+                },
+                hide_index=True,
+                use_container_width=True
+            )
+        else:
+            st.info("Le calendrier réglementaire n'affiche aucun contrôle futur planifié dans Google Sheets.")
+        
+        if role == "Responsable" and password_correct:
+            st.markdown("<br>", unsafe_allow_html=True)
+            with st.expander("🛠️ Panneau d'administration (Gestion du Planning)"):
+                st.markdown(f"Pour ajouter ou modifier des dates d'échéances de contrôle : [Modifier le calendrier Google Sheets]({URL_GOOGLE_SHEET})")
+
+    # --- PARTIE 3 : ACCÈS RESTREINT RESPONSABLE (ONGLET LOGS) ---
+    if tab3 and role == "Responsable" and password_correct:
+        with tab3:
+            st.markdown("<p style='font-size: 1.2rem; font-weight: 700; color: #1E3A8A; margin-bottom:10px;'>👥 Registre des accès à la plateforme</p>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #64748B; font-size: 14px;'>Historique en temps réel des utilisateurs ayant consulté l'application.</p>", unsafe_allow_html=True)
+            
+            df_logs = None
+            if conn_logs:
+                try:
+                    df_logs = conn_logs.query("SELECT * FROM Logs;")
+                except Exception:
+                    pass
+                    
+            if df_logs is not None and not df_logs.empty:
+                st.dataframe(df_logs, hide_index=True, use_container_width=True)
+            else:
+                tz_local = pytz.timezone('Africa/Tunis')
+                maintenant_secours = datetime.datetime.now(tz_local).strftime("%d/%m/%Y %H:%M")
+                
+                data_secours = {
+                    "Date & Heure d'accès": [maintenant_secours],
+                    "Utilisateur": [st.session_state.get("email_visiteur", "aucun_visiteur@gmail.com")]
+                }
+                st.dataframe(pd.DataFrame(data_secours), hide_index=True, use_container_width=True)
+    else:
+        pass
