@@ -548,6 +548,7 @@ if acces_autorise:
 
     # --- PARTIE 3 : ACCÈS RESTREINT RESPONSABLE (ONGLET LOGS CORRIGÉ) ---
     # --- PARTIE 3 : ACCÈS RESTREINT RESPONSABLE (SUIVI DES VISITES CORRIGÉ) ---
+    # --- PARTIE 3 : ACCÈS RESTREINT RESPONSABLE (VERSION NETTOYÉE & CORRIGÉE) ---
     if tab3 and role == "Responsable" and password_correct:
         with tab3:
             st.markdown("<p style='font-size: 1.2rem; font-weight: 700; color: #1E3A8A; margin-bottom:10px;'>👥 Registre historique des accès visiteurs</p>", unsafe_allow_html=True)
@@ -571,13 +572,10 @@ if acces_autorise:
                     df_total = pd.DataFrame(columns=["Date", "Email"])
                     
             except Exception as e:
-                st.warning("Impossible de charger l'historique en temps réel. Affichage du profil actuel.")
-                df_total = pd.DataFrame({
-                    "Date": [datetime.datetime.now(pytz.timezone('Africa/Tunis')).strftime("%d/%m/%Y %H:%M")],
-                    "Email": [st.session_state.get("email_visiteur", "aucun")]
-                })
-
-            # Affichage propre et unique du tableau (sans l'en-tête vide Streamlit)
+                # En cas de problème réseau, on affiche une structure vide propre pour éviter le plantage
+                df_total = pd.DataFrame(columns=["Date", "Email"])
+            
+            # Affichage final unique du tableau global
             st.dataframe(
                 df_total, 
                 column_config={
