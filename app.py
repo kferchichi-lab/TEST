@@ -766,42 +766,69 @@ if acces_autorise:
                             evenements[jour].append(couleur)
                             details_evenements[jour].append(row)
 
-                    # --- RENDU CALENDRIER COMPACT ---
-                    jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
-                    cal_html = "<table style='width:100%; border-collapse:collapse; table-layout:fixed; margin:auto;'>"
-                    cal_html += "<tr>" + "".join(f"<th style='color:#94a3b8; font-size:11px; padding:2px 0; text-align:center; font-weight:500; width:14%;'>{j}</th>" for j in jours_abbr) + "</tr>"
+                    # Injection de CSS ciblé pour compresser les colonnes et styliser les boutons calendriers natifs
+                    st.markdown("""
+                        <style>
+                        /* Supprime l'espace excessif entre les colonnes de la grille */
+                        div[data-testid="column"] {
+                            padding: 0px !important;
+                            margin: 0px !important;
+                        }
+                        /* Formatage ultra-strict des boutons du calendrier pour garder la forme ronde parfaite */
+                        div.stButton > button.cal-btn {
+                            border: none !important;
+                            width: 24px !important;
+                            height: 24px !important;
+                            min-height: 24px !important;
+                            max-height: 24px !important;
+                            padding: 0 !important;
+                            font-size: 10px !important;
+                            margin: 1px auto !important;
+                            display: flex !important;
+                            align-items: center !important;
+                            justify-content: center !important;
+                            cursor: pointer !important;
+                        }
+                        </style>
+                    """, unsafe_allow_html=True)
 
+                    # --- EN-TÊTE DES JOURS DE LA SEMAINE ---
+                    jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
+                    cols_th = st.columns(7)
+                    for idx, j_ab in enumerate(jours_abbr):
+                        cols_th[idx].markdown(f"<p style='color:#94a3b8; font-size:11px; text-align:center; margin:0 0 4px 0; font-weight:500;'>{j_ab}</p>", unsafe_allow_html=True)
+
+                    # --- GRILLE DU CALENDRIER TOTALEMENT CLIQUABLE ---
                     cal_obj = calendar.monthcalendar(a_view, m_view)
-                    for semaine in cal_obj:
-                        cal_html += "<tr>"
-                        for jour in semaine:
+                    for num_semaine, semaine in enumerate(cal_obj):
+                        cols_semaine = st.columns(7)
+                        for idx_jour, jour in enumerate(semaine):
                             if jour == 0:
-                                cal_html += "<td style='padding:2px; text-align:center;'></td>"
+                                cols_semaine[idx_jour].write("")
                             else:
                                 is_today = (jour == today_dt.day and m_view == today_dt.month and a_view == today_dt.year)
+                                is_selected = (st.session_state.jour_selectionne == jour)
                                 evts = evenements.get(jour, [])
 
-                                if is_today:
-                                    cell_style = "background:#1E3A8A; color:white; border-radius:50%; font-weight:600;"
+                                # Application dynamique des couleurs de fond
+                                if is_selected:
+                                    bg_style = "background:#0F172A !important; color:white !important; border-radius:50% !important; font-weight:700 !important;"
+                                elif is_today:
+                                    bg_style = "background:#1E3A8A !important; color:white !important; border-radius:50% !important; font-weight:600 !important;"
                                 elif evts:
-                                    cell_style = f"background:{evts[0]}; color:white; border-radius:50%; font-weight:600;"
+                                    bg_style = f"background:{evts[0]} !important; color:white !important; border-radius:50% !important; font-weight:600 !important;"
                                 else:
-                                    cell_style = "color:#334155;"
+                                    bg_style = "background:#F1F5F9 !important; color:#334155 !important; border-radius:50% !important;"
 
-                                dot_html = ""
-                                if len(evts) > 1:
-                                    dot_html = f"<div style='font-size:7px; color:white; line-height:1; margin-top:-2px;'>+{len(evts)-1}</div>"
+                                label_bouton = f"{jour}+" if len(evts) > 1 else f"{jour}"
 
-                                cal_html += f"""
-                                <td style='padding:3px 0; text-align:center;'>
-                                    <div style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column;
-                                    align-items:center; justify-content:center; {cell_style} font-size:10px;'>
-                                        {jour}{dot_html}
-                                    </div>
-                                </td>"""
-                        cal_html += "</tr>"
-                    cal_html += "</table>"
-                    st.markdown(cal_html, unsafe_allow_html=True)
+                                # Injection CSS en ligne propre à chaque bouton de jour
+                                st.markdown(f"<style>div.stButton > button[key='btn_cal_{m_view}_{jour}'] {{{bg_style}}}</style>", unsafe_allow_html=True)
+
+                                # Le bouton natif change la variable d'état et déclenche l'affichage instantanément
+                                if cols_semaine[idx_jour].button(label_bouton, key=f"btn_cal_{m_view}_{jour}", class_name="cal-btn"):
+                                    st.session_state.jour_selectionne = jour
+                                    st.rerun()
 
                     # ---- LÉGENDE FIXE TOUJOURS VIVE ----
                     st.markdown("<div style='margin-top:12px; border-top:1px dashed #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
@@ -815,39 +842,28 @@ if acces_autorise:
         # ========================================================
             # ZONE HORIZONTALE EN DESSOUS DES TABLEAUX ET CALENDRIER
             # ========================================================
+            # ========================================================
+            # ZONE HORIZONTALE EN DESSOUS DES TABLEAUX ET CALENDRIER
+            # ========================================================
             st.markdown("<div style='margin-top:20px; border-top:2px solid #E2E8F0; padding-top:15px;'></div>", unsafe_allow_html=True)
             
             jours_avec_evenements = sorted(list(details_evenements.keys()))
             
             if jours_avec_evenements:
+                # Si aucun jour n'est sélectionné par clic, on pré-sélectionne automatiquement le premier jour avec contrôle du mois
                 if st.session_state.jour_selectionne not in jours_avec_evenements:
                     st.session_state.jour_selectionne = jours_avec_evenements[0]
                 
-                index_defaut = jours_avec_evenements.index(st.session_state.jour_selectionne)
+                jour_actif = st.session_state.jour_selectionne
                 
-                # Alignement du titre et du selectbox
-                c_title, c_select = st.columns([2, 1])
-                with c_title:
-                    st.markdown(f"### 📋 Contrôles prévus le {st.session_state.jour_selectionne}/{m_view}/{a_view}")
-                with c_select:
-                    choix_inspect = st.selectbox(
-                        "🔍 Choisir la date à inspecter :",
-                        options=jours_avec_evenements,
-                        index=index_defaut,
-                        format_func=lambda x: f"Jour {x} ({len(details_evenements[x])} contrôle(s))",
-                        key="global_inspect_jour",
-                        label_visibility="collapsed"
-                    )
-                    st.session_state.jour_selectionne = choix_inspect
+                # Titre de la section horizontale indiquant le jour actif
+                st.markdown(f"### 📋 Contrôles prévus le {jour_actif}/{m_view}/{a_view}")
 
                 # --- AFFICHAGE HORIZONTAL DES CARTES ---
-                jour_actif = st.session_state.jour_selectionne
                 list_ctrls = details_evenements.get(jour_actif, [])
                 
                 if list_ctrls:
-                    # Crée dynamiquement autant de colonnes qu'il y a de contrôles ce jour-là
                     cols_cards = st.columns(len(list_ctrls))
-                    
                     for idx, row_ctrl in enumerate(list_ctrls):
                         with cols_cards[idx]:
                             c_cat = str(row_ctrl[col_cat_r[0]]).strip()
@@ -855,7 +871,6 @@ if acces_autorise:
                             c_label = str(row_ctrl[col_label_r[0]]).strip() if col_label_r else ""
                             c_couleur = COULEURS_CAT.get(c_cat, "#94a3b8")
                             
-                            # Carte descriptive premium horizontale
                             st.markdown(f"""
                             <div style='background:#F8FAFC; border-top:4px solid {c_couleur}; padding:12px; border-radius:6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); min-height:90px;'>
                                 <p style='margin:0; font-size:12px; font-weight:700; color:#1E293B;'>{c_cat}</p>
