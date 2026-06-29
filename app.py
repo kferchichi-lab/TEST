@@ -456,91 +456,107 @@ if acces_autorise:
                     a_view = st.session_state.cal_annee
 
                     # Navigation mois
-                    nav1, nav2, nav3 = st.columns([1,3,1])
+                    nav1, nav2, nav3 = st.columns([1, 3, 1])
                     with nav1:
                         if st.button("◀", key="prev_month"):
-                            if st.session_state.cal_mois==1: st.session_state.cal_mois=12; st.session_state.cal_annee-=1
-                            else: st.session_state.cal_mois-=1
-                            st.session_state.jour_selectionne=None; st.rerun()
+                            if st.session_state.cal_mois == 1:
+                                st.session_state.cal_mois = 12
+                                st.session_state.cal_annee -= 1
+                            else:
+                                st.session_state.cal_mois -= 1
+                            st.session_state.jour_selectionne = None
+                            st.rerun()
                     with nav2:
                         st.markdown(f"<p style='text-align:center;font-weight:600;font-size:14px;margin:0;padding-top:4px;'>{MOIS_FR[m_view]} {a_view}</p>", unsafe_allow_html=True)
                     with nav3:
                         if st.button("▶", key="next_month"):
-                            if st.session_state.cal_mois==12: st.session_state.cal_mois=1; st.session_state.cal_annee+=1
-                            else: st.session_state.cal_mois+=1
-                            st.session_state.jour_selectionne=None; st.rerun()
+                            if st.session_state.cal_mois == 12:
+                                st.session_state.cal_mois = 1
+                                st.session_state.cal_annee += 1
+                            else:
+                                st.session_state.cal_mois += 1
+                            st.session_state.jour_selectionne = None
+                            st.rerun()
 
-                    # Recalcul après navigation
                     m_view = st.session_state.cal_mois
                     a_view = st.session_state.cal_annee
 
-                    # Extraction des événements du mois affiché
-                    evenements      = {}  # jour → [couleur, ...]
-                    details_evt     = {}  # jour → [row, ...]
+                    # Extraction des événements
+                    evenements  = {}
+                    details_evt = {}
                     for _, row in df_ech.iterrows():
                         d = row["Prochaine échéance"]
-                        if pd.notna(d) and d.month==m_view and d.year==a_view:
+                        if pd.notna(d) and d.month == m_view and d.year == a_view:
                             j   = d.day
                             cat = str(row[col_cat_r[0]]).strip()
                             col = COULEURS_CAT.get(cat, "#94a3b8")
-                            evenements.setdefault(j,[]).append(col)
-                            details_evt.setdefault(j,[]).append(row)
+                            evenements.setdefault(j, []).append(col)
+                            details_evt.setdefault(j, []).append(row)
 
-                    # Rendu HTML du calendrier
-                    jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
-                    cal_html   = "<table style='width:100%;border-collapse:collapse;table-layout:fixed;'>"
-                    cal_html  += "<tr>"+"".join(
-                        f"<th style='color:#94a3b8;font-size:11px;padding:3px 0;text-align:center;font-weight:500;width:14%;'>{j}</th>"
-                        for j in jours_abbr)+"</tr>"
+                    # CSS pour les boutons du calendrier
+                    st.markdown("""
+                    <style>
+                    div[data-testid="stHorizontalBlock"] > div > div > div > button {
+                        padding: 0 !important;
+                        min-height: 32px !important;
+                        height: 32px !important;
+                        width: 32px !important;
+                        border-radius: 50% !important;
+                        font-size: 11px !important;
+                        font-weight: 500 !important;
+                        margin: auto !important;
+                        display: flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                    }
+                    </style>
+                    """, unsafe_allow_html=True)
 
+                    # En-tête jours
+                    jours_abbr = ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"]
+                    cols_header = st.columns(7)
+                    for i, j in enumerate(jours_abbr):
+                        with cols_header[i]:
+                            st.markdown(f"<p style='text-align:center;font-size:10px;color:#94a3b8;font-weight:500;margin:0;padding:2px 0;'>{j}</p>", unsafe_allow_html=True)
+
+                    # Grille calendrier avec boutons cliquables
+                    today_dt2 = datetime.date.today()
                     for semaine in calendar.monthcalendar(a_view, m_view):
-                        cal_html += "<tr>"
-                        for jour in semaine:
-                            if jour == 0:
-                                cal_html += "<td style='padding:3px 0;'></td>"
-                            else:
-                                is_today = (jour==today_dt.day and m_view==today_dt.month and a_view==today_dt.year)
-                                is_sel   = (jour==st.session_state.jour_selectionne)
-                                evts     = evenements.get(jour,[])
-
-                                if is_sel and evts:
-                                    style = f"background:{evts[0]};color:white;border-radius:50%;font-weight:700;outline:3px solid #0F172A;outline-offset:1px;"
-                                elif is_today:
-                                    style = "background:#1E3A8A;color:white;border-radius:50%;font-weight:600;"
-                                elif evts:
-                                    style = f"background:{evts[0]};color:white;border-radius:50%;font-weight:600;cursor:pointer;"
+                        cols_sem = st.columns(7)
+                        for i, jour in enumerate(semaine):
+                            with cols_sem[i]:
+                                if jour == 0:
+                                    st.markdown("<div style='height:32px'></div>", unsafe_allow_html=True)
                                 else:
-                                    style = "color:#334155;"
+                                    evts       = evenements.get(jour, [])
+                                    is_today   = (jour == today_dt2.day and m_view == today_dt2.month and a_view == today_dt2.year)
+                                    is_sel     = (jour == st.session_state.jour_selectionne)
+                                    has_event  = len(evts) > 0
 
-                                nb_sup = f"<div style='font-size:7px;color:white;line-height:1;margin-top:-1px;'>+{len(evts)-1}</div>" if len(evts)>1 else ""
-                                cal_html += f"""<td style='padding:3px 0;text-align:center;'>
-                                    <div style='width:26px;height:26px;margin:auto;display:flex;flex-direction:column;
-                                         align-items:center;justify-content:center;{style}font-size:11px;'>
-                                        {jour}{nb_sup}
-                                    </div></td>"""
-                        cal_html += "</tr>"
-                    cal_html += "</table>"
-                    st.markdown(cal_html, unsafe_allow_html=True)
+                                    if is_sel:
+                                        bg = evts[0] if evts else "#1E3A8A"
+                                        style = f"background:{bg};color:white;border-radius:50%;border:3px solid #0F172A;width:32px;height:32px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;margin:auto;cursor:pointer;"
+                                    elif is_today:
+                                        style = "background:#1E3A8A;color:white;border-radius:50%;border:none;width:32px;height:32px;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;margin:auto;"
+                                    elif has_event:
+                                        style = f"background:{evts[0]};color:white;border-radius:50%;border:none;width:32px;height:32px;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;margin:auto;cursor:pointer;"
+                                    else:
+                                        style = "background:transparent;color:#334155;border-radius:50%;border:none;width:32px;height:32px;font-size:11px;display:flex;align-items:center;justify-content:center;margin:auto;"
 
-                    # Sélecteur de jour cliquable (boutons)
-                    if evenements:
-                        st.markdown("<div style='margin-top:10px;border-top:1px dashed #E2E8F0;padding-top:8px;'></div>", unsafe_allow_html=True)
-                        st.markdown("<p style='font-size:11px;color:#94a3b8;margin-bottom:6px;'>Cliquez sur un jour avec contrôle :</p>", unsafe_allow_html=True)
-                        jours_tries = sorted(evenements.keys())
-                        btn_cols    = st.columns(min(len(jours_tries), 7))
-                        for idx, j in enumerate(jours_tries):
-                            col_idx = idx % len(btn_cols)
-                            couleur = evenements[j][0]
-                            with btn_cols[col_idx]:
-                                if st.button(f"{j}", key=f"btn_jour_{j}",
-                                    help=f"{len(evenements[j])} contrôle(s) le {j}/{m_view}/{a_view}"):
-                                    st.session_state.jour_selectionne = j
-                                    st.rerun()
+                                    if has_event:
+                                        # Jour avec événement = bouton cliquable
+                                        if st.button(str(jour), key=f"cal_{a_view}_{m_view}_{jour}",
+                                                     help=f"{len(evts)} contrôle(s) ce jour"):
+                                            st.session_state.jour_selectionne = jour
+                                            st.rerun()
+                                    else:
+                                        # Jour sans événement = texte simple
+                                        st.markdown(f"<div style='{style}'>{jour}</div>", unsafe_allow_html=True)
 
                     # Légende
-                    st.markdown("<div style='margin-top:10px;border-top:1px dashed #E2E8F0;padding-top:8px;'></div>", unsafe_allow_html=True)
+                    st.markdown("<div style='margin-top:12px;border-top:1px dashed #E2E8F0;padding-top:8px;'></div>", unsafe_allow_html=True)
+                    cats_du_mois = {str(r[col_cat_r[0]]).strip() for evts_list in details_evt.values() for r in evts_list}
                     for cat, couleur in COULEURS_CAT.items():
-                        cats_du_mois = set(str(r[col_cat_r[0]]).strip() for evts_list in details_evt.values() for r in evts_list)
                         opacity = "1" if cat in cats_du_mois else "0.3"
                         st.markdown(f"""<div style='display:flex;align-items:center;gap:8px;margin-bottom:5px;opacity:{opacity};'>
                             <span style='width:10px;height:10px;border-radius:2px;background:{couleur};display:inline-block;flex-shrink:0;'></span>
