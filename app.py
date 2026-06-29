@@ -724,134 +724,109 @@ if acces_autorise:
                 st.dataframe(df_show, column_config=col_cfg, hide_index=True, use_container_width=True)
 
             with right_col:
-                import calendar
-                calendar.setfirstweekday(0)
+                    import calendar
+                    calendar.setfirstweekday(0)
 
-                if "cal_mois" not in st.session_state:
-                    st.session_state.cal_mois = today_dt.month
-                if "cal_annee" not in st.session_state:
-                    st.session_state.cal_annee = today_dt.year
-                if "jour_selectionne" not in st.session_state:
-                    st.session_state.jour_selectionne = None
-
-                # --- FORMULAIRE INTERNE CACHÉ POUR CAPTURER LES CLICS HTML ---
-                with st.form("click_form", clear_on_submit=True):
-                    click_val = st.text_input("target_day", value="", key="target_day", label_visibility="collapsed")
-                    submitted = st.form_submit_button("submit")
-                    if submitted and click_val:
-                        st.session_state.jour_selectionne = int(click_val)
-                        st.rerun()
-
-                # Dissimulation complète du bouton technique de soumission
-                st.markdown("<style>form[data-testid='stForm'] { display: none !important; }</style>", unsafe_allow_html=True)
-
-                # Barre de navigation des mois
-                nav1, nav2, nav3 = st.columns([1, 3, 1])
-                with nav1:
-                    if st.button("◀", key="prev_month"):
-                        if st.session_state.cal_mois == 1:
-                            st.session_state.cal_mois = 12
-                            st.session_state.cal_annee -= 1
-                        else:
-                            st.session_state.cal_mois -= 1
+                    if "cal_mois" not in st.session_state:
+                        st.session_state.cal_mois = today_dt.month
+                    if "cal_annee" not in st.session_state:
+                        st.session_state.cal_annee = today_dt.year
+                    if "jour_selectionne" not in st.session_state:
                         st.session_state.jour_selectionne = None
-                        st.rerun()
-                with nav2:
-                    MOIS_FR = ["","Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
-                    st.markdown(f"<p style='text-align:center;font-weight:600;font-size:14px;margin:0;padding-top:4px;'>{MOIS_FR[st.session_state.cal_mois]} {st.session_state.cal_annee}</p>", unsafe_allow_html=True)
-                with nav3:
-                    if st.button("▶", key="next_month"):
-                        if st.session_state.cal_mois == 12:
-                            st.session_state.cal_mois = 1
-                            st.session_state.cal_annee += 1
-                        else:
-                            st.session_state.cal_mois += 1
-                        st.session_state.jour_selectionne = None
-                        st.rerun()
 
-                m_view = st.session_state.cal_mois
-                a_view = st.session_state.cal_annee
-
-                # Extraction et indexation des événements du mois (Tolérant à la casse)
-                evenements = {}
-                details_evenements = {}
-                for _, row in df_ech.iterrows():
-                    d = row["Prochaine échéance"]
-                    if pd.notna(d) and d.month == m_view and d.year == a_view:
-                        jour = d.day
-                        cat_brute = str(row[col_cat_r[0]]).strip()
-                        
-                        couleur = "#94a3b8"
-                        for key_cat, col_val in COULEURS_CAT.items():
-                            if key_cat.lower().strip() == cat_brute.lower():
-                                couleur = col_val
-                                break
-                                
-                        if jour not in evenements:
-                            evenements[jour] = []
-                            details_evenements[jour] = []
-                        evenements[jour].append(couleur)
-                        details_evenements[jour].append(row)
-
-                # --- CONSTRUCTION DE LA TABLE HTML CRISTALINE ---
-                jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
-                cal_html = "<table style='width:100%; border-collapse:collapse; table-layout:fixed; margin:auto;'>"
-                cal_html += "<tr>" + "".join(f"<th style='color:#94a3b8; font-size:11px; padding:2px 0; text-align:center; font-weight:500; width:14%;'>{j}</th>" for j in jours_abbr) + "</tr>"
-
-                cal_obj = calendar.monthcalendar(a_view, m_view)
-                for semaine in cal_obj:
-                    cal_html += "<tr>"
-                    for jour in semaine:
-                        if jour == 0:
-                            cal_html += "<td style='padding:2px; text-align:center;'></td>"
-                        else:
-                            is_today = (jour == today_dt.day and m_view == today_dt.month and a_view == today_dt.year)
-                            is_selected = (st.session_state.jour_selectionne == jour)
-                            evts = evenements.get(jour, [])
-
-                            if is_selected:
-                                cell_style = "background:#0F172A; color:white; border-radius:50%; font-weight:700;"
-                            elif is_today:
-                                cell_style = "background:#1E3A8A; color:white; border-radius:50%; font-weight:600;"
-                            elif evts:
-                                cell_style = f"background:{evts[0]}; color:white; border-radius:50%; font-weight:600;"
+                    # Navigation des mois
+                    nav1, nav2, nav3 = st.columns([1, 3, 1])
+                    with nav1:
+                        if st.button("◀", key="prev_month"):
+                            if st.session_state.cal_mois == 1:
+                                st.session_state.cal_mois = 12
+                                st.session_state.cal_annee -= 1
                             else:
-                                cell_style = "color:#334155;"
+                                st.session_state.cal_mois -= 1
+                            st.session_state.jour_selectionne = None
+                            st.rerun()
+                    with nav2:
+                        MOIS_FR = ["","Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+                        st.markdown(f"<p style='text-align:center;font-weight:600;font-size:14px;margin:0;padding-top:4px;'>{MOIS_FR[st.session_state.cal_mois]} {st.session_state.cal_annee}</p>", unsafe_allow_html=True)
+                    with nav3:
+                        if st.button("▶", key="next_month"):
+                            if st.session_state.cal_mois == 12:
+                                st.session_state.cal_mois = 1
+                                st.session_state.cal_annee += 1
+                            else:
+                                st.session_state.cal_mois += 1
+                            st.session_state.jour_selectionne = None
+                            st.rerun()
 
-                            dot_html = ""
-                            if len(evts) > 1:
-                                dot_html = f"<div style='font-size:7px; color:white; line-height:1; margin-top:-2px;'>+{len(evts)-1}</div>"
+                    m_view = st.session_state.cal_mois
+                    a_view = st.session_state.cal_annee
 
-                            if evts:
-                                cell_content = f"""
-                                <button onclick="let inp = window.parent.document.querySelector('input[aria-label=\\'target_day\\']'); if(inp){{inp.value='{jour}'; inp.dispatchEvent(new Event('change', {{bubbles:true}})); setTimeout(()=>{{window.parent.document.querySelector('form[data-testid=\\'stForm\\'] button').click();}},50);}}"
-                                        style="background:none; border:none; padding:0; margin:0; width:100%; cursor:pointer; font-family:inherit; color:inherit;">
-                                    <div style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column; align-items:center; justify-content:center; {cell_style} font-size:10px;'>
+                    # Extraction des événements du mois
+                    evenements = {}
+                    details_evenements = {}
+                    for _, row in df_ech.iterrows():
+                        d = row["Prochaine échéance"]
+                        if pd.notna(d) and d.month == m_view and d.year == a_view:
+                            jour = d.day
+                            cat_brute = str(row[col_cat_r[0]]).strip()
+                            
+                            couleur = "#94a3b8"
+                            for key_cat, col_val in COULEURS_CAT.items():
+                                if key_cat.lower().strip() == cat_brute.lower():
+                                    couleur = col_val
+                                    break
+                                    
+                            if jour not in evenements:
+                                evenements[jour] = []
+                                details_evenements[jour] = []
+                            evenements[jour].append(couleur)
+                            details_evenements[jour].append(row)
+
+                    # --- RENDU CALENDRIER COMPACT ---
+                    jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
+                    cal_html = "<table style='width:100%; border-collapse:collapse; table-layout:fixed; margin:auto;'>"
+                    cal_html += "<tr>" + "".join(f"<th style='color:#94a3b8; font-size:11px; padding:2px 0; text-align:center; font-weight:500; width:14%;'>{j}</th>" for j in jours_abbr) + "</tr>"
+
+                    cal_obj = calendar.monthcalendar(a_view, m_view)
+                    for semaine in cal_obj:
+                        cal_html += "<tr>"
+                        for jour in semaine:
+                            if jour == 0:
+                                cal_html += "<td style='padding:2px; text-align:center;'></td>"
+                            else:
+                                is_today = (jour == today_dt.day and m_view == today_dt.month and a_view == today_dt.year)
+                                evts = evenements.get(jour, [])
+
+                                if is_today:
+                                    cell_style = "background:#1E3A8A; color:white; border-radius:50%; font-weight:600;"
+                                elif evts:
+                                    cell_style = f"background:{evts[0]}; color:white; border-radius:50%; font-weight:600;"
+                                else:
+                                    cell_style = "color:#334155;"
+
+                                dot_html = ""
+                                if len(evts) > 1:
+                                    dot_html = f"<div style='font-size:7px; color:white; line-height:1; margin-top:-2px;'>+{len(evts)-1}</div>"
+
+                                cal_html += f"""
+                                <td style='padding:3px 0; text-align:center;'>
+                                    <div style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column;
+                                    align-items:center; justify-content:center; {cell_style} font-size:10px;'>
                                         {jour}{dot_html}
                                     </div>
-                                </button>
-                                """
-                            else:
-                                cell_content = f"""
-                                <div style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column; align-items:center; justify-content:center; {cell_style} font-size:10px;'>
-                                    {jour}
-                                </div>
-                                """
+                                </td>"""
+                        cal_html += "</tr>"
+                    cal_html += "</table>"
+                    st.markdown(cal_html, unsafe_allow_html=True)
 
-                            cal_html += f"<td style='padding:3px 0; text-align:center;'>{cell_content}</td>"
-                    cal_html += "</tr>"
-                cal_html += "</table>"
-                
-                st.markdown(cal_html, unsafe_allow_html=True)
-
-                # ---- LÉGENDE DU CALENDRIER (SANS TRANSPARENCE) ----
-                st.markdown("<div style='margin-top:12px; border-top:1px dashed #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
-                for cat, couleur in COULEURS_CAT.items():
-                    st.markdown(f"""
-                        <div style='display:flex; align-items:center; gap:8px; margin-bottom:5px;'>
-                            <span style='width:10px; height:10px; border-radius:2px; background:{couleur}; display:inline-block; flex-shrink:0;'></span>
-                            <span style='font-size:11px; color:#475569;'>{cat}</span>
-                        </div>""", unsafe_allow_html=True)
+                    # ---- LÉGENDE FIXE TOUJOURS VIVE ----
+                    st.markdown("<div style='margin-top:12px; border-top:1px dashed #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
+                    for cat, couleur in COULEURS_CAT.items():
+                        st.markdown(f"""
+                            <div style='display:flex; align-items:center; gap:8px; margin-bottom:5px;'>
+                                <span style='width:10px; height:10px; border-radius:2px; background:{couleur}; display:inline-block; flex-shrink:0;'></span>
+                                <span style='font-size:11px; color:#475569;'>{cat}</span>
+                            </div>""", unsafe_allow_html=True)
 
             # ========================================================================
             # ZONE D'AFFICHAGE HORIZONTALE DES CARTES (SECTION INFÉRIEURE DE TAB2)
