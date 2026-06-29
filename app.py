@@ -849,10 +849,15 @@ if acces_autorise:
 
                     # Légende des couleurs en bas
                     st.markdown("<div style='margin-top:12px; border-top:1px dashed #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
-                    cats_presentes = set(cat for evts_list in evenements.values() for c in evts_list for cat_name, col in COULEURS_CAT.items() if col == c)
+                    
+                    # CORRECTION ICI : cat_name au lieu de cat
+                    cats_presentes = set(cat_name for evts_list in evenements.values() for c in evts_list for cat_name, col in COULEURS_CAT.items() if col == c)
                     
                     for cat, couleur in COULEURS_CAT.items():
-                        opacity = "1" if cat in cats_presentes else "0.35"
+                        # On vérifie si la catégorie est présente (en ignorant la casse)
+                        is_visible = any(cat.lower().strip() == cp.lower().strip() for cp in cats_presentes)
+                        opacity = "1" if is_visible else "0.35"
+                        
                         st.markdown(f"""
                             <div style='display:flex; align-items:center; gap:8px; opacity:{opacity}; margin-bottom:4px;'>
                                 <span style='width:10px; height:10px; border-radius:2px; background:{couleur}; display:inline-block; flex-shrink:0;'></span>
