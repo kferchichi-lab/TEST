@@ -718,6 +718,22 @@ if acces_autorise:
                     if "jour_selectionne" not in st.session_state:
                         st.session_state.jour_selectionne = None
 
+                    # --- INTERCEPTION DU CLIC SANS RECHARGEMENT ---
+                    # Formulaire de secours caché : capture l'action du clic HTML
+                    with st.form("click_form", clear_on_submit=True):
+                        click_val = st.text_input("target_day", value="", key="target_day", label_visibility="collapsed")
+                        submitted = st.form_submit_button("submit", label_visibility="collapsed")
+                        if submitted and click_val:
+                            st.session_state.jour_selectionne = int(click_val)
+                            st.rerun()
+
+                    # Masquer complètement le formulaire de secours technique pour ne pas polluer le design
+                    st.markdown("""
+                        <style>
+                        form[data-testid="stForm"] { display: none !important; }
+                        </style>
+                    """, unsafe_allow_html=True)
+
                     # Navigation des mois
                     nav1, nav2, nav3 = st.columns([1, 3, 1])
                     with nav1:
@@ -745,7 +761,7 @@ if acces_autorise:
                     m_view = st.session_state.cal_mois
                     a_view = st.session_state.cal_annee
 
-                    # Extraction des événements du mois
+                    # Extraction des événements du mois (Insensible à la casse)
                     evenements = {}
                     details_evenements = {}
                     for _, row in df_ech.iterrows():
@@ -766,69 +782,59 @@ if acces_autorise:
                             evenements[jour].append(couleur)
                             details_evenements[jour].append(row)
 
-                    # Injection CSS ciblée pour masquer l'affichage par défaut des boutons Streamlit et les forcer à être de petits ronds
-                    st.markdown("""
-                        <style>
-                        /* Supprime l'espace interne des colonnes de la grille pour resserrer le calendrier */
-                        div[data-testid="column"] {
-                            padding: 0px !important;
-                            margin: 0px !important;
-                        }
-                        /* Formatage global pour tous les boutons générés dans le calendrier */
-                        div.stButton > button {
-                            border: none !important;
-                            width: 24px !important;
-                            height: 24px !important;
-                            min-height: 24px !important;
-                            max-height: 24px !important;
-                            padding: 0 !important;
-                            font-size: 10px !important;
-                            margin: 1px auto !important;
-                            display: flex !important;
-                            align-items: center !important;
-                            justify-content: center !important;
-                            cursor: pointer !important;
-                        }
-                        </style>
-                    """, unsafe_allow_html=True)
-
-                    # --- EN-TÊTE DES JOURS DE LA SEMAINE ---
+                    # --- GENERATION DU TABLEAU HTML INTERACTIF ULTRA-FIN ---
                     jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
-                    cols_th = st.columns(7)
-                    for idx, j_ab in enumerate(jours_abbr):
-                        cols_th[idx].markdown(f"<p style='color:#94a3b8; font-size:11px; text-align:center; margin:0 0 4px 0; font-weight:500;'>{j_ab}</p>", unsafe_allow_html=True)
+                    cal_html = "<table style='width:100%; border-collapse:collapse; table-layout:fixed; margin:auto;'>"
+                    cal_html += "<tr>" + "".join(f"<th style='color:#94a3b8; font-size:11px; padding:2px 0; text-align:center; font-weight:500; width:14%;'>{j}</th>" for j in jours_abbr) + "</tr>"
 
-                    # --- GRILLE DU CALENDRIER TOTALEMENT CLIQUABLE ---
                     cal_obj = calendar.monthcalendar(a_view, m_view)
-                    for num_semaine, semaine in enumerate(cal_obj):
-                        cols_semaine = st.columns(7)
-                        for idx_jour, jour in enumerate(semaine):
+                    for semaine in cal_obj:
+                        cal_html += "<tr>"
+                        for jour in semaine:
                             if jour == 0:
-                                cols_semaine[idx_jour].write("")
+                                cal_html += "<td style='padding:2px; text-align:center;'></td>"
                             else:
                                 is_today = (jour == today_dt.day and m_view == today_dt.month and a_view == today_dt.year)
                                 is_selected = (st.session_state.jour_selectionne == jour)
                                 evts = evenements.get(jour, [])
 
-                                # Choix dynamique du design selon l'état de la date
+                                # Styles CSS des ronds
                                 if is_selected:
-                                    bg_style = "background:#0F172A !important; color:white !important; border-radius:50% !important; font-weight:700 !important;"
+                                    cell_style = "background:#0F172A; color:white; border-radius:50%; font-weight:700;"
                                 elif is_today:
-                                    bg_style = "background:#1E3A8A !important; color:white !important; border-radius:50% !important; font-weight:600 !important;"
+                                    cell_style = "background:#1E3A8A; color:white; border-radius:50%; font-weight:600;"
                                 elif evts:
-                                    bg_style = f"background:{evts[0]} !important; color:white !important; border-radius:50% !important; font-weight:600 !important;"
+                                    cell_style = f"background:{evts[0]}; color:white; border-radius:50%; font-weight:600;"
                                 else:
-                                    bg_style = "background:#F1F5F9 !important; color:#334155 !important; border-radius:50% !important;"
+                                    cell_style = "color:#334155;"
 
-                                label_bouton = f"{jour}+" if len(evts) > 1 else f"{jour}"
+                                dot_html = ""
+                                if len(evts) > 1:
+                                    dot_html = f"<div style='font-size:7px; color:white; line-height:1; margin-top:-2px;'>+{len(evts)-1}</div>"
 
-                                # Application du style CSS individuel basé sur la clé du bouton unique
-                                st.markdown(f"<style>div.stButton > button[key='btn_cal_{m_view}_{jour}'] {{{bg_style}}}</style>", unsafe_allow_html=True)
+                                # On utilise un bouton HTML standard couplé à une fonction JS inline pour soumettre le changement
+                                if evts:
+                                    cell_content = f"""
+                                    <button onclick="let inp = window.parent.document.querySelector('input[aria-label=\\'target_day\\']'); if(inp){{inp.value='{jour}'; inp.dispatchEvent(new Event('change', {{bubbles:true}})); setTimeout(()=>{{window.parent.document.querySelector('form[data-testid=\\'stForm\\'] button').click();}},50);}}"
+                                            style="background:none; border:none; padding:0; margin:0; width:100%; cursor:pointer; font-family:inherit; color:inherit;">
+                                        <div style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column; align-items:center; justify-content:center; {cell_style} font-size:10px;'>
+                                            {jour}{dot_html}
+                                        </div>
+                                    </button>
+                                    """
+                                else:
+                                    cell_content = f"""
+                                    <div style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column; align-items:center; justify-content:center; {cell_style} font-size:10px;'>
+                                        {jour}
+                                    </div>
+                                    """
 
-                                # CORRECTION : Le paramètre invalide class_name a été retiré ici !
-                                if cols_semaine[idx_jour].button(label_bouton, key=f"btn_cal_{m_view}_{jour}"):
-                                    st.session_state.jour_selectionne = jour
-                                    st.rerun()
+                                cal_html += f"<td style='padding:3px 0; text-align:center;'>{cell_content}</td>"
+                        cal_html += "</tr>"
+                    cal_html += "</table>"
+                    
+                    # Rendu du calendrier
+                    st.markdown(cal_html, unsafe_allow_html=True)
 
                     # ---- LÉGENDE FIXE TOUJOURS VIVE ----
                     st.markdown("<div style='margin-top:12px; border-top:1px dashed #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
