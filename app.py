@@ -718,16 +718,17 @@ if acces_autorise:
                     if "jour_selectionne" not in st.session_state:
                         st.session_state.jour_selectionne = None
 
-                    # --- INTERCEPTION DU CLIC SANS RECHARGEMENT ---
-                    # Formulaire de secours caché : capture l'action du clic HTML
+                    # --- FORMULAIRE CACHÉ (CORRIGÉ & ALIGNÉ) ---
                     with st.form("click_form", clear_on_submit=True):
                         click_val = st.text_input("target_day", value="", key="target_day", label_visibility="collapsed")
-                        submitted = st.form_submit_button("submit", label_visibility="collapsed")
+                        # LE BOUTON EST MAINTENANT CORRECTEMENT IMBRIQUÉ DANS LE WITH FORM
+                        submitted = st.form_submit_button("submit")
+                        
                         if submitted and click_val:
                             st.session_state.jour_selectionne = int(click_val)
                             st.rerun()
 
-                    # Masquer complètement le formulaire de secours technique pour ne pas polluer le design
+                    # Masquer complètement le formulaire technique pour ne pas polluer le design
                     st.markdown("""
                         <style>
                         form[data-testid="stForm"] { display: none !important; }
@@ -761,7 +762,7 @@ if acces_autorise:
                     m_view = st.session_state.cal_mois
                     a_view = st.session_state.cal_annee
 
-                    # Extraction des événements du mois (Insensible à la casse)
+                    # Extraction des événements du mois
                     evenements = {}
                     details_evenements = {}
                     for _, row in df_ech.iterrows():
@@ -782,7 +783,7 @@ if acces_autorise:
                             evenements[jour].append(couleur)
                             details_evenements[jour].append(row)
 
-                    # --- GENERATION DU TABLEAU HTML INTERACTIF ULTRA-FIN ---
+                    # --- CONFIGURATION DU TABLEAU HTML INTERACTIF ---
                     jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
                     cal_html = "<table style='width:100%; border-collapse:collapse; table-layout:fixed; margin:auto;'>"
                     cal_html += "<tr>" + "".join(f"<th style='color:#94a3b8; font-size:11px; padding:2px 0; text-align:center; font-weight:500; width:14%;'>{j}</th>" for j in jours_abbr) + "</tr>"
@@ -798,7 +799,7 @@ if acces_autorise:
                                 is_selected = (st.session_state.jour_selectionne == jour)
                                 evts = evenements.get(jour, [])
 
-                                # Styles CSS des ronds
+                                # Sélection des styles visuels
                                 if is_selected:
                                     cell_style = "background:#0F172A; color:white; border-radius:50%; font-weight:700;"
                                 elif is_today:
@@ -812,7 +813,7 @@ if acces_autorise:
                                 if len(evts) > 1:
                                     dot_html = f"<div style='font-size:7px; color:white; line-height:1; margin-top:-2px;'>+{len(evts)-1}</div>"
 
-                                # On utilise un bouton HTML standard couplé à une fonction JS inline pour soumettre le changement
+                                # Rendu cliquable uniquement si le jour contient des contrôles planifiés
                                 if evts:
                                     cell_content = f"""
                                     <button onclick="let inp = window.parent.document.querySelector('input[aria-label=\\'target_day\\']'); if(inp){{inp.value='{jour}'; inp.dispatchEvent(new Event('change', {{bubbles:true}})); setTimeout(()=>{{window.parent.document.querySelector('form[data-testid=\\'stForm\\'] button').click();}},50);}}"
@@ -833,10 +834,9 @@ if acces_autorise:
                         cal_html += "</tr>"
                     cal_html += "</table>"
                     
-                    # Rendu du calendrier
                     st.markdown(cal_html, unsafe_allow_html=True)
 
-                    # ---- LÉGENDE FIXE TOUJOURS VIVE ----
+                    # ---- LÉGENDE FIXE ----
                     st.markdown("<div style='margin-top:12px; border-top:1px dashed #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
                     for cat, couleur in COULEURS_CAT.items():
                         st.markdown(f"""
