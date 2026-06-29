@@ -715,7 +715,10 @@ if acces_autorise:
                         st.session_state.cal_mois = today_dt.month
                     if "cal_annee" not in st.session_state:
                         st.session_state.cal_annee = today_dt.year
+                    if "jour_selectionne" not in st.session_state:
+                        st.session_state.jour_selectionne = None
 
+                    # Navigation des mois
                     nav1, nav2, nav3 = st.columns([1, 3, 1])
                     with nav1:
                         if st.button("◀", key="prev_month"):
@@ -724,119 +727,120 @@ if acces_autorise:
                                 st.session_state.cal_annee -= 1
                             else:
                                 st.session_state.cal_mois -= 1
+                            st.session_state.jour_selectionne = None  # Reset sélection
                             st.rerun()
                     with nav2:
                         MOIS_FR = ["","Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
-                        st.markdown(f"<p style='text-align:center;font-weight:600;font-size:14px;padding-top:6px'>{MOIS_FR[st.session_state.cal_mois]} {st.session_state.cal_annee}</p>", unsafe_allow_html=True)
+                        st.markdown(f"<p style='text-align:center;font-weight:600;font-size:14px;margin:0;padding-top:4px;'>{MOIS_FR[st.session_state.cal_mois]} {st.session_state.cal_annee}</p>", unsafe_allow_html=True)
                     with nav3:
                         if st.button("▶", key="next_month"):
                             if st.session_state.cal_mois == 12:
                                 st.session_state.cal_mois = 1
                                 st.session_state.cal_annee += 1
                             else:
-                                st.session_state.cal_mois += 1
+                                st.session_state.cal_mois -= 1
+                            st.session_state.jour_selectionne = None  # Reset sélection
                             st.rerun()
 
                     m_view = st.session_state.cal_mois
                     a_view = st.session_state.cal_annee
 
-                    # Collecte des événements détaillés pour ce mois
+                    # Extraction des événements du mois
                     evenements = {}
-                    details_evenements = {}  # Pour stocker les lignes complètes du contrôle
-                    
+                    details_evenements = {}
                     for _, row in df_ech.iterrows():
                         d = row["Prochaine échéance"]
                         if pd.notna(d) and d.month == m_view and d.year == a_view:
                             jour = d.day
                             cat = str(row[col_cat_r[0]]).strip()
                             couleur = COULEURS_CAT.get(cat, "#94a3b8")
-                            
                             if jour not in evenements:
                                 evenements[jour] = []
                                 details_evenements[jour] = []
                             evenements[jour].append(couleur)
                             details_evenements[jour].append(row)
 
+                    # --- AFFICHAGE DU CALENDRIER CLIQUABLE ---
                     jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
                     
-                    # Rapprochement et affinement maximal des colonnes
-                    cal_html = "<table style='width:100%; border-collapse:collapse; table-layout:fixed; margin:auto;'>\n<tr>"
-                    cal_html += "".join(f"<th style='color:#94a3b8; font-size:11px; padding:2px 0; text-align:center; font-weight:500; width:14%;'>{j}</th>" for j in jours_abbr) + "</tr>"
+                    # En-tête des jours de la semaine
+                    cols_jours = st.columns(7)
+                    for idx, j_ab in enumerate(jours_abbr):
+                        cols_jours[idx].markdown(f"<p style='color:#94a3b8; font-size:11px; text-align:center; margin:0; font-weight:500;'>{j_ab}</p>", unsafe_allow_html=True)
 
+                    # Grille des jours
                     cal_obj = calendar.monthcalendar(a_view, m_view)
-                    for semaine in cal_obj:
-                        cal_html += "<tr>"
-                        for jour in semaine:
+                    for num_semaine, semaine in enumerate(cal_obj):
+                        cols_semaine = st.columns(7)
+                        for idx_jour, jour in enumerate(semaine):
                             if jour == 0:
-                                cal_html += "<td style='padding:2px; text-align:center;'></td>"
+                                cols_semaine[idx_jour].write("")
                             else:
                                 is_today = (jour == today_dt.day and m_view == today_dt.month and a_view == today_dt.year)
+                                is_selected = (st.session_state.jour_selectionne == jour)
                                 evts = evenements.get(jour, [])
 
-                                if is_today:
-                                    cell_style = "background:#1E3A8A; color:white; border-radius:50%; font-weight:600;"
+                                # Choix du style de la bulle de jour
+                                if is_selected:
+                                    bg_style = "background:#0F172A; color:white; border-radius:50%; font-weight:700;"
+                                elif is_today:
+                                    bg_style = "background:#1E3A8A; color:white; border-radius:50%; font-weight:600;"
                                 elif evts:
-                                    cell_style = f"background:{evts[0]}; color:white; border-radius:50%; font-weight:600;"
+                                    bg_style = f"background:{evts[0]}; color:white; border-radius:50%; font-weight:600;"
                                 else:
-                                    cell_style = "color:#334155;"
+                                    bg_style = "background:#F1F5F9; color:#334155; border-radius:50%;"
 
-                                dot_html = ""
-                                if len(evts) > 1:
-                                    dot_html = f"<div style='font-size:8px; color:white; line-height:1;'>+{len(evts)-1}</div>"
+                                # Label du bouton personnalisé (affiche un petit + s'il y a plusieurs contrôles)
+                                label_bouton = f"{jour}+" if len(evts) > 1 else f"{jour}"
 
-                                cal_html += f"""<td style='padding:3px 0; text-align:center;'>
-                                    <div style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column;
-                                    align-items:center; justify-content:center; {cell_style} font-size:10px;'>
-                                        {jour}{dot_html}
-                                    </div></td>"""
-                        cal_html += "</tr>"
-                    cal_html += "</table>"
-                    st.markdown(cal_html, unsafe_allow_html=True)
+                                # CSS personnalisé injecté pour masquer le style natif ingrat des boutons Streamlit dans la grille
+                                st.markdown(f"""
+                                    <style>
+                                    div[data-testid="stHorizontalBlock"] button[key="btn_{m_view}_{jour}"] {{
+                                        {bg_style}
+                                        border: none !important; width: 26px !important; height: 26px !important;
+                                        padding: 0 !important; min-height: 26px !important; max-height: 26px !important;
+                                        font-size: 10px !important; margin: 2px auto !important; display: flex !important;
+                                        align-items: center !important; justify-content: center !important;
+                                    }}
+                                    </style>
+                                """, unsafe_allow_html=True)
 
-                    # ---- NOUVELLE CASE : INSPECTEUR DE DATE ----
-                    st.markdown("<div style='margin-top:15px; border-top:1px solid #E2E8F0; padding-top:10px;'></div>", unsafe_allow_html=True)
+                                # Le bouton devient une cellule active
+                                if cols_semaine[idx_jour].button(label_bouton, key=f"btn_{m_view}_{jour}"):
+                                    st.session_state.jour_selectionne = jour
+                                    st.rerun()
+
+                    # ---- ZONE D'AFFICHAGE DU CONTRÔLE SÉLECTIONNÉ ----
+                    st.markdown("<div style='margin-top:12px; border-top:1px solid #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
                     
-                    # On crée une liste des jours du mois qui ont des contrôles pour faciliter la sélection
-                    jours_avec_controles = sorted(list(details_evenements.keys()))
+                    # Si aucun jour n'est sélectionné manuellement, on pré-sélectionne le premier jour qui contient un contrôle
+                    if st.session_state.jour_selectionne is None and details_evenements:
+                        st.session_state.jour_selectionne = min(details_evenements.keys())
+
+                    jour_actif = st.session_state.jour_selectionne
                     
-                    if jours_avec_controles:
-                        choix_jour = st.selectbox(
-                            "🔍 Sélectionner un jour avec contrôle :",
-                            options=jours_avec_controles,
-                            format_func=lambda x: f"Jour {x} ({len(details_evenements[x])} contrôle(s))",
-                            key="inspect_jour"
-                        )
-                        
-                        # Affichage des contrôles pour le jour sélectionné
-                        if choix_jour in details_evenements:
-                            st.markdown(f"<p style='font-size:12px; font-weight:600; color:#1E3A8A; margin-bottom:5px;'>📋 Contrôle(s) prévu(s) le {choix_jour}/{m_view}/{a_view} :</p>", unsafe_allow_html=True)
+                    if jour_actif in details_evenements:
+                        st.markdown(f"<p style='font-size:12px; font-weight:600; color:#1E3A8A; margin-bottom:6px;'>📋 Contrôle(s) du {jour_actif}/{m_view}/{a_view} :</p>", unsafe_allow_html=True)
+                        for row_ctrl in details_evenements[jour_actif]:
+                            c_cat = str(row_ctrl[col_cat_r[0]]).strip()
+                            c_site = str(row_ctrl[col_site_r[0]]).strip() if col_site_r else ""
+                            c_label = str(row_ctrl[col_label_r[0]]).strip() if col_label_r else ""
+                            c_couleur = COULEURS_CAT.get(c_cat, "#94a3b8")
                             
-                            for row_ctrl in details_evenements[choix_jour]:
-                                c_cat = str(row_ctrl[col_cat_r[0]]).strip()
-                                c_site = str(row_ctrl[col_site_r[0]]).strip() if col_site_r else ""
-                                c_label = str(row_ctrl[col_label_r[0]]).strip() if col_label_r else ""
-                                c_couleur = COULEURS_CAT.get(c_cat, "#94a3b8")
-                                
-                                # Carte descriptive fine du contrôle
-                                item_html = f"""
-                                <div style='background:#F8FAFC; border-left:4px solid {c_couleur}; padding:6px 10px; border-radius:4px; margin-bottom:6px;'>
-                                    <p style='margin:0; font-size:11px; font-weight:600; color:#1E293B;'>{c_cat}</p>
-                                    <p style='margin:2px 0 0 0; font-size:10px; color:#64748B;'>🏢 Site : <b>{c_site}</b> {'| ⚙️ ' + c_label if c_label else ""}</p>
-                                </div>
-                                """
-                                st.markdown(item_html, unsafe_allow_html=True)
+                            st.markdown(f"""
+                            <div style='background:#F8FAFC; border-left:4px solid {c_couleur}; padding:6px 10px; border-radius:4px; margin-bottom:6px;'>
+                                <p style='margin:0; font-size:11px; font-weight:600; color:#1E293B;'>{c_cat}</p>
+                                <p style='margin:2px 0 0 0; font-size:10px; color:#64748B;'>🏢 Site : <b>{c_site}</b> {'| ⚙️ ' + c_label if c_label else ""}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
                     else:
-                        st.caption("ℹ️ Aucun contrôle prévu ce mois-ci.")
+                        st.caption("💡 Cliquez sur un jour coloré du calendrier pour voir ses détails.")
 
-                    # Légende verticale optimisée en dessous
-                    st.markdown("<div style='margin-top:15px; border-top:1px dashed #E2E8F0; padding-top:10px;'></div>", unsafe_allow_html=True)
-                    cats_presentes = set()
-                    for evts_list in evenements.values():
-                        for c in evts_list:
-                            for cat_name, col in COULEURS_CAT.items():
-                                if col == c:
-                                    cats_presentes.add(cat_name)
-
+                    # Légende des couleurs en bas
+                    st.markdown("<div style='margin-top:12px; border-top:1px dashed #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
+                    cats_presentes = set(cat for evts_list in evenements.values() for c in evts_list for cat_name, col in COULEURS_CAT.items() if col == c)
+                    
                     for cat, couleur in COULEURS_CAT.items():
                         opacity = "1" if cat in cats_presentes else "0.35"
                         st.markdown(f"""
