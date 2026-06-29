@@ -641,7 +641,6 @@ if acces_autorise:
             with st.expander("🛠️ Panneau d'administration"):
                 st.markdown(f"[Modifier le calendrier]({URL_GOOGLE_SHEET})")
 
-        # ---- TOUTE CETTE SECTION EST MAINTENANT CORRECTEMENT IMBRIQUÉE DANS L'ONGLET 2 ----
         st.markdown("<br><p style='font-size:1.2rem; font-weight:700; color:#0F172A;'>📅 Prochaines échéances calculées</p>", unsafe_allow_html=True)
 
         PERIODICITE = {
@@ -661,32 +660,31 @@ if acces_autorise:
         }
 
         if not df_rapports.empty:
-            col_cat_r  = [c for c in df_rapports.columns if "cat" in c.lower()]
-            col_date_r = [c for c in df_rapports.columns if "date" in c.lower()]
-            col_site_r = [c for c in df_rapports.columns if "site" in c.lower()]
-            col_label_r= [c for c in df_rapports.columns if "equip" in c.lower() or "label" in c.lower() or "nom" in c.lower()]
+            col_cat_r   = [c for c in df_rapports.columns if "cat" in c.lower()]
+            col_date_r  = [c for c in df_rapports.columns if "date" in c.lower()]
+            col_site_r  = [c for c in df_rapports.columns if "site" in c.lower()]
+            col_label_r = [c for c in df_rapports.columns if "equip" in c.lower() or "label" in c.lower() or "nom" in c.lower()]
 
         if col_cat_r and col_date_r:
             df_ech = df_rapports.copy()
-        # Convertir en vraie date pour pouvoir trier correctement
+            # Convertir en vraie date pour pouvoir trier correctement
             df_ech["_date"] = pd.to_datetime(df_ech[col_date_r[0]], dayfirst=True, errors='coerce')
             df_ech = df_ech.dropna(subset=["_date"])
 
-        # --- AJOUT DE LA LOGIQUE DE FILTRAGE DES DOUBLONS (PLUS RÉCENTE DATE) ---
-        # On définit les colonnes qui identifient de façon unique un équipement
+            # --- LOGIQUE DE FILTRAGE DES DOUBLONS (CONSERVER LA DATE LA PLUS RÉCENTE) ---
             colonnes_cles = []
             if col_site_r:
-                colonnes_cles.append(col_site_r[0]) # Le site (ex: SGB, MEG)
-                colonnes_cles.append(col_cat_r[0])      # La catégorie / domaine technique
+                colonnes_cles.append(col_site_r[0])
+            colonnes_cles.append(col_cat_r[0])
             if col_label_r:
-                colonnes_cles.append(col_label_r[0]) # Le nom/sous-équipement spécifique
+                colonnes_cles.append(col_label_r[0])
 
             if colonnes_cles:
-            # 1. Trier par date du plus ancien au plus récent
+                # 1. Trier par date par ordre croissant
                 df_ech = df_ech.sort_values(by="_date", ascending=True)
-            # 2. Ne garder que la DERNIÈRE ligne (la plus récente) pour chaque équipement unique
+                # 2. Garder uniquement la DERNIÈRE ligne (la plus récente dans le temps)
                 df_ech = df_ech.drop_duplicates(subset=colonnes_cles, keep="last")
-        # ------------------------------------------------------------------------
+            # --------------------------------------------------------------------------
 
             today_dt = pd.Timestamp.today().normalize()
 
@@ -719,118 +717,177 @@ if acces_autorise:
                 "Jours restants":     st.column_config.NumberColumn("Jours restants", format="%d j"),
             }
 
+            # Déclaration des colonnes principales de l'onglet
             left_col, right_col = st.columns([1.5, 1])
 
-                with left_col:
-                    st.dataframe(df_show, column_config=col_cfg, hide_index=True, use_container_width=True)
+            with left_col:
+                st.dataframe(df_show, column_config=col_cfg, hide_index=True, use_container_width=True)
 
-                with right_col:
-                    import calendar
-                    calendar.setfirstweekday(0)
+            with right_col:
+                import calendar
+                calendar.setfirstweekday(0)
 
-                    if "cal_mois" not in st.session_state:
-                        st.session_state.cal_mois = today_dt.month
-                    if "cal_annee" not in st.session_state:
-                        st.session_state.cal_annee = today_dt.year
-                    if "jour_selectionne" not in st.session_state:
+                if "cal_mois" not in st.session_state:
+                    st.session_state.cal_mois = today_dt.month
+                if "cal_annee" not in st.session_state:
+                    st.session_state.cal_annee = today_dt.year
+                if "jour_selectionne" not in st.session_state:
+                    st.session_state.jour_selectionne = None
+
+                # --- FORMULAIRE INTERNE CACHÉ POUR CAPTURER LES CLICS HTML ---
+                with st.form("click_form", clear_on_submit=True):
+                    click_val = st.text_input("target_day", value="", key="target_day", label_visibility="collapsed")
+                    submitted = st.form_submit_button("submit")
+                    if submitted and click_val:
+                        st.session_state.jour_selectionne = int(click_val)
+                        st.rerun()
+
+                # Dissimulation complète du bouton technique de soumission
+                st.markdown("<style>form[data-testid='stForm'] { display: none !important; }</style>", unsafe_allow_html=True)
+
+                # Barre de navigation des mois
+                nav1, nav2, nav3 = st.columns([1, 3, 1])
+                with nav1:
+                    if st.button("◀", key="prev_month"):
+                        if st.session_state.cal_mois == 1:
+                            st.session_state.cal_mois = 12
+                            st.session_state.cal_annee -= 1
+                        else:
+                            st.session_state.cal_mois -= 1
                         st.session_state.jour_selectionne = None
+                        st.rerun()
+                with nav2:
+                    MOIS_FR = ["","Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+                    st.markdown(f"<p style='text-align:center;font-weight:600;font-size:14px;margin:0;padding-top:4px;'>{MOIS_FR[st.session_state.cal_mois]} {st.session_state.cal_annee}</p>", unsafe_allow_html=True)
+                with nav3:
+                    if st.button("▶", key="next_month"):
+                        if st.session_state.cal_mois == 12:
+                            st.session_state.cal_mois = 1
+                            st.session_state.cal_annee += 1
+                        else:
+                            st.session_state.cal_mois += 1
+                        st.session_state.jour_selectionne = None
+                        st.rerun()
 
-                    # Navigation des mois
-                    nav1, nav2, nav3 = st.columns([1, 3, 1])
-                    with nav1:
-                        if st.button("◀", key="prev_month"):
-                            if st.session_state.cal_mois == 1:
-                                st.session_state.cal_mois = 12
-                                st.session_state.cal_annee -= 1
+                m_view = st.session_state.cal_mois
+                a_view = st.session_state.cal_annee
+
+                # Extraction et indexation des événements du mois (Tolérant à la casse)
+                evenements = {}
+                details_evenements = {}
+                for _, row in df_ech.iterrows():
+                    d = row["Prochaine échéance"]
+                    if pd.notna(d) and d.month == m_view and d.year == a_view:
+                        jour = d.day
+                        cat_brute = str(row[col_cat_r[0]]).strip()
+                        
+                        couleur = "#94a3b8"
+                        for key_cat, col_val in COULEURS_CAT.items():
+                            if key_cat.lower().strip() == cat_brute.lower():
+                                couleur = col_val
+                                break
+                                
+                        if jour not in evenements:
+                            evenements[jour] = []
+                            details_evenements[jour] = []
+                        evenements[jour].append(couleur)
+                        details_evenements[jour].append(row)
+
+                # --- CONSTRUCTION DE LA TABLE HTML CRISTALINE ---
+                jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
+                cal_html = "<table style='width:100%; border-collapse:collapse; table-layout:fixed; margin:auto;'>"
+                cal_html += "<tr>" + "".join(f"<th style='color:#94a3b8; font-size:11px; padding:2px 0; text-align:center; font-weight:500; width:14%;'>{j}</th>" for j in jours_abbr) + "</tr>"
+
+                cal_obj = calendar.monthcalendar(a_view, m_view)
+                for semaine in cal_obj:
+                    cal_html += "<tr>"
+                    for jour in semaine:
+                        if jour == 0:
+                            cal_html += "<td style='padding:2px; text-align:center;'></td>"
+                        else:
+                            is_today = (jour == today_dt.day and m_view == today_dt.month and a_view == today_dt.year)
+                            is_selected = (st.session_state.jour_selectionne == jour)
+                            evts = evenements.get(jour, [])
+
+                            if is_selected:
+                                cell_style = "background:#0F172A; color:white; border-radius:50%; font-weight:700;"
+                            elif is_today:
+                                cell_style = "background:#1E3A8A; color:white; border-radius:50%; font-weight:600;"
+                            elif evts:
+                                cell_style = f"background:{evts[0]}; color:white; border-radius:50%; font-weight:600;"
                             else:
-                                st.session_state.cal_mois -= 1
-                            st.session_state.jour_selectionne = None
-                            st.rerun()
-                    with nav2:
-                        MOIS_FR = ["","Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
-                        st.markdown(f"<p style='text-align:center;font-weight:600;font-size:14px;margin:0;padding-top:4px;'>{MOIS_FR[st.session_state.cal_mois]} {st.session_state.cal_annee}</p>", unsafe_allow_html=True)
-                    with nav3:
-                        if st.button("▶", key="next_month"):
-                            if st.session_state.cal_mois == 12:
-                                st.session_state.cal_mois = 1
-                                st.session_state.cal_annee += 1
-                            else:
-                                st.session_state.cal_mois += 1
-                            st.session_state.jour_selectionne = None
-                            st.rerun()
+                                cell_style = "color:#334155;"
 
-                    m_view = st.session_state.cal_mois
-                    a_view = st.session_state.cal_annee
+                            dot_html = ""
+                            if len(evts) > 1:
+                                dot_html = f"<div style='font-size:7px; color:white; line-height:1; margin-top:-2px;'>+{len(evts)-1}</div>"
 
-                    # Extraction des événements du mois
-                    evenements = {}
-                    details_evenements = {}
-                    for _, row in df_ech.iterrows():
-                        d = row["Prochaine échéance"]
-                        if pd.notna(d) and d.month == m_view and d.year == a_view:
-                            jour = d.day
-                            cat_brute = str(row[col_cat_r[0]]).strip()
-                            
-                            couleur = "#94a3b8"
-                            for key_cat, col_val in COULEURS_CAT.items():
-                                if key_cat.lower().strip() == cat_brute.lower():
-                                    couleur = col_val
-                                    break
-                                    
-                            if jour not in evenements:
-                                evenements[jour] = []
-                                details_evenements[jour] = []
-                            evenements[jour].append(couleur)
-                            details_evenements[jour].append(row)
-
-                    # --- RENDU CALENDRIER COMPACT ---
-                    jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
-                    cal_html = "<table style='width:100%; border-collapse:collapse; table-layout:fixed; margin:auto;'>"
-                    cal_html += "<tr>" + "".join(f"<th style='color:#94a3b8; font-size:11px; padding:2px 0; text-align:center; font-weight:500; width:14%;'>{j}</th>" for j in jours_abbr) + "</tr>"
-
-                    cal_obj = calendar.monthcalendar(a_view, m_view)
-                    for semaine in cal_obj:
-                        cal_html += "<tr>"
-                        for jour in semaine:
-                            if jour == 0:
-                                cal_html += "<td style='padding:2px; text-align:center;'></td>"
-                            else:
-                                is_today = (jour == today_dt.day and m_view == today_dt.month and a_view == today_dt.year)
-                                evts = evenements.get(jour, [])
-
-                                if is_today:
-                                    cell_style = "background:#1E3A8A; color:white; border-radius:50%; font-weight:600;"
-                                elif evts:
-                                    cell_style = f"background:{evts[0]}; color:white; border-radius:50%; font-weight:600;"
-                                else:
-                                    cell_style = "color:#334155;"
-
-                                dot_html = ""
-                                if len(evts) > 1:
-                                    dot_html = f"<div style='font-size:7px; color:white; line-height:1; margin-top:-2px;'>+{len(evts)-1}</div>"
-
-                                cal_html += f"""
-                                <td style='padding:3px 0; text-align:center;'>
-                                    <div style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column;
-                                    align-items:center; justify-content:center; {cell_style} font-size:10px;'>
+                            if evts:
+                                cell_content = f"""
+                                <button onclick="let inp = window.parent.document.querySelector('input[aria-label=\\'target_day\\']'); if(inp){{inp.value='{jour}'; inp.dispatchEvent(new Event('change', {{bubbles:true}})); setTimeout(()=>{{window.parent.document.querySelector('form[data-testid=\\'stForm\\'] button').click();}},50);}}"
+                                        style="background:none; border:none; padding:0; margin:0; width:100%; cursor:pointer; font-family:inherit; color:inherit;">
+                                    <div style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column; align-items:center; justify-content:center; {cell_style} font-size:10px;'>
                                         {jour}{dot_html}
                                     </div>
-                                </td>"""
-                        cal_html += "</tr>"
-                    cal_html += "</table>"
-                    st.markdown(cal_html, unsafe_allow_html=True)
+                                </button>
+                                """
+                            else:
+                                cell_content = f"""
+                                <div style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column; align-items:center; justify-content:center; {cell_style} font-size:10px;'>
+                                    {jour}
+                                </div>
+                                """
 
-                    # ---- LÉGENDE FIXE TOUJOURS VIVE ----
-                    st.markdown("<div style='margin-top:12px; border-top:1px dashed #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
-                    for cat, couleur in COULEURS_CAT.items():
-                        st.markdown(f"""
-                            <div style='display:flex; align-items:center; gap:8px; margin-bottom:5px;'>
-                                <span style='width:10px; height:10px; border-radius:2px; background:{couleur}; display:inline-block; flex-shrink:0;'></span>
-                                <span style='font-size:11px; color:#475569;'>{cat}</span>
-                            </div>""", unsafe_allow_html=True)
-            # ========================================================
-            # ZONE HORIZONTALE EN DESSOUS DES TABLEAUX ET CALENDRIER
-            # ========================================================
+                            cal_html += f"<td style='padding:3px 0; text-align:center;'>{cell_content}</td>"
+                    cal_html += "</tr>"
+                cal_html += "</table>"
+                
+                st.markdown(cal_html, unsafe_allow_html=True)
+
+                # ---- LÉGENDE DU CALENDRIER (SANS TRANSPARENCE) ----
+                st.markdown("<div style='margin-top:12px; border-top:1px dashed #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
+                for cat, couleur in COULEURS_CAT.items():
+                    st.markdown(f"""
+                        <div style='display:flex; align-items:center; gap:8px; margin-bottom:5px;'>
+                            <span style='width:10px; height:10px; border-radius:2px; background:{couleur}; display:inline-block; flex-shrink:0;'></span>
+                            <span style='font-size:11px; color:#475569;'>{cat}</span>
+                        </div>""", unsafe_allow_html=True)
+
+            # ========================================================================
+            # ZONE D'AFFICHAGE HORIZONTALE DES CARTES (SECTION INFÉRIEURE DE TAB2)
+            # ========================================================================
+            st.markdown("<div style='margin-top:20px; border-top:2px solid #E2E8F0; padding-top:15px;'></div>", unsafe_allow_html=True)
+            
+            jours_avec_evenements = sorted(list(details_evenements.keys()))
+            
+            if jours_avec_evenements:
+                if st.session_state.jour_selectionne not in jours_avec_evenements:
+                    st.session_state.jour_selectionne = jours_avec_evenements[0]
+                
+                jour_actif = st.session_state.jour_selectionne
+                st.markdown(f"### 📋 Contrôles prévus le {jour_actif}/{m_view}/{a_view}")
+
+                list_ctrls = details_evenements.get(jour_actif, [])
+                
+                if list_ctrls:
+                    # Génération des colonnes équitables pour aligner horizontalement chaque carte
+                    cols_cards = st.columns(len(list_ctrls))
+                    for idx, row_ctrl in enumerate(list_ctrls):
+                        with cols_cards[idx]:
+                            c_cat = str(row_ctrl[col_cat_r[0]]).strip()
+                            c_site = str(row_ctrl[col_site_r[0]]).strip() if col_site_r else ""
+                            c_label = str(row_ctrl[col_label_r[0]]).strip() if col_label_r else ""
+                            c_couleur = COULEURS_CAT.get(c_cat, "#94a3b8")
+                            
+                            st.markdown(f"""
+                            <div style='background:#F8FAFC; border-top:4px solid {c_couleur}; padding:12px; border-radius:6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); min-height:90px;'>
+                                <p style='margin:0; font-size:12px; font-weight:700; color:#1E293B;'>{c_cat}</p>
+                                <p style='margin:6px 0 0 0; font-size:11px; color:#475569;'>🏢 Site : <b>{c_site}</b></p>
+                                {'<p style="margin:4px 0 0 0; font-size:11px; color:#64748B;">⚙️ ' + c_label + '</p>' if c_label else ''}
+                            </div>
+                            """, unsafe_allow_html=True)
+            else:
+                st.info("ℹ️ Aucun contrôle n'est planifié pour le mois sélectionné.")
             # ========================================================
             # ZONE HORIZONTALE EN DESSOUS DES TABLEAUX ET CALENDRIER
             # ========================================================
