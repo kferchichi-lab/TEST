@@ -415,7 +415,30 @@ if not acces_autorise and role == "Visiteur":
 # ==========================================
 # HEARTBEAT — Signal de vie toutes les 30s
 # ==========================================
-if acces_autorise and role == "Visiteur" and st.session_state.email_visiteur:
+# Déterminer l'identifiant actif (visiteur ou responsable)
+if role == "Responsable" and password_correct:
+    email_actif = "responsable@admin"
+elif role == "Visiteur" and st.session_state.email_visiteur:
+    email_actif = st.session_state.email_visiteur
+else:
+    email_actif = None
+
+if acces_autorise and email_actif:
+    if "last_heartbeat" not in st.session_state:
+        st.session_state.last_heartbeat = 0
+
+    now_ts = time.time()
+    if now_ts - st.session_state.last_heartbeat > 30:
+        mettre_a_jour_presence(email_actif)
+        st.session_state.last_heartbeat = now_ts
+
+    st.markdown("""
+        <script>
+        setTimeout(function() {
+            window.parent.document.querySelector('[data-testid="stApp"]').click();
+        }, 30000);
+        </script>
+    """, unsafe_allow_html=True)
     # Initialiser le timestamp du dernier heartbeat
     if "last_heartbeat" not in st.session_state:
         st.session_state.last_heartbeat = 0
