@@ -759,8 +759,8 @@ if acces_autorise:
                             st.session_state.jour_selectionne = None
                             st.rerun()
 
-                    m_view = st.session_state.cal_mois
-                    a_view = st.session_state.cal_annee
+                        m_view = st.session_state.cal_mois
+                        a_view = st.session_state.cal_annee
 
                     # Extraction des événements du mois
                     evenements = {}
