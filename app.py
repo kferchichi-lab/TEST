@@ -631,7 +631,6 @@ if acces_autorise:
                 st.markdown(f"[Ouvrir le Google Sheets]({URL_GOOGLE_SHEET})")
 
     # ---- ONGLET 2 : PLANNING ----
-    # ---- ONGLET 2 : PLANNING ----
     with tab2:
         st.markdown("<p style='font-size:1.2rem; font-weight:700; color:#0F172A;'>📅 Planification des contrôles obligatoires</p>", unsafe_allow_html=True)
         if not df_planning.empty:
@@ -663,7 +662,7 @@ if acces_autorise:
 
                 def calc_prochaine(row):
                     cat = str(row[col_cat_r[0]]).strip()
-                    mois = PERIODICITE.get(cat, 12)
+                    mois = PERIODICITES.get(cat, 12)
                     return row["_date"] + pd.DateOffset(months=mois)
 
                 df_ech["Prochaine échéance"] = df_ech.apply(calc_prochaine, axis=1)
