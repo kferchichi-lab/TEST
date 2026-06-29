@@ -745,8 +745,7 @@ if acces_autorise:
                     m_view = st.session_state.cal_mois
                     a_view = st.session_state.cal_annee
 
-                    # Extraction des événements du mois
-                    # Extraction des événements du mois (Version corrigée sans blocage de couleur)
+                    # Extraction des événements du mois avec correction de la casse (Majuscules/Minuscules)
                     evenements = {}
                     details_evenements = {}
                     for _, row in df_ech.iterrows():
@@ -755,8 +754,8 @@ if acces_autorise:
                             jour = d.day
                             cat_brute = str(row[col_cat_r[0]]).strip()
                             
-                            # On cherche la couleur en ignorant les casses (majuscules/minuscules)
-                            couleur = "#94a3b8"  # Couleur grise par défaut
+                            # Recherche de la couleur correspondante (insensible à la casse)
+                            couleur = "#94a3b8"  # Couleur grise de secours
                             for key_cat, col_val in COULEURS_CAT.items():
                                 if key_cat.lower().strip() == cat_brute.lower():
                                     couleur = col_val
@@ -767,7 +766,8 @@ if acces_autorise:
                                 details_evenements[jour] = []
                             evenements[jour].append(couleur)
                             details_evenements[jour].append(row)
-                    # --- RETOUR AU TABLEAU HTML FIXE (RENDU COMPACT ET PROPRE) ---
+
+                    # --- RETOUR AU TABLEAU HTML FIXE ULTRA-FIN ---
                     jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
                     cal_html = "<table style='width:100%; border-collapse:collapse; table-layout:fixed; margin:auto;'>"
                     cal_html += "<tr>" + "".join(f"<th style='color:#94a3b8; font-size:11px; padding:2px 0; text-align:center; font-weight:500; width:14%;'>{j}</th>" for j in jours_abbr) + "</tr>"
@@ -806,17 +806,15 @@ if acces_autorise:
                     # Affichage du calendrier parfait
                     st.markdown(cal_html, unsafe_allow_html=True)
 
-                    # ---- CASE DE SÉLECTION SECURISÉE ET DISCRÈTE JUSTE EN DESSOUS ----
+                    # ---- SÉLECTEUR DE JOUR SÉCURISÉ JUSTE EN DESSOUS ----
                     st.markdown("<div style='margin-top:10px; border-top:1px solid #E2E8F0; padding-top:10px;'></div>", unsafe_allow_html=True)
                     
                     jours_avec_evenements = sorted(list(details_evenements.keys()))
                     
                     if jours_avec_evenements:
-                        # Si aucun jour n'est sélectionné, on prend le premier disponible
                         if st.session_state.jour_selectionne not in jours_avec_evenements:
                             st.session_state.jour_selectionne = jours_avec_evenements[0]
                             
-                        # Sélecteur compact sous forme de liste déroulante élégante
                         index_defaut = jours_avec_evenements.index(st.session_state.jour_selectionne)
                         
                         choix_inspect = st.selectbox(
@@ -828,7 +826,7 @@ if acces_autorise:
                         )
                         st.session_state.jour_selectionne = choix_inspect
                         
-                        # Affichage dynamique des contrôles pour ce jour
+                        # Affichage des détails du jour actif
                         jour_actif = st.session_state.jour_selectionne
                         if jour_actif in details_evenements:
                             st.markdown(f"<p style='font-size:12px; font-weight:600; color:#1E3A8A; margin-top:8px; margin-bottom:6px;'>📋 Détail du {jour_actif}/{m_view}/{a_view} :</p>", unsafe_allow_html=True)
@@ -847,19 +845,13 @@ if acces_autorise:
                     else:
                         st.markdown("<p style='font-size:11px; color:#64748B; font-style:italic;'>ℹ️ Aucun contrôle ce mois-ci.</p>", unsafe_allow_html=True)
 
-                    # Légende des couleurs en bas
+                    # ---- LÉGENDE : TOUJOURS CORRIGÉE, VIVE ET OPACITÉ 100% ----
                     st.markdown("<div style='margin-top:12px; border-top:1px dashed #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
                     
-                    # CORRECTION ICI : cat_name au lieu de cat
-                    cats_presentes = set(cat_name for evts_list in evenements.values() for c in evts_list for cat_name, col in COULEURS_CAT.items() if col == c)
-                    
                     for cat, couleur in COULEURS_CAT.items():
-                        # On vérifie si la catégorie est présente (en ignorant la casse)
-                        is_visible = any(cat.lower().strip() == cp.lower().strip() for cp in cats_presentes)
-                        opacity = "1" if is_visible else "0.35"
-                        
+                        # L'opacité reste fixée à 1 pour être toujours vive, peu importe l'usage
                         st.markdown(f"""
-                            <div style='display:flex; align-items:center; gap:8px; opacity:{opacity}; margin-bottom:4px;'>
+                            <div style='display:flex; align-items:center; gap:8px; margin-bottom:5px;'>
                                 <span style='width:10px; height:10px; border-radius:2px; background:{couleur}; display:inline-block; flex-shrink:0;'></span>
                                 <span style='font-size:11px; color:#475569;'>{cat}</span>
                             </div>""", unsafe_allow_html=True)
