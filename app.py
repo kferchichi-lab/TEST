@@ -709,19 +709,24 @@ if acces_autorise:
 
                 with right_col:
                     import calendar
+                    import streamlit.components.v1 as components
                     calendar.setfirstweekday(0)
 
                     if "cal_mois" not in st.session_state:
                         st.session_state.cal_mois = today_dt.month
                     if "cal_annee" not in st.session_state:
                         st.session_state.cal_annee = today_dt.year
-
-                    # Récupérer le jour cliqué depuis l'URL de Streamlit
-                    query_params = st.query_params
-                    if "click_day" in query_params:
-                        st.session_state.jour_selectionne = int(query_params["click_day"])
-                    elif "jour_selectionne" not in st.session_state:
+                    if "jour_selectionne" not in st.session_state:
                         st.session_state.jour_selectionne = None
+
+                    # --- GESTION DU CLIC VIA REQUÊTE SANS RECHARGEMENT ---
+                    # Un input masqué qui récupère la valeur cliquée en JS
+                    action_click = st.text_input("action_click_holder", value="", key="action_click_holder", label_visibility="collapsed")
+                    if action_click.startswith("click_"):
+                        try:
+                            st.session_state.jour_selectionne = int(action_click.split("_")[1])
+                        except:
+                            pass
 
                     # Navigation des mois
                     nav1, nav2, nav3 = st.columns([1, 3, 1])
@@ -733,7 +738,6 @@ if acces_autorise:
                             else:
                                 st.session_state.cal_mois -= 1
                             st.session_state.jour_selectionne = None
-                            st.query_params.clear()
                             st.rerun()
                     with nav2:
                         MOIS_FR = ["","Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
@@ -746,7 +750,6 @@ if acces_autorise:
                             else:
                                 st.session_state.cal_mois += 1
                             st.session_state.jour_selectionne = None
-                            st.query_params.clear()
                             st.rerun()
 
                     m_view = st.session_state.cal_mois
@@ -767,9 +770,11 @@ if acces_autorise:
                             evenements[jour].append(couleur)
                             details_evenements[jour].append(row)
 
-                    # --- RETOUR AU TABLEAU HTML ULTRA FIN ---
+                    # --- CONSTRUCTION DU TABLEAU HTML INTERACTIF ---
                     jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
-                    cal_html = "<table style='width:100%; border-collapse:collapse; table-layout:fixed; margin:auto;'>"
+                    cal_html = """
+                    <table style='width:100%; border-collapse:collapse; table-layout:fixed; margin:auto; font-family:sans-serif;'>
+                    """
                     cal_html += "<tr>" + "".join(f"<th style='color:#94a3b8; font-size:11px; padding:2px 0; text-align:center; font-weight:500; width:14%;'>{j}</th>" for j in jours_abbr) + "</tr>"
 
                     cal_obj = calendar.monthcalendar(a_view, m_view)
@@ -796,29 +801,33 @@ if acces_autorise:
                                 if len(evts) > 1:
                                     dot_html = f"<div style='font-size:7px; color:white; line-height:1; margin-top:-2px;'>+{len(evts)-1}</div>"
 
-                                # Si le jour a un contrôle, on le rend cliquable via un lien invisible qui recharge l'URL cible
+                                # JS injecté : modifie l'input Streamlit parent sans recharger la page entière
                                 if evts:
-                                    cell_content = f"""<a href='?click_day={jour}' target='_self' style='text-decoration:none; color:inherit; display:block;'>
-                                        <div style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column;
-                                        align-items:center; justify-content:center; {cell_style} font-size:10px; cursor:pointer;'>
+                                    cell_content = f"""
+                                    <div onclick="window.parent.document.querySelector('input[aria-label=\\'action_click_holder\\']').value='click_{jour}'; window.parent.document.querySelector('input[aria-label=\\'action_click_holder\\']').dispatchEvent(new Event('change',{{bubbles:true}}))"
+                                         style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column;
+                                         align-items:center; justify-content:center; {cell_style} font-size:10px; cursor:pointer;'>
                                             {jour}{dot_html}
-                                        </div>
-                                    </a>"""
+                                    </div>
+                                    """
                                 else:
-                                    cell_content = f"""<div style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column;
-                                        align-items:center; justify-content:center; {cell_style} font-size:10px;'>
+                                    cell_content = f"""
+                                    <div style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column;
+                                         align-items:center; justify-content:center; {cell_style} font-size:10px;'>
                                             {jour}
-                                    </div>"""
+                                    </div>
+                                    """
 
                                 cal_html += f"<td style='padding:3px 0; text-align:center;'>{cell_content}</td>"
                         cal_html += "</tr>"
                     cal_html += "</table>"
-                    st.markdown(cal_html, unsafe_allow_html=True)
-
-                    # ---- CASE DES CONTRÔLES DU JOUR ----
-                    st.markdown("<div style='margin-top:12px; border-top:1px solid #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
                     
-                    # Sélection automatique du premier jour avec événement s'il n'y a pas de sélection
+                    # Rendu via iframe miniature isolée pour exécuter le JS proprement
+                    components.html(cal_html, height=190, scrolling=False)
+
+                    # ---- CASE DES CONTRÔLES DU JOUR SÉLECTIONNÉ ----
+                    st.markdown("<div style='margin-top:5px; border-top:1px solid #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
+                    
                     if st.session_state.jour_selectionne is None and details_evenements:
                         st.session_state.jour_selectionne = min(details_evenements.keys())
 
