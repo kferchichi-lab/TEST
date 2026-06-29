@@ -453,7 +453,7 @@ if acces_autorise:
                 cols_affich += [col_cat_r[0], "_date_brute", "_date_reelle", "Date du contrôle", "Prochaine échéance", "Jours restants", "Statut"]
 
                 df_show = df_ech[cols_affich].sort_values("Prochaine échéance")
-
+                left_col, right_col = st.columns([1.5, 1])
                 col_cfg = {
                     "Date du contrôle":   st.column_config.DateColumn("📅 Date du contrôle", format="DD/MM/YYYY"),
                     "_date_brute":        st.column_config.DateColumn("📅 Date planifiée", format="DD/MM/YYYY"),
