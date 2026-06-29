@@ -230,7 +230,7 @@ if not acces_autorise and role == "Visiteur":
     email_saisi = st.text_input("Adresse e-mail :", placeholder="exemple@domain.com")
     
     if st.button("Valider l'accès", type="primary"):
-    if format_email_valide(email_saisi):
+        if format_email_valide(email_saisi):
         st.session_state.email_visiteur = email_saisi
         
         tz_local = pytz.timezone('Africa/Tunis') 
