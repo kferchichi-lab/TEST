@@ -231,10 +231,10 @@ if not acces_autorise and role == "Visiteur":
     
     if st.button("Valider l'accès", type="primary"):
         if format_email_valide(email_saisi):
-        st.session_state.email_visiteur = email_saisi
+            st.session_state.email_visiteur = email_saisi
         
-        tz_local = pytz.timezone('Africa/Tunis') 
-        maintenant = datetime.datetime.now(tz_local).strftime("%d/%m/%Y %H:%M")
+            tz_local = pytz.timezone('Africa/Tunis') 
+            maintenant = datetime.datetime.now(tz_local).strftime("%d/%m/%Y %H:%M")
         
         # ---- BLOC CORRIGÉ ----
         try:
