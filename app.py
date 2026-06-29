@@ -371,9 +371,16 @@ with st.sidebar:
         if password == "admin123*":
             password_correct = True
             st.success("Accès administrateur validé")
+            
+            # Enregistrer la connexion responsable une seule fois par session
+            if "responsable_log_enregistre" not in st.session_state:
+                st.session_state.responsable_log_enregistre = True
+                maintenant = datetime.datetime.now(TZ).strftime("%d/%m/%Y %H:%M")
+                ecrire_log_responsable = lambda: sheets_append("Logs", [maintenant, "responsable@admin"])
+                ecrire_log_responsable()
+                
         elif password:
             st.error("Code d'accès incorrect")
-
 # ==========================================
 # CONTRÔLE D'ACCÈS
 # ==========================================
