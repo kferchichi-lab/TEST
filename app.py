@@ -402,6 +402,17 @@ if acces_autorise:
 
         st.markdown("<br><p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📅 Prochaines échéances calculées</p>", unsafe_allow_html=True)
 
+        # ---- FILTRES ÉCHÉANCES ----
+        with st.container(border=True):
+            st.markdown("<p style='font-weight:600;color:#1E293B;margin:0 0 10px 0;font-size:13px;'>🔍 Filtrer les échéances</p>", unsafe_allow_html=True)
+            fc1, fc2, fc3 = st.columns(3)
+            with fc1:
+                f_ech_site = st.selectbox("Site", ["Tous", "SGB", "MEG"], key="f_ech_site")
+            with fc2:
+                f_ech_cat  = st.selectbox("Catégorie", ["Tous"] + list(PERIODICITE.keys()), key="f_ech_cat")
+            with fc3:
+                opts_seq = ["Tous"] + SOUS_EQUIPEMENTS.get(f_ech_cat, []) if f_ech_cat != "Tous" else ["Tous"] + [i for sub in SOUS_EQUIPEMENTS.values() for i in sub]
+                f_ech_seq  = st.selectbox("Sous-équipement", opts_seq, key="f_ech_seq")
         # ---- CONSTRUCTION DU TABLEAU DES ÉCHÉANCES ----
         if not df_rapports.empty:
             col_cat_r  =[c for c in df_rapports.columns if "cat" in c.lower()]
@@ -453,6 +464,52 @@ if acces_autorise:
                 cols_affich += [col_cat_r[0], "_date_brute", "_date_reelle", "Date du contrôle", "Prochaine échéance", "Jours restants", "Statut"]
 
                 df_show = df_ech[cols_affich].sort_values("Prochaine échéance")
+
+                # ---- APPLICATION DES FILTRES ----
+                df_show_filtre = df_show.copy()
+
+                if f_ech_site != "Tous" and col_site_r:
+                    df_show_filtre = df_show_filtre[
+                        df_show_filtre[col_site_r[0]].astype(str).str.strip() == f_ech_site]
+
+                if f_ech_cat != "Tous" and col_cat_r:
+                    df_show_filtre = df_show_filtre[
+                        df_show_filtre[col_cat_r[0]].astype(str).str.strip() == f_ech_cat]
+
+                if f_ech_seq != "Tous" and col_label_r:
+                    df_show_filtre = df_show_filtre[
+                        df_show_filtre[col_label_r[0]].astype(str).str.strip().str.contains(f_ech_seq, case=False, na=False)]
+
+                # KPIs rapides sous les filtres
+                nb_depasse = len(df_show_filtre[df_show_filtre["Statut"] == "⚠️ Dépassé"])
+                nb_urgent  = len(df_show_filtre[df_show_filtre["Statut"] == "🔴 Urgent"])
+                nb_proche  = len(df_show_filtre[df_show_filtre["Statut"] == "🟡 Proche"])
+                nb_ok      = len(df_show_filtre[df_show_filtre["Statut"] == "🟢 OK"])
+
+                kf1, kf2, kf3, kf4 = st.columns(4)
+                with kf1:
+                    st.markdown(f"""<div style="background:#FEF2F2;padding:10px;border-radius:8px;border-left:3px solid #EF4444;margin-bottom:12px;">
+                        <p style="margin:0;font-size:10px;color:#7F1D1D;font-weight:600;text-transform:uppercase;">⚠️ Dépassé</p>
+                        <p style="margin:2px 0 0 0;font-size:22px;color:#991B1B;font-weight:700;">{nb_depasse}</p>
+                    </div>""", unsafe_allow_html=True)
+                with kf2:
+                    st.markdown(f"""<div style="background:#FFF1F0;padding:10px;border-radius:8px;border-left:3px solid #e34948;margin-bottom:12px;">
+                        <p style="margin:0;font-size:10px;color:#7F1D1D;font-weight:600;text-transform:uppercase;">🔴 Urgent</p>
+                        <p style="margin:2px 0 0 0;font-size:22px;color:#e34948;font-weight:700;">{nb_urgent}</p>
+                    </div>""", unsafe_allow_html=True)
+                with kf3:
+                    st.markdown(f"""<div style="background:#FFFBEB;padding:10px;border-radius:8px;border-left:3px solid #eda100;margin-bottom:12px;">
+                        <p style="margin:0;font-size:10px;color:#78350F;font-weight:600;text-transform:uppercase;">🟡 Proche</p>
+                        <p style="margin:2px 0 0 0;font-size:22px;color:#eda100;font-weight:700;">{nb_proche}</p>
+                    </div>""", unsafe_allow_html=True)
+                with kf4:
+                    st.markdown(f"""<div style="background:#F0FDF4;padding:10px;border-radius:8px;border-left:3px solid #10B981;margin-bottom:12px;">
+                        <p style="margin:0;font-size:10px;color:#064E3B;font-weight:600;text-transform:uppercase;">🟢 OK</p>
+                        <p style="margin:2px 0 0 0;font-size:22px;color:#10B981;font-weight:700;">{nb_ok}</p>
+                    </div>""", unsafe_allow_html=True)
+
+                left_col, right_col = st.columns([1.5, 1])
+                
                 left_col, right_col = st.columns([1.5, 1])
                 col_cfg = {
                     "Date du contrôle":   st.column_config.DateColumn("📅 Date du contrôle", format="DD/MM/YYYY"),
@@ -507,7 +564,7 @@ if acces_autorise:
                             "Jours restants":     st.column_config.NumberColumn("Jours restants", format="%d j"),
                         }
 
-                        df_editable = df_show[cols_resp].copy()
+                        df_editable = df_show_filtre[cols_resp].copy()
                         df_editable["_date_reelle"] = pd.to_datetime(df_editable["_date_reelle"], errors='coerce')
 
                         edited_df = st.data_editor(
