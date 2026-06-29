@@ -766,16 +766,16 @@ if acces_autorise:
                             evenements[jour].append(couleur)
                             details_evenements[jour].append(row)
 
-                    # Injection de CSS ciblé pour compresser les colonnes et styliser les boutons calendriers natifs
+                    # Injection CSS ciblée pour masquer l'affichage par défaut des boutons Streamlit et les forcer à être de petits ronds
                     st.markdown("""
                         <style>
-                        /* Supprime l'espace excessif entre les colonnes de la grille */
+                        /* Supprime l'espace interne des colonnes de la grille pour resserrer le calendrier */
                         div[data-testid="column"] {
                             padding: 0px !important;
                             margin: 0px !important;
                         }
-                        /* Formatage ultra-strict des boutons du calendrier pour garder la forme ronde parfaite */
-                        div.stButton > button.cal-btn {
+                        /* Formatage global pour tous les boutons générés dans le calendrier */
+                        div.stButton > button {
                             border: none !important;
                             width: 24px !important;
                             height: 24px !important;
@@ -810,7 +810,7 @@ if acces_autorise:
                                 is_selected = (st.session_state.jour_selectionne == jour)
                                 evts = evenements.get(jour, [])
 
-                                # Application dynamique des couleurs de fond
+                                # Choix dynamique du design selon l'état de la date
                                 if is_selected:
                                     bg_style = "background:#0F172A !important; color:white !important; border-radius:50% !important; font-weight:700 !important;"
                                 elif is_today:
@@ -822,11 +822,11 @@ if acces_autorise:
 
                                 label_bouton = f"{jour}+" if len(evts) > 1 else f"{jour}"
 
-                                # Injection CSS en ligne propre à chaque bouton de jour
+                                # Application du style CSS individuel basé sur la clé du bouton unique
                                 st.markdown(f"<style>div.stButton > button[key='btn_cal_{m_view}_{jour}'] {{{bg_style}}}</style>", unsafe_allow_html=True)
 
-                                # Le bouton natif change la variable d'état et déclenche l'affichage instantanément
-                                if cols_semaine[idx_jour].button(label_bouton, key=f"btn_cal_{m_view}_{jour}", class_name="cal-btn"):
+                                # CORRECTION : Le paramètre invalide class_name a été retiré ici !
+                                if cols_semaine[idx_jour].button(label_bouton, key=f"btn_cal_{m_view}_{jour}"):
                                     st.session_state.jour_selectionne = jour
                                     st.rerun()
 
@@ -838,10 +838,6 @@ if acces_autorise:
                                 <span style='width:10px; height:10px; border-radius:2px; background:{couleur}; display:inline-block; flex-shrink:0;'></span>
                                 <span style='font-size:11px; color:#475569;'>{cat}</span>
                             </div>""", unsafe_allow_html=True)
-
-        # ========================================================
-            # ZONE HORIZONTALE EN DESSOUS DES TABLEAUX ET CALENDRIER
-            # ========================================================
             # ========================================================
             # ZONE HORIZONTALE EN DESSOUS DES TABLEAUX ET CALENDRIER
             # ========================================================
