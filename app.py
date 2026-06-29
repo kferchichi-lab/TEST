@@ -760,103 +760,87 @@ if acces_autorise:
                             evenements[jour].append(couleur)
                             details_evenements[jour].append(row)
 
-                    # Pré-sélection par défaut du premier jour avec contrôle si rien n'est sélectionné
-                    if st.session_state.jour_selectionne is None and details_evenements:
-                        st.session_state.jour_selectionne = min(details_evenements.keys())
-
-                    # --- AFFICHAGE DE LA GRILLE DE BOUTONS SÉCURISÉS ---
+                    # --- RETOUR AU TABLEAU HTML FIXE (RENDU COMPACT ET PROPRE) ---
                     jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
-                    
-                    # En-tête de la semaine très fin
-                    cols_th = st.columns(7)
-                    for idx, j_ab in enumerate(jours_abbr):
-                        cols_th[idx].markdown(f"<p style='color:#94a3b8; font-size:11px; text-align:center; margin:0; font-weight:500;'>{j_ab}</p>", unsafe_allow_html=True)
-
-                    # Injection CSS Global pour forcer les colonnes à être ultra-fines et supprimer le style moche des boutons
-                    st.markdown("""
-                        <style>
-                        /* Forcer l'alignement et réduire les espaces des colonnes du calendrier */
-                        div[data-testid="stHorizontalBlock"] { gap: 2px !important; }
-                        
-                        /* Customisation absolue des boutons du calendrier */
-                        div.stButton > button.cal-btn-style {
-                            border: none !important; 
-                            width: 24px !important; 
-                            height: 24px !important;
-                            min-height: 24px !important;
-                            max-height: 24px !important;
-                            padding: 0 !important; 
-                            font-size: 10px !important; 
-                            margin: 2px auto !important; 
-                            display: flex !important;
-                            align-items: center !important; 
-                            justify-content: center !important;
-                            transition: transform 0.1s ease;
-                        }
-                        div.stButton > button.cal-btn-style:hover { transform: scale(1.1); }
-                        </style>
-                    """, unsafe_allow_html=True)
+                    cal_html = "<table style='width:100%; border-collapse:collapse; table-layout:fixed; margin:auto;'>"
+                    cal_html += "<tr>" + "".join(f"<th style='color:#94a3b8; font-size:11px; padding:2px 0; text-align:center; font-weight:500; width:14%;'>{j}</th>" for j in jours_abbr) + "</tr>"
 
                     cal_obj = calendar.monthcalendar(a_view, m_view)
-                    for num_semaine, semaine in enumerate(cal_obj):
-                        cols_semaine = st.columns(7)
-                        for idx_jour, jour in enumerate(semaine):
+                    for semaine in cal_obj:
+                        cal_html += "<tr>"
+                        for jour in semaine:
                             if jour == 0:
-                                cols_semaine[idx_jour].write("")
+                                cal_html += "<td style='padding:2px; text-align:center;'></td>"
                             else:
                                 is_today = (jour == today_dt.day and m_view == today_dt.month and a_view == today_dt.year)
-                                is_selected = (st.session_state.jour_selectionne == jour)
                                 evts = evenements.get(jour, [])
 
-                                # Attribution des styles CSS selon l'état du jour
-                                if is_selected:
-                                    bg_style = "background:#0F172A; color:white; border-radius:50%; font-weight:700;"
-                                elif is_today:
-                                    bg_style = "background:#1E3A8A; color:white; border-radius:50%; font-weight:600;"
+                                if is_today:
+                                    cell_style = "background:#1E3A8A; color:white; border-radius:50%; font-weight:600;"
                                 elif evts:
-                                    bg_style = f"background:{evts[0]}; color:white; border-radius:50%; font-weight:600;"
+                                    cell_style = f"background:{evts[0]}; color:white; border-radius:50%; font-weight:600;"
                                 else:
-                                    bg_style = "background:#F1F5F9; color:#334155; border-radius:50%;"
+                                    cell_style = "color:#334155;"
 
-                                label_bouton = f"{jour}+" if len(evts) > 1 else f"{jour}"
+                                dot_html = ""
+                                if len(evts) > 1:
+                                    dot_html = f"<div style='font-size:7px; color:white; line-height:1; margin-top:-2px;'>+{len(evts)-1}</div>"
 
-                                # Injection du style spécifique pour CE bouton précis
-                                st.markdown(f"""
-                                    <style>
-                                    div.stButton > button[key="btn_{m_view}_{jour}"] {{
-                                        {bg_style}
-                                    }}
-                                    </style>
-                                """, unsafe_allow_html=True)
-
-                                # Rendu du bouton natif : aucun rechargement de page, réactivité 100% garantie !
-                                if cols_semaine[idx_jour].button(label_bouton, key=f"btn_{m_view}_{jour}", help=f"Voir les contrôles du {jour}"):
-                                    st.session_state.jour_selectionne = jour
-                                    st.rerun()
-
-                    # ---- CASE DES CONTRÔLES DU JOUR SÉLECTIONNÉ ----
-                    st.markdown("<div style='margin-top:12px; border-top:1px solid #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
+                                cal_html += f"""
+                                <td style='padding:3px 0; text-align:center;'>
+                                    <div style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column;
+                                    align-items:center; justify-content:center; {cell_style} font-size:10px;'>
+                                        {jour}{dot_html}
+                                    </div>
+                                </td>"""
+                        cal_html += "</tr>"
+                    cal_html += "</table>"
                     
-                    jour_actif = st.session_state.jour_selectionne
+                    # Affichage du calendrier parfait
+                    st.markdown(cal_html, unsafe_allow_html=True)
+
+                    # ---- CASE DE SÉLECTION SECURISÉE ET DISCRÈTE JUSTE EN DESSOUS ----
+                    st.markdown("<div style='margin-top:10px; border-top:1px solid #E2E8F0; padding-top:10px;'></div>", unsafe_allow_html=True)
                     
-                    if jour_actif in details_evenements:
-                        st.markdown(f"<p style='font-size:12px; font-weight:600; color:#1E3A8A; margin-bottom:6px;'>📋 Contrôle(s) du {jour_actif}/{m_view}/{a_view} :</p>", unsafe_allow_html=True)
-                        for row_ctrl in details_evenements[jour_actif]:
-                            c_cat = str(row_ctrl[col_cat_r[0]]).strip()
-                            c_site = str(row_ctrl[col_site_r[0]]).strip() if col_site_r else ""
-                            c_label = str(row_ctrl[col_label_r[0]]).strip() if col_label_r else ""
-                            c_couleur = COULEURS_CAT.get(c_cat, "#94a3b8")
+                    jours_avec_evenements = sorted(list(details_evenements.keys()))
+                    
+                    if jours_avec_evenements:
+                        # Si aucun jour n'est sélectionné, on prend le premier disponible
+                        if st.session_state.jour_selectionne not in jours_avec_evenements:
+                            st.session_state.jour_selectionne = jours_avec_evenements[0]
                             
-                            st.markdown(f"""
-                            <div style='background:#F8FAFC; border-left:4px solid {c_couleur}; padding:6px 10px; border-radius:4px; margin-bottom:6px;'>
-                                <p style='margin:0; font-size:11px; font-weight:600; color:#1E293B;'>{c_cat}</p>
-                                <p style='margin:2px 0 0 0; font-size:10px; color:#64748B;'>🏢 Site : <b>{c_site}</b> {'| ⚙️ ' + c_label if c_label else ""}</p>
-                            </div>
-                            """, unsafe_allow_html=True)
+                        # Sélecteur compact sous forme de liste déroulante élégante
+                        index_defaut = jours_avec_evenements.index(st.session_state.jour_selectionne)
+                        
+                        choix_inspect = st.selectbox(
+                            "🔍 Sélectionner le jour à inspecter :",
+                            options=jours_avec_evenements,
+                            index=index_defaut,
+                            format_func=lambda x: f"Jour {x} — ({len(details_evenements[x])} contrôle(s))",
+                            key="select_inspect_jour"
+                        )
+                        st.session_state.jour_selectionne = choix_inspect
+                        
+                        # Affichage dynamique des contrôles pour ce jour
+                        jour_actif = st.session_state.jour_selectionne
+                        if jour_actif in details_evenements:
+                            st.markdown(f"<p style='font-size:12px; font-weight:600; color:#1E3A8A; margin-top:8px; margin-bottom:6px;'>📋 Détail du {jour_actif}/{m_view}/{a_view} :</p>", unsafe_allow_html=True)
+                            for row_ctrl in details_evenements[jour_actif]:
+                                c_cat = str(row_ctrl[col_cat_r[0]]).strip()
+                                c_site = str(row_ctrl[col_site_r[0]]).strip() if col_site_r else ""
+                                c_label = str(row_ctrl[col_label_r[0]]).strip() if col_label_r else ""
+                                c_couleur = COULEURS_CAT.get(c_cat, "#94a3b8")
+                                
+                                st.markdown(f"""
+                                <div style='background:#F8FAFC; border-left:4px solid {c_couleur}; padding:6px 10px; border-radius:4px; margin-bottom:6px;'>
+                                    <p style='margin:0; font-size:11px; font-weight:600; color:#1E293B;'>{c_cat}</p>
+                                    <p style='margin:2px 0 0 0; font-size:10px; color:#64748B;'>🏢 Site : <b>{c_site}</b> {'| ⚙️ ' + c_label if c_label else ""}</p>
+                                </div>
+                                """, unsafe_allow_html=True)
                     else:
-                        st.markdown("<p style='font-size:11px; color:#64748B; font-style:italic;'>💡 Cliquez sur un jour du calendrier pour charger ses contrôles.</p>", unsafe_allow_html=True)
+                        st.markdown("<p style='font-size:11px; color:#64748B; font-style:italic;'>ℹ️ Aucun contrôle ce mois-ci.</p>", unsafe_allow_html=True)
 
-                    # Légende des couleurs
+                    # Légende des couleurs en bas
                     st.markdown("<div style='margin-top:12px; border-top:1px dashed #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
                     cats_presentes = set(cat for evts_list in evenements.values() for c in evts_list for cat_name, col in COULEURS_CAT.items() if col == c)
                     
@@ -867,7 +851,6 @@ if acces_autorise:
                                 <span style='width:10px; height:10px; border-radius:2px; background:{couleur}; display:inline-block; flex-shrink:0;'></span>
                                 <span style='font-size:11px; color:#475569;'>{cat}</span>
                             </div>""", unsafe_allow_html=True)
-
     # ---- ONGLET 3 : PRÉSENCE & VISITES ----
     if tab3 and role == "Responsable" and password_correct:
         with tab3:
