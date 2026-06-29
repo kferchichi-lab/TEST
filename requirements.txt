@@ -1,7 +1,8 @@
 streamlit
-plotly
 pandas
-qrcode
-pillow
+plotly
 pytz
-gspread
+requests
+PyJWT
+cryptography
+ 
