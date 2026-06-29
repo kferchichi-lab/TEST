@@ -411,15 +411,26 @@ if acces_autorise:
 
             if col_cat_r and col_date_r:
                 df_ech = df_rapports.copy()
-                df_ech["_date"] = pd.to_datetime(df_ech[col_date_r[0]], dayfirst=True, errors='coerce')
+                df_ech["_date_brute"] = pd.to_datetime(df_ech[col_date_r[0]], dayfirst=True, errors='coerce')
+
+                # Récupérer colonne Date_reelle si elle existe
+                col_reelle = [c for c in df_ech.columns if "reelle" in c.lower() or "réelle" in c.lower()]
+
+                if col_reelle:
+                    df_ech["_date_reelle"] = pd.to_datetime(df_ech[col_reelle[0]], dayfirst=True, errors='coerce')
+                else:
+                    df_ech["_date_reelle"] = pd.NaT
+
+                # La date de référence = date réelle si renseignée, sinon date planifiée
+                df_ech["_date"] = df_ech["_date_reelle"].combine_first(df_ech["_date_brute"])
                 df_ech = df_ech.dropna(subset=["_date"])
 
-                # DÉDUPLICATION : garder la date la plus récente par site+cat+équipement
+                # Déduplication : garder la ligne la plus récente
                 cles = []
                 if col_site_r:  cles.append(col_site_r[0])
                 cles.append(col_cat_r[0])
                 if col_label_r: cles.append(col_label_r[0])
-                df_ech = df_ech.sort_values("_date", ascending=True)
+                df_ech = df_ech.sort_values("_date_brute", ascending=True)
                 df_ech = df_ech.drop_duplicates(subset=cles, keep="last")
 
                 today_dt = pd.Timestamp.today().normalize()
@@ -436,19 +447,115 @@ if acces_autorise:
                 cols_affich = []
                 if col_site_r:  cols_affich.append(col_site_r[0])
                 if col_label_r: cols_affich.append(col_label_r[0])
-                cols_affich += [col_cat_r[0],"_date","Prochaine échéance","Jours restants","Statut"]
-                df_show = df_ech[cols_affich].sort_values("Prochaine échéance")
+                cols_affich += [col_cat_r[0], "_date_brute", "_date_reelle", "Prochaine échéance", "Jours restants", "Statut"]
+
+                # Date d'affichage unique : réelle si dispo, sinon planifiée
+                df_show["Date du contrôle"] = df_show["_date_reelle"].combine_first(df_show["_date_brute"])
 
                 col_cfg = {
-                    "_date":              st.column_config.DateColumn("Dernier contrôle",format="DD/MM/YYYY"),
-                    "Prochaine échéance": st.column_config.DateColumn("Prochaine échéance",format="DD/MM/YYYY"),
-                    "Jours restants":     st.column_config.NumberColumn("Jours restants",format="%d j"),
+                    "Date du contrôle":   st.column_config.DateColumn("📅 Date du contrôle", format="DD/MM/YYYY"),
+                    "_date_brute":        st.column_config.DateColumn("📅 Date planifiée", format="DD/MM/YYYY"),
+                    "_date_reelle":       st.column_config.DateColumn("✅ Date réelle visite", format="DD/MM/YYYY"),
+                    "Prochaine échéance": st.column_config.DateColumn("⏭️ Prochaine échéance", format="DD/MM/YYYY"),
+                    "Jours restants":     st.column_config.NumberColumn("Jours restants", format="%d j"),
                 }
 
-                left_col, right_col = st.columns([1.5, 1])
-
                 with left_col:
-                    st.dataframe(df_show, column_config=col_cfg, hide_index=True, use_container_width=True)
+                    # ---- TABLEAU VISITEUR : une seule colonne de date ----
+                    if role != "Responsable" or not password_correct:
+
+                        # Colonnes à afficher pour le visiteur (sans _date_brute et _date_reelle séparées)
+                        cols_visiteur = []
+                        if col_site_r:  cols_visiteur.append(col_site_r[0])
+                        if col_label_r: cols_visiteur.append(col_label_r[0])
+                        cols_visiteur += [col_cat_r[0], "Date du contrôle", "Prochaine échéance", "Jours restants", "Statut"]
+
+                        col_cfg_visiteur = {
+                            "Date du contrôle":   st.column_config.DateColumn("📅 Date du contrôle", format="DD/MM/YYYY"),
+                            "Prochaine échéance": st.column_config.DateColumn("⏭️ Prochaine échéance", format="DD/MM/YYYY"),
+                            "Jours restants":     st.column_config.NumberColumn("Jours restants", format="%d j"),
+                        }
+
+                        st.dataframe(
+                            df_show[cols_visiteur],
+                            column_config=col_cfg_visiteur,
+                            hide_index=True,
+                            use_container_width=True
+                        )
+
+                    # ---- TABLEAU RESPONSABLE : les deux dates + édition ----
+                    else:
+                        st.markdown("""<div style='background:#EFF6FF;border-left:4px solid #2a78d6;
+                            padding:10px 14px;border-radius:6px;margin-bottom:10px;'>
+                            <p style='margin:0;font-size:12px;color:#1e40af;font-weight:600;'>
+                            ✏️ Mode responsable — Modifiez la colonne <b>Date réelle visite</b> puis sauvegardez.</p>
+                        </div>""", unsafe_allow_html=True)
+
+                        # Colonnes responsable : les deux dates séparées
+                        cols_resp = []
+                        if col_site_r:  cols_resp.append(col_site_r[0])
+                        if col_label_r: cols_resp.append(col_label_r[0])
+                        cols_resp += [col_cat_r[0], "_date_brute", "_date_reelle", "Prochaine échéance", "Jours restants", "Statut"]
+
+                        col_cfg_edit = {
+                            "_date_brute":        st.column_config.DateColumn("📅 Date planifiée", format="DD/MM/YYYY"),
+                            "_date_reelle":       st.column_config.DateColumn("✅ Date réelle visite", format="DD/MM/YYYY",
+                                                    help="Saisissez ici la date réelle du contrôle effectué"),
+                            "Prochaine échéance": st.column_config.DateColumn("⏭️ Prochaine échéance", format="DD/MM/YYYY"),
+                            "Jours restants":     st.column_config.NumberColumn("Jours restants", format="%d j"),
+                        }
+
+                        df_editable = df_show[cols_resp].copy()
+                        df_editable["_date_reelle"] = pd.to_datetime(df_editable["_date_reelle"], errors='coerce')
+
+                        edited_df = st.data_editor(
+                            df_editable,
+                            column_config=col_cfg_edit,
+                            disabled=[c for c in df_editable.columns if c != "_date_reelle"],
+                            hide_index=True,
+                            use_container_width=True,
+                            key="editor_dates_reelles"
+                        )
+
+                        if st.button("💾 Sauvegarder les dates réelles", type="primary"):
+                            with st.spinner("Mise à jour dans Google Sheets..."):
+                                nb_maj = 0
+                                for idx, row_edit in edited_df.iterrows():
+                                    nouvelle_date = row_edit["_date_reelle"]
+                                    ancienne_date = df_editable.loc[idx, "_date_reelle"]
+                                    dates_differentes = False
+                                    if pd.isna(nouvelle_date) and pd.isna(ancienne_date):
+                                        dates_differentes = False
+                                    elif pd.isna(nouvelle_date) != pd.isna(ancienne_date):
+                                        dates_differentes = True
+                                    elif not pd.isna(nouvelle_date) and nouvelle_date != ancienne_date:
+                                        dates_differentes = True
+
+                                    if dates_differentes and not pd.isna(nouvelle_date):
+                                        site_val  = str(row_edit[col_site_r[0]]).strip()  if col_site_r  else ""
+                                        label_val = str(row_edit[col_label_r[0]]).strip() if col_label_r else ""
+                                        cat_val   = str(row_edit[col_cat_r[0]]).strip()
+                                        masque    = df_rapports[col_cat_r[0]].astype(str).str.strip() == cat_val
+                                        if col_site_r:  masque &= df_rapports[col_site_r[0]].astype(str).str.strip() == site_val
+                                        if col_label_r: masque &= df_rapports[col_label_r[0]].astype(str).str.strip() == label_val
+                                        lignes = df_rapports[masque]
+                                        if not lignes.empty:
+                                            num_ligne_sheet = lignes.index[-1] + 2
+                                            if col_reelle:
+                                                num_col = df_rapports.columns.tolist().index(col_reelle[0]) + 1
+                                            else:
+                                                num_col = len(df_rapports.columns) + 1
+                                            lettre_col = chr(64 + num_col)
+                                            date_str = nouvelle_date.strftime("%d/%m/%Y")
+                                            sheets_ecrire_cellule("Rapports", f"{lettre_col}{num_ligne_sheet}", date_str)
+                                            nb_maj += 1
+
+                            if nb_maj > 0:
+                                st.success(f"✅ {nb_maj} date(s) enregistrée(s) !")
+                                st.cache_data.clear()
+                                st.rerun()
+                            else:
+                                st.info("Aucune modification détectée.")
 
                 # ---- CALENDRIER ----
                 with right_col:
