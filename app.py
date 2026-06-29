@@ -711,14 +711,105 @@ if not df_rapports.empty:
             st.dataframe(df_show, column_config=col_cfg, hide_index=True, use_container_width=True)
 
         with right_col:
-            # Calendrier simple en HTML
             import calendar
-            mois_now = today_dt.month
-            annee_now = today_dt.year
-            cal_html = f"<div style='font-family:sans-serif;font-size:13px;'>"
-            cal_html += f"<p style='font-weight:600;margin-bottom:8px'>{calendar.month_name[mois_now]} {annee_now}</p>"
-            cal_html += "<table style='width:100%;border-collapse:collapse;text-align:center'>"
-            cal_html += "<tr>" + "".join(f"<th style='color:#94a3b8;font-size:11px;padding:3px'>{j}</th>" for j in ["Lu","Ma","Me","Je","Ve","Sa","Di"]) + "</tr>"
+            calendar.setfirstweekday(0)
+
+            if "cal_mois" not in st.session_state:
+                st.session_state.cal_mois = today_dt.month
+            if "cal_annee" not in st.session_state:
+                st.session_state.cal_annee = today_dt.year
+
+            nav1, nav2, nav3 = st.columns([1, 3, 1])
+            with nav1:
+                if st.button("◀", key="prev_month"):
+                    if st.session_state.cal_mois == 1:
+                        st.session_state.cal_mois = 12
+                        st.session_state.cal_annee -= 1
+                    else:
+                        st.session_state.cal_mois -= 1
+                    st.rerun()
+            with nav2:
+                MOIS_FR = ["","Janvier","Février","Mars","Avril","Mai","Juin",
+                           "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+                st.markdown(f"<p style='text-align:center;font-weight:600;font-size:14px;padding-top:6px'>{MOIS_FR[st.session_state.cal_mois]} {st.session_state.cal_annee}</p>", unsafe_allow_html=True)
+            with nav3:
+                if st.button("▶", key="next_month"):
+                    if st.session_state.cal_mois == 12:
+                        st.session_state.cal_mois = 1
+                        st.session_state.cal_annee += 1
+                    else:
+                        st.session_state.cal_mois += 1
+                    st.rerun()
+
+            m_view = st.session_state.cal_mois
+            a_view = st.session_state.cal_annee
+
+            evenements = {}
+            for _, row in df_ech.iterrows():
+                d = row["Prochaine échéance"]
+                if pd.notna(d) and d.month == m_view and d.year == a_view:
+                    jour = d.day
+                    cat = str(row[col_cat_r[0]]).strip()
+                    couleur = COULEURS_CAT.get(cat, "#94a3b8")
+                    if jour not in evenements:
+                        evenements[jour] = []
+                    evenements[jour].append(couleur)
+
+            jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
+            cal_html = "<table style='width:100%;border-collapse:collapse;table-layout:fixed'>"
+            cal_html += "<tr>" + "".join(
+                f"<th style='color:#94a3b8;font-size:10px;padding:2px 0;text-align:center;font-weight:500'>{j}</th>"
+                for j in jours_abbr
+            ) + "</tr>"
+
+            cal_obj = calendar.monthcalendar(a_view, m_view)
+            for semaine in cal_obj:
+                cal_html += "<tr>"
+                for jour in semaine:
+                    if jour == 0:
+                        cal_html += "<td style='padding:2px;text-align:center'></td>"
+                    else:
+                        is_today = (jour == today_dt.day and m_view == today_dt.month and a_view == today_dt.year)
+                        evts = evenements.get(jour, [])
+
+                        if is_today:
+                            cell_style = "background:#1E3A8A;color:white;border-radius:50%;font-weight:600;"
+                        elif evts:
+                            cell_style = f"background:{evts[0]};color:white;border-radius:50%;font-weight:600;"
+                        else:
+                            cell_style = "color:#334155;"
+
+                        dot_html = ""
+                        if len(evts) > 1:
+                            dot_html = f"<div style='font-size:8px;color:white;line-height:1'>+{len(evts)-1}</div>"
+
+                        cal_html += f"""<td style='padding:2px;text-align:center'>
+                            <div style='width:26px;height:26px;margin:auto;display:flex;flex-direction:column;
+                                        align-items:center;justify-content:center;{cell_style}font-size:11px;'>
+                                {jour}{dot_html}
+                            </div></td>"""
+                cal_html += "</tr>"
+            cal_html += "</table>"
+
+            # Légende en liste verticale
+            cal_html += "<div style='margin-top:14px;display:flex;flex-direction:column;gap:6px'>"
+            cats_presentes = set()
+            for evts_list in evenements.values():
+                for c in evts_list:
+                    for cat_name, col in COULEURS_CAT.items():
+                        if col == c:
+                            cats_presentes.add(cat_name)
+
+            for cat, couleur in COULEURS_CAT.items():
+                opacity = "1" if cat in cats_presentes else "0.35"
+                cal_html += f"""<div style='display:flex;align-items:center;gap:8px;opacity:{opacity}'>
+                    <span style='width:12px;height:12px;border-radius:3px;background:{couleur};
+                                 display:inline-block;flex-shrink:0'></span>
+                    <span style='font-size:11px;color:#475569'>{cat}</span>
+                </div>"""
+            cal_html += "</div>"
+
+            st.markdown(cal_html, unsafe_allow_html=True)
             
             evenements = {}
             for _, row in df_ech.iterrows():
