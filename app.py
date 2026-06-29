@@ -666,58 +666,58 @@ if acces_autorise:
             col_site_r = [c for c in df_rapports.columns if "site" in c.lower()]
             col_label_r= [c for c in df_rapports.columns if "equip" in c.lower() or "label" in c.lower() or "nom" in c.lower()]
 
-            if col_cat_r and col_date_r:
-        df_ech = df_rapports.copy()
+        if col_cat_r and col_date_r:
+            df_ech = df_rapports.copy()
         # Convertir en vraie date pour pouvoir trier correctement
-        df_ech["_date"] = pd.to_datetime(df_ech[col_date_r[0]], dayfirst=True, errors='coerce')
-        df_ech = df_ech.dropna(subset=["_date"])
+            df_ech["_date"] = pd.to_datetime(df_ech[col_date_r[0]], dayfirst=True, errors='coerce')
+            df_ech = df_ech.dropna(subset=["_date"])
 
         # --- AJOUT DE LA LOGIQUE DE FILTRAGE DES DOUBLONS (PLUS RÉCENTE DATE) ---
         # On définit les colonnes qui identifient de façon unique un équipement
-        colonnes_cles = []
-        if col_site_r:
-            colonnes_cles.append(col_site_r[0]) # Le site (ex: SGB, MEG)
-        colonnes_cles.append(col_cat_r[0])      # La catégorie / domaine technique
-        if col_label_r:
-            colonnes_cles.append(col_label_r[0]) # Le nom/sous-équipement spécifique
+            colonnes_cles = []
+            if col_site_r:
+                colonnes_cles.append(col_site_r[0]) # Le site (ex: SGB, MEG)
+                colonnes_cles.append(col_cat_r[0])      # La catégorie / domaine technique
+            if col_label_r:
+                colonnes_cles.append(col_label_r[0]) # Le nom/sous-équipement spécifique
 
-        if colonnes_cles:
+            if colonnes_cles:
             # 1. Trier par date du plus ancien au plus récent
-            df_ech = df_ech.sort_values(by="_date", ascending=True)
+                df_ech = df_ech.sort_values(by="_date", ascending=True)
             # 2. Ne garder que la DERNIÈRE ligne (la plus récente) pour chaque équipement unique
-            df_ech = df_ech.drop_duplicates(subset=colonnes_cles, keep="last")
+                df_ech = df_ech.drop_duplicates(subset=colonnes_cles, keep="last")
         # ------------------------------------------------------------------------
 
-        today_dt = pd.Timestamp.today().normalize()
+            today_dt = pd.Timestamp.today().normalize()
 
-        def calc_prochaine(row):
-            cat = str(row[col_cat_r[0]]).strip()
-            mois = PERIODICITE.get(cat, 12)
-            return row["_date"] + pd.DateOffset(months=mois)
+            def calc_prochaine(row):
+                cat = str(row[col_cat_r[0]]).strip()
+                mois = PERIODICITE.get(cat, 12)
+                return row["_date"] + pd.DateOffset(months=mois)
 
-        df_ech["Prochaine échéance"] = df_ech.apply(calc_prochaine, axis=1)
-        df_ech["Jours restants"]     = (df_ech["Prochaine échéance"] - today_dt).dt.days
+            df_ech["Prochaine échéance"] = df_ech.apply(calc_prochaine, axis=1)
+            df_ech["Jours restants"]     = (df_ech["Prochaine échéance"] - today_dt).dt.days
 
-        def statut(j):
-            if j < 0:   return "⚠️ Dépassé"
-            if j < 30:  return "🔴 Urgent"
-            if j < 90:  return "🟡 Proche"
-            return "🟢 OK"
+            def statut(j):
+                if j < 0:   return "⚠️ Dépassé"
+                if j < 30:  return "🔴 Urgent"
+                if j < 90:  return "🟡 Proche"
+                return "🟢 OK"
 
-        df_ech["Statut"] = df_ech["Jours restants"].apply(statut)
+            df_ech["Statut"] = df_ech["Jours restants"].apply(statut)
 
-        cols_affich = []
-        if col_site_r:  cols_affich.append(col_site_r[0])
-        if col_label_r: cols_affich.append(col_label_r[0])
-        cols_affich += [col_cat_r[0], "_date", "Prochaine échéance", "Jours restants", "Statut"]
+            cols_affich = []
+            if col_site_r:  cols_affich.append(col_site_r[0])
+            if col_label_r: cols_affich.append(col_label_r[0])
+            cols_affich += [col_cat_r[0], "_date", "Prochaine échéance", "Jours restants", "Statut"]
 
-        df_show = df_ech[cols_affich].sort_values("Prochaine échéance")
+            df_show = df_ech[cols_affich].sort_values("Prochaine échéance")
 
-        col_cfg = {
-            "_date":              st.column_config.DateColumn("Dernier contrôle", format="DD/MM/YYYY"),
-            "Prochaine échéance": st.column_config.DateColumn("Prochaine échéance", format="DD/MM/YYYY"),
-            "Jours restants":     st.column_config.NumberColumn("Jours restants", format="%d j"),
-        }
+            col_cfg = {
+                "_date":              st.column_config.DateColumn("Dernier contrôle", format="DD/MM/YYYY"),
+                "Prochaine échéance": st.column_config.DateColumn("Prochaine échéance", format="DD/MM/YYYY"),
+                "Jours restants":     st.column_config.NumberColumn("Jours restants", format="%d j"),
+            }
 
                 left_col, right_col = st.columns([1.5, 1])
 
@@ -759,8 +759,8 @@ if acces_autorise:
                             st.session_state.jour_selectionne = None
                             st.rerun()
 
-                        m_view = st.session_state.cal_mois
-                        a_view = st.session_state.cal_annee
+                    m_view = st.session_state.cal_mois
+                    a_view = st.session_state.cal_annee
 
                     # Extraction des événements du mois
                     evenements = {}
