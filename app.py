@@ -745,7 +745,7 @@ if acces_autorise:
                     m_view = st.session_state.cal_mois
                     a_view = st.session_state.cal_annee
 
-                    # Extraction des événements du mois avec correction de la casse (Majuscules/Minuscules)
+                    # Extraction des événements du mois
                     evenements = {}
                     details_evenements = {}
                     for _, row in df_ech.iterrows():
@@ -754,8 +754,7 @@ if acces_autorise:
                             jour = d.day
                             cat_brute = str(row[col_cat_r[0]]).strip()
                             
-                            # Recherche de la couleur correspondante (insensible à la casse)
-                            couleur = "#94a3b8"  # Couleur grise de secours
+                            couleur = "#94a3b8"
                             for key_cat, col_val in COULEURS_CAT.items():
                                 if key_cat.lower().strip() == cat_brute.lower():
                                     couleur = col_val
@@ -767,7 +766,7 @@ if acces_autorise:
                             evenements[jour].append(couleur)
                             details_evenements[jour].append(row)
 
-                    # --- RETOUR AU TABLEAU HTML FIXE ULTRA-FIN ---
+                    # --- RENDU CALENDRIER COMPACT ---
                     jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
                     cal_html = "<table style='width:100%; border-collapse:collapse; table-layout:fixed; margin:auto;'>"
                     cal_html += "<tr>" + "".join(f"<th style='color:#94a3b8; font-size:11px; padding:2px 0; text-align:center; font-weight:500; width:14%;'>{j}</th>" for j in jours_abbr) + "</tr>"
@@ -802,59 +801,70 @@ if acces_autorise:
                                 </td>"""
                         cal_html += "</tr>"
                     cal_html += "</table>"
-                    
-                    # Affichage du calendrier parfait
                     st.markdown(cal_html, unsafe_allow_html=True)
 
-                    # ---- SÉLECTEUR DE JOUR SÉCURISÉ JUSTE EN DESSOUS ----
-                    st.markdown("<div style='margin-top:10px; border-top:1px solid #E2E8F0; padding-top:10px;'></div>", unsafe_allow_html=True)
-                    
-                    jours_avec_evenements = sorted(list(details_evenements.keys()))
-                    
-                    if jours_avec_evenements:
-                        if st.session_state.jour_selectionne not in jours_avec_evenements:
-                            st.session_state.jour_selectionne = jours_avec_evenements[0]
-                            
-                        index_defaut = jours_avec_evenements.index(st.session_state.jour_selectionne)
-                        
-                        choix_inspect = st.selectbox(
-                            "🔍 Sélectionner le jour à inspecter :",
-                            options=jours_avec_evenements,
-                            index=index_defaut,
-                            format_func=lambda x: f"Jour {x} — ({len(details_evenements[x])} contrôle(s))",
-                            key="select_inspect_jour"
-                        )
-                        st.session_state.jour_selectionne = choix_inspect
-                        
-                        # Affichage des détails du jour actif
-                        jour_actif = st.session_state.jour_selectionne
-                        if jour_actif in details_evenements:
-                            st.markdown(f"<p style='font-size:12px; font-weight:600; color:#1E3A8A; margin-top:8px; margin-bottom:6px;'>📋 Détail du {jour_actif}/{m_view}/{a_view} :</p>", unsafe_allow_html=True)
-                            for row_ctrl in details_evenements[jour_actif]:
-                                c_cat = str(row_ctrl[col_cat_r[0]]).strip()
-                                c_site = str(row_ctrl[col_site_r[0]]).strip() if col_site_r else ""
-                                c_label = str(row_ctrl[col_label_r[0]]).strip() if col_label_r else ""
-                                c_couleur = COULEURS_CAT.get(c_cat, "#94a3b8")
-                                
-                                st.markdown(f"""
-                                <div style='background:#F8FAFC; border-left:4px solid {c_couleur}; padding:6px 10px; border-radius:4px; margin-bottom:6px;'>
-                                    <p style='margin:0; font-size:11px; font-weight:600; color:#1E293B;'>{c_cat}</p>
-                                    <p style='margin:2px 0 0 0; font-size:10px; color:#64748B;'>🏢 Site : <b>{c_site}</b> {'| ⚙️ ' + c_label if c_label else ""}</p>
-                                </div>
-                                """, unsafe_allow_html=True)
-                    else:
-                        st.markdown("<p style='font-size:11px; color:#64748B; font-style:italic;'>ℹ️ Aucun contrôle ce mois-ci.</p>", unsafe_allow_html=True)
-
-                    # ---- LÉGENDE : TOUJOURS CORRIGÉE, VIVE ET OPACITÉ 100% ----
+                    # ---- LÉGENDE FIXE TOUJOURS VIVE ----
                     st.markdown("<div style='margin-top:12px; border-top:1px dashed #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
-                    
                     for cat, couleur in COULEURS_CAT.items():
-                        # L'opacité reste fixée à 1 pour être toujours vive, peu importe l'usage
                         st.markdown(f"""
                             <div style='display:flex; align-items:center; gap:8px; margin-bottom:5px;'>
                                 <span style='width:10px; height:10px; border-radius:2px; background:{couleur}; display:inline-block; flex-shrink:0;'></span>
                                 <span style='font-size:11px; color:#475569;'>{cat}</span>
                             </div>""", unsafe_allow_html=True)
+
+        # ========================================================
+            # ZONE HORIZONTALE EN DESSOUS DES TABLEAUX ET CALENDRIER
+            # ========================================================
+            st.markdown("<div style='margin-top:20px; border-top:2px solid #E2E8F0; padding-top:15px;'></div>", unsafe_allow_html=True)
+            
+            jours_avec_evenements = sorted(list(details_evenements.keys()))
+            
+            if jours_avec_evenements:
+                if st.session_state.jour_selectionne not in jours_avec_evenements:
+                    st.session_state.jour_selectionne = jours_avec_evenements[0]
+                
+                index_defaut = jours_avec_evenements.index(st.session_state.jour_selectionne)
+                
+                # Alignement du titre et du selectbox
+                c_title, c_select = st.columns([2, 1])
+                with c_title:
+                    st.markdown(f"### 📋 Contrôles prévus le {st.session_state.jour_selectionne}/{m_view}/{a_view}")
+                with c_select:
+                    choix_inspect = st.selectbox(
+                        "🔍 Choisir la date à inspecter :",
+                        options=jours_avec_evenements,
+                        index=index_defaut,
+                        format_func=lambda x: f"Jour {x} ({len(details_evenements[x])} contrôle(s))",
+                        key="global_inspect_jour",
+                        label_visibility="collapsed"
+                    )
+                    st.session_state.jour_selectionne = choix_inspect
+
+                # --- AFFICHAGE HORIZONTAL DES CARTES ---
+                jour_actif = st.session_state.jour_selectionne
+                list_ctrls = details_evenements.get(jour_actif, [])
+                
+                if list_ctrls:
+                    # Crée dynamiquement autant de colonnes qu'il y a de contrôles ce jour-là
+                    cols_cards = st.columns(len(list_ctrls))
+                    
+                    for idx, row_ctrl in enumerate(list_ctrls):
+                        with cols_cards[idx]:
+                            c_cat = str(row_ctrl[col_cat_r[0]]).strip()
+                            c_site = str(row_ctrl[col_site_r[0]]).strip() if col_site_r else ""
+                            c_label = str(row_ctrl[col_label_r[0]]).strip() if col_label_r else ""
+                            c_couleur = COULEURS_CAT.get(c_cat, "#94a3b8")
+                            
+                            # Carte descriptive premium horizontale
+                            st.markdown(f"""
+                            <div style='background:#F8FAFC; border-top:4px solid {c_couleur}; padding:12px; border-radius:6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); min-height:90px;'>
+                                <p style='margin:0; font-size:12px; font-weight:700; color:#1E293B;'>{c_cat}</p>
+                                <p style='margin:6px 0 0 0; font-size:11px; color:#475569;'>🏢 Site : <b>{c_site}</b></p>
+                                {'<p style="margin:4px 0 0 0; font-size:11px; color:#64748B;">⚙️ ' + c_label + '</p>' if c_label else ''}
+                            </div>
+                            """, unsafe_allow_html=True)
+            else:
+                st.info("ℹ️ Aucun contrôle n'est planifié pour le mois sélectionné.")
     # ---- ONGLET 3 : PRÉSENCE & VISITES ----
     if tab3 and role == "Responsable" and password_correct:
         with tab3:
