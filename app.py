@@ -230,37 +230,49 @@ if not acces_autorise and role == "Visiteur":
     email_saisi = st.text_input("Adresse e-mail :", placeholder="exemple@domain.com")
     
     if st.button("Valider l'accès", type="primary"):
-        if format_email_valide(email_saisi):
-            st.session_state.email_visiteur = email_saisi
+    if format_email_valide(email_saisi):
+        st.session_state.email_visiteur = email_saisi
+        
+        tz_local = pytz.timezone('Africa/Tunis') 
+        maintenant = datetime.datetime.now(tz_local).strftime("%d/%m/%Y %H:%M")
+        
+        # ---- BLOC CORRIGÉ ----
+        try:
+            scopes = [
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive"
+            ]
             
-            # Gestion du fuseau horaire
-            tz_local = pytz.timezone('Africa/Tunis') 
-            maintenant = datetime.datetime.now(tz_local).strftime("%d/%m/%Y %H:%M")
+            # Construire le dict credentials proprement
+            creds_dict = {
+                "type": st.secrets["connections"]["gsheets"]["type"],
+                "project_id": st.secrets["connections"]["gsheets"]["project_id"],
+                "private_key_id": st.secrets["connections"]["gsheets"]["private_key_id"],
+                "private_key": st.secrets["connections"]["gsheets"]["private_key"],
+                "client_email": st.secrets["connections"]["gsheets"]["client_email"],
+                "client_id": st.secrets["connections"]["gsheets"]["client_id"],
+                "auth_uri": st.secrets["connections"]["gsheets"]["auth_uri"],
+                "token_uri": st.secrets["connections"]["gsheets"]["token_uri"],
+                "auth_provider_x509_cert_url": st.secrets["connections"]["gsheets"]["auth_provider_x509_cert_url"],
+                "client_x509_cert_url": st.secrets["connections"]["gsheets"]["client_x509_cert_url"],
+            }
             
-            try:
-                # Récupération de l'URL dans les secrets
-                url_directe = st.secrets["connections"]["gsheets"]["url_de_secours"]
-                
-                # Authentification Google directe
-                scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-                creds = Credentials.from_service_account_info(st.secrets["connections"]["gsheets"], scopes=scopes)
-                client_gspread = gspread.authorize(creds)
-                
-                # Ouverture et ajout immédiat de la ligne
-                feuille_complete = client_gspread.open_by_url(url_directe)
-                onglet_logs = feuille_complete.worksheet("Logs")
-                onglet_logs.append_row([maintenant, email_saisi])
-                
-            except Exception as e:
-                st.error("❌ Erreur critique lors de l'enregistrement")
-                st.code(str(e))
-                st.stop()
+            creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+            client_gspread = gspread.authorize(creds)
             
-            st.success("Accès accordé.")
-            st.rerun()
-        else:
-            st.error("Veuillez saisir une adresse e-mail valide.")
+            SHEET_ID = "1ZK6VWg_gcCO70nt6DTyYogDeNeQUgovFmwWQufMVO-M"
+            feuille = client_gspread.open_by_key(SHEET_ID)
+            onglet_logs = feuille.worksheet("Logs")
+            onglet_logs.append_row([maintenant, email_saisi])
+            
+        except Exception as e:
+            st.error(f"❌ Erreur d'écriture Google Sheets : {e}")
             st.stop()
+        
+        st.success("Accès accordé.")
+        st.rerun()
+    else:
+        st.error("Veuillez saisir une adresse e-mail valide.")
 
 # ==========================================
 # 5. EN-TÊTE DE PAGE CENTRALISÉ
