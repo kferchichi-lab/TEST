@@ -709,7 +709,6 @@ if acces_autorise:
 
                 with right_col:
                     import calendar
-                    import streamlit.components.v1 as components
                     calendar.setfirstweekday(0)
 
                     if "cal_mois" not in st.session_state:
@@ -718,15 +717,6 @@ if acces_autorise:
                         st.session_state.cal_annee = today_dt.year
                     if "jour_selectionne" not in st.session_state:
                         st.session_state.jour_selectionne = None
-
-                    # --- GESTION DU CLIC VIA REQUÊTE SANS RECHARGEMENT ---
-                    # Un input masqué qui récupère la valeur cliquée en JS
-                    action_click = st.text_input("action_click_holder", value="", key="action_click_holder", label_visibility="collapsed")
-                    if action_click.startswith("click_"):
-                        try:
-                            st.session_state.jour_selectionne = int(action_click.split("_")[1])
-                        except:
-                            pass
 
                     # Navigation des mois
                     nav1, nav2, nav3 = st.columns([1, 3, 1])
@@ -770,67 +760,83 @@ if acces_autorise:
                             evenements[jour].append(couleur)
                             details_evenements[jour].append(row)
 
-                    # --- CONSTRUCTION DU TABLEAU HTML INTERACTIF ---
+                    # Pré-sélection par défaut du premier jour avec contrôle si rien n'est sélectionné
+                    if st.session_state.jour_selectionne is None and details_evenements:
+                        st.session_state.jour_selectionne = min(details_evenements.keys())
+
+                    # --- AFFICHAGE DE LA GRILLE DE BOUTONS SÉCURISÉS ---
                     jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
-                    cal_html = """
-                    <table style='width:100%; border-collapse:collapse; table-layout:fixed; margin:auto; font-family:sans-serif;'>
-                    """
-                    cal_html += "<tr>" + "".join(f"<th style='color:#94a3b8; font-size:11px; padding:2px 0; text-align:center; font-weight:500; width:14%;'>{j}</th>" for j in jours_abbr) + "</tr>"
+                    
+                    # En-tête de la semaine très fin
+                    cols_th = st.columns(7)
+                    for idx, j_ab in enumerate(jours_abbr):
+                        cols_th[idx].markdown(f"<p style='color:#94a3b8; font-size:11px; text-align:center; margin:0; font-weight:500;'>{j_ab}</p>", unsafe_allow_html=True)
+
+                    # Injection CSS Global pour forcer les colonnes à être ultra-fines et supprimer le style moche des boutons
+                    st.markdown("""
+                        <style>
+                        /* Forcer l'alignement et réduire les espaces des colonnes du calendrier */
+                        div[data-testid="stHorizontalBlock"] { gap: 2px !important; }
+                        
+                        /* Customisation absolue des boutons du calendrier */
+                        div.stButton > button.cal-btn-style {
+                            border: none !important; 
+                            width: 24px !important; 
+                            height: 24px !important;
+                            min-height: 24px !important;
+                            max-height: 24px !important;
+                            padding: 0 !important; 
+                            font-size: 10px !important; 
+                            margin: 2px auto !important; 
+                            display: flex !important;
+                            align-items: center !important; 
+                            justify-content: center !important;
+                            transition: transform 0.1s ease;
+                        }
+                        div.stButton > button.cal-btn-style:hover { transform: scale(1.1); }
+                        </style>
+                    """, unsafe_allow_html=True)
 
                     cal_obj = calendar.monthcalendar(a_view, m_view)
-                    for semaine in cal_obj:
-                        cal_html += "<tr>"
-                        for jour in semaine:
+                    for num_semaine, semaine in enumerate(cal_obj):
+                        cols_semaine = st.columns(7)
+                        for idx_jour, jour in enumerate(semaine):
                             if jour == 0:
-                                cal_html += "<td style='padding:2px; text-align:center;'></td>"
+                                cols_semaine[idx_jour].write("")
                             else:
                                 is_today = (jour == today_dt.day and m_view == today_dt.month and a_view == today_dt.year)
                                 is_selected = (st.session_state.jour_selectionne == jour)
                                 evts = evenements.get(jour, [])
 
+                                # Attribution des styles CSS selon l'état du jour
                                 if is_selected:
-                                    cell_style = "background:#0F172A; color:white; border-radius:50%; font-weight:700;"
+                                    bg_style = "background:#0F172A; color:white; border-radius:50%; font-weight:700;"
                                 elif is_today:
-                                    cell_style = "background:#1E3A8A; color:white; border-radius:50%; font-weight:600;"
+                                    bg_style = "background:#1E3A8A; color:white; border-radius:50%; font-weight:600;"
                                 elif evts:
-                                    cell_style = f"background:{evts[0]}; color:white; border-radius:50%; font-weight:600;"
+                                    bg_style = f"background:{evts[0]}; color:white; border-radius:50%; font-weight:600;"
                                 else:
-                                    cell_style = "color:#334155;"
+                                    bg_style = "background:#F1F5F9; color:#334155; border-radius:50%;"
 
-                                dot_html = ""
-                                if len(evts) > 1:
-                                    dot_html = f"<div style='font-size:7px; color:white; line-height:1; margin-top:-2px;'>+{len(evts)-1}</div>"
+                                label_bouton = f"{jour}+" if len(evts) > 1 else f"{jour}"
 
-                                # JS injecté : modifie l'input Streamlit parent sans recharger la page entière
-                                if evts:
-                                    cell_content = f"""
-                                    <div onclick="window.parent.document.querySelector('input[aria-label=\\'action_click_holder\\']').value='click_{jour}'; window.parent.document.querySelector('input[aria-label=\\'action_click_holder\\']').dispatchEvent(new Event('change',{{bubbles:true}}))"
-                                         style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column;
-                                         align-items:center; justify-content:center; {cell_style} font-size:10px; cursor:pointer;'>
-                                            {jour}{dot_html}
-                                    </div>
-                                    """
-                                else:
-                                    cell_content = f"""
-                                    <div style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column;
-                                         align-items:center; justify-content:center; {cell_style} font-size:10px;'>
-                                            {jour}
-                                    </div>
-                                    """
+                                # Injection du style spécifique pour CE bouton précis
+                                st.markdown(f"""
+                                    <style>
+                                    div.stButton > button[key="btn_{m_view}_{jour}"] {{
+                                        {bg_style}
+                                    }}
+                                    </style>
+                                """, unsafe_allow_html=True)
 
-                                cal_html += f"<td style='padding:3px 0; text-align:center;'>{cell_content}</td>"
-                        cal_html += "</tr>"
-                    cal_html += "</table>"
-                    
-                    # Rendu via iframe miniature isolée pour exécuter le JS proprement
-                    components.html(cal_html, height=190, scrolling=False)
+                                # Rendu du bouton natif : aucun rechargement de page, réactivité 100% garantie !
+                                if cols_semaine[idx_jour].button(label_bouton, key=f"btn_{m_view}_{jour}", help=f"Voir les contrôles du {jour}"):
+                                    st.session_state.jour_selectionne = jour
+                                    st.rerun()
 
                     # ---- CASE DES CONTRÔLES DU JOUR SÉLECTIONNÉ ----
-                    st.markdown("<div style='margin-top:5px; border-top:1px solid #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
+                    st.markdown("<div style='margin-top:12px; border-top:1px solid #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
                     
-                    if st.session_state.jour_selectionne is None and details_evenements:
-                        st.session_state.jour_selectionne = min(details_evenements.keys())
-
                     jour_actif = st.session_state.jour_selectionne
                     
                     if jour_actif in details_evenements:
@@ -848,7 +854,7 @@ if acces_autorise:
                             </div>
                             """, unsafe_allow_html=True)
                     else:
-                        st.markdown("<p style='font-size:11px; color:#64748B; font-style:italic;'>💡 Cliquez sur un jour coloré pour charger ses contrôles.</p>", unsafe_allow_html=True)
+                        st.markdown("<p style='font-size:11px; color:#64748B; font-style:italic;'>💡 Cliquez sur un jour du calendrier pour charger ses contrôles.</p>", unsafe_allow_html=True)
 
                     # Légende des couleurs
                     st.markdown("<div style='margin-top:12px; border-top:1px dashed #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
