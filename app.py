@@ -444,13 +444,15 @@ if acces_autorise:
                 df_ech["Statut"]             = df_ech["Jours restants"].apply(
                     lambda j: "⚠️ Dépassé" if j<0 else "🔴 Urgent" if j<30 else "🟡 Proche" if j<90 else "🟢 OK")
 
+                # Colonne unifiée AVANT de construire df_show
+                df_ech["Date du contrôle"] = df_ech["_date_reelle"].combine_first(df_ech["_date_brute"])
+
                 cols_affich = []
                 if col_site_r:  cols_affich.append(col_site_r[0])
                 if col_label_r: cols_affich.append(col_label_r[0])
-                cols_affich += [col_cat_r[0], "_date_brute", "_date_reelle", "Prochaine échéance", "Jours restants", "Statut"]
+                cols_affich += [col_cat_r[0], "_date_brute", "_date_reelle", "Date du contrôle", "Prochaine échéance", "Jours restants", "Statut"]
 
-                # Date d'affichage unique : réelle si dispo, sinon planifiée
-                df_show["Date du contrôle"] = df_show["_date_reelle"].combine_first(df_show["_date_brute"])
+                df_show = df_ech[cols_affich].sort_values("Prochaine échéance")
 
                 col_cfg = {
                     "Date du contrôle":   st.column_config.DateColumn("📅 Date du contrôle", format="DD/MM/YYYY"),
