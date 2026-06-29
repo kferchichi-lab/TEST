@@ -746,20 +746,27 @@ if acces_autorise:
                     a_view = st.session_state.cal_annee
 
                     # Extraction des événements du mois
+                    # Extraction des événements du mois (Version corrigée sans blocage de couleur)
                     evenements = {}
                     details_evenements = {}
                     for _, row in df_ech.iterrows():
                         d = row["Prochaine échéance"]
                         if pd.notna(d) and d.month == m_view and d.year == a_view:
                             jour = d.day
-                            cat = str(row[col_cat_r[0]]).strip()
-                            couleur = COULEURS_CAT.get(cat, "#94a3b8")
+                            cat_brute = str(row[col_cat_r[0]]).strip()
+                            
+                            # On cherche la couleur en ignorant les casses (majuscules/minuscules)
+                            couleur = "#94a3b8"  # Couleur grise par défaut
+                            for key_cat, col_val in COULEURS_CAT.items():
+                                if key_cat.lower().strip() == cat_brute.lower():
+                                    couleur = col_val
+                                    break
+                                    
                             if jour not in evenements:
                                 evenements[jour] = []
                                 details_evenements[jour] = []
                             evenements[jour].append(couleur)
                             details_evenements[jour].append(row)
-
                     # --- RETOUR AU TABLEAU HTML FIXE (RENDU COMPACT ET PROPRE) ---
                     jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
                     cal_html = "<table style='width:100%; border-collapse:collapse; table-layout:fixed; margin:auto;'>"
