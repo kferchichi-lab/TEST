@@ -715,7 +715,12 @@ if acces_autorise:
                         st.session_state.cal_mois = today_dt.month
                     if "cal_annee" not in st.session_state:
                         st.session_state.cal_annee = today_dt.year
-                    if "jour_selectionne" not in st.session_state:
+
+                    # Récupérer le jour cliqué depuis l'URL de Streamlit
+                    query_params = st.query_params
+                    if "click_day" in query_params:
+                        st.session_state.jour_selectionne = int(query_params["click_day"])
+                    elif "jour_selectionne" not in st.session_state:
                         st.session_state.jour_selectionne = None
 
                     # Navigation des mois
@@ -727,7 +732,8 @@ if acces_autorise:
                                 st.session_state.cal_annee -= 1
                             else:
                                 st.session_state.cal_mois -= 1
-                            st.session_state.jour_selectionne = None  # Reset sélection
+                            st.session_state.jour_selectionne = None
+                            st.query_params.clear()
                             st.rerun()
                     with nav2:
                         MOIS_FR = ["","Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
@@ -738,8 +744,9 @@ if acces_autorise:
                                 st.session_state.cal_mois = 1
                                 st.session_state.cal_annee += 1
                             else:
-                                st.session_state.cal_mois -= 1
-                            st.session_state.jour_selectionne = None  # Reset sélection
+                                st.session_state.cal_mois += 1
+                            st.session_state.jour_selectionne = None
+                            st.query_params.clear()
                             st.rerun()
 
                     m_view = st.session_state.cal_mois
@@ -760,61 +767,58 @@ if acces_autorise:
                             evenements[jour].append(couleur)
                             details_evenements[jour].append(row)
 
-                    # --- AFFICHAGE DU CALENDRIER CLIQUABLE ---
+                    # --- RETOUR AU TABLEAU HTML ULTRA FIN ---
                     jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
-                    
-                    # En-tête des jours de la semaine
-                    cols_jours = st.columns(7)
-                    for idx, j_ab in enumerate(jours_abbr):
-                        cols_jours[idx].markdown(f"<p style='color:#94a3b8; font-size:11px; text-align:center; margin:0; font-weight:500;'>{j_ab}</p>", unsafe_allow_html=True)
+                    cal_html = "<table style='width:100%; border-collapse:collapse; table-layout:fixed; margin:auto;'>"
+                    cal_html += "<tr>" + "".join(f"<th style='color:#94a3b8; font-size:11px; padding:2px 0; text-align:center; font-weight:500; width:14%;'>{j}</th>" for j in jours_abbr) + "</tr>"
 
-                    # Grille des jours
                     cal_obj = calendar.monthcalendar(a_view, m_view)
-                    for num_semaine, semaine in enumerate(cal_obj):
-                        cols_semaine = st.columns(7)
-                        for idx_jour, jour in enumerate(semaine):
+                    for semaine in cal_obj:
+                        cal_html += "<tr>"
+                        for jour in semaine:
                             if jour == 0:
-                                cols_semaine[idx_jour].write("")
+                                cal_html += "<td style='padding:2px; text-align:center;'></td>"
                             else:
                                 is_today = (jour == today_dt.day and m_view == today_dt.month and a_view == today_dt.year)
                                 is_selected = (st.session_state.jour_selectionne == jour)
                                 evts = evenements.get(jour, [])
 
-                                # Choix du style de la bulle de jour
                                 if is_selected:
-                                    bg_style = "background:#0F172A; color:white; border-radius:50%; font-weight:700;"
+                                    cell_style = "background:#0F172A; color:white; border-radius:50%; font-weight:700;"
                                 elif is_today:
-                                    bg_style = "background:#1E3A8A; color:white; border-radius:50%; font-weight:600;"
+                                    cell_style = "background:#1E3A8A; color:white; border-radius:50%; font-weight:600;"
                                 elif evts:
-                                    bg_style = f"background:{evts[0]}; color:white; border-radius:50%; font-weight:600;"
+                                    cell_style = f"background:{evts[0]}; color:white; border-radius:50%; font-weight:600;"
                                 else:
-                                    bg_style = "background:#F1F5F9; color:#334155; border-radius:50%;"
+                                    cell_style = "color:#334155;"
 
-                                # Label du bouton personnalisé (affiche un petit + s'il y a plusieurs contrôles)
-                                label_bouton = f"{jour}+" if len(evts) > 1 else f"{jour}"
+                                dot_html = ""
+                                if len(evts) > 1:
+                                    dot_html = f"<div style='font-size:7px; color:white; line-height:1; margin-top:-2px;'>+{len(evts)-1}</div>"
 
-                                # CSS personnalisé injecté pour masquer le style natif ingrat des boutons Streamlit dans la grille
-                                st.markdown(f"""
-                                    <style>
-                                    div[data-testid="stHorizontalBlock"] button[key="btn_{m_view}_{jour}"] {{
-                                        {bg_style}
-                                        border: none !important; width: 26px !important; height: 26px !important;
-                                        padding: 0 !important; min-height: 26px !important; max-height: 26px !important;
-                                        font-size: 10px !important; margin: 2px auto !important; display: flex !important;
-                                        align-items: center !important; justify-content: center !important;
-                                    }}
-                                    </style>
-                                """, unsafe_allow_html=True)
+                                # Si le jour a un contrôle, on le rend cliquable via un lien invisible qui recharge l'URL cible
+                                if evts:
+                                    cell_content = f"""<a href='?click_day={jour}' target='_self' style='text-decoration:none; color:inherit; display:block;'>
+                                        <div style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column;
+                                        align-items:center; justify-content:center; {cell_style} font-size:10px; cursor:pointer;'>
+                                            {jour}{dot_html}
+                                        </div>
+                                    </a>"""
+                                else:
+                                    cell_content = f"""<div style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column;
+                                        align-items:center; justify-content:center; {cell_style} font-size:10px;'>
+                                            {jour}
+                                    </div>"""
 
-                                # Le bouton devient une cellule active
-                                if cols_semaine[idx_jour].button(label_bouton, key=f"btn_{m_view}_{jour}"):
-                                    st.session_state.jour_selectionne = jour
-                                    st.rerun()
+                                cal_html += f"<td style='padding:3px 0; text-align:center;'>{cell_content}</td>"
+                        cal_html += "</tr>"
+                    cal_html += "</table>"
+                    st.markdown(cal_html, unsafe_allow_html=True)
 
-                    # ---- ZONE D'AFFICHAGE DU CONTRÔLE SÉLECTIONNÉ ----
+                    # ---- CASE DES CONTRÔLES DU JOUR ----
                     st.markdown("<div style='margin-top:12px; border-top:1px solid #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
                     
-                    # Si aucun jour n'est sélectionné manuellement, on pré-sélectionne le premier jour qui contient un contrôle
+                    # Sélection automatique du premier jour avec événement s'il n'y a pas de sélection
                     if st.session_state.jour_selectionne is None and details_evenements:
                         st.session_state.jour_selectionne = min(details_evenements.keys())
 
@@ -835,9 +839,9 @@ if acces_autorise:
                             </div>
                             """, unsafe_allow_html=True)
                     else:
-                        st.caption("💡 Cliquez sur un jour coloré du calendrier pour voir ses détails.")
+                        st.markdown("<p style='font-size:11px; color:#64748B; font-style:italic;'>💡 Cliquez sur un jour coloré pour charger ses contrôles.</p>", unsafe_allow_html=True)
 
-                    # Légende des couleurs en bas
+                    # Légende des couleurs
                     st.markdown("<div style='margin-top:12px; border-top:1px dashed #E2E8F0; padding-top:8px;'></div>", unsafe_allow_html=True)
                     cats_presentes = set(cat for evts_list in evenements.values() for c in evts_list for cat_name, col in COULEURS_CAT.items() if col == c)
                     
