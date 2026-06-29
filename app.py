@@ -631,6 +631,7 @@ if acces_autorise:
                 st.markdown(f"[Ouvrir le Google Sheets]({URL_GOOGLE_SHEET})")
 
     # ---- ONGLET 2 : PLANNING ----
+    # ---- ONGLET 2 : PLANNING ----
     with tab2:
         st.markdown("<p style='font-size:1.2rem; font-weight:700; color:#0F172A;'>📅 Planification des contrôles obligatoires</p>", unsafe_allow_html=True)
         if not df_planning.empty:
@@ -640,209 +641,157 @@ if acces_autorise:
                 hide_index=True, use_container_width=True)
         else:
             st.info("Aucun contrôle planifié.")
+            
         if role == "Responsable" and password_correct:
             with st.expander("🛠️ Panneau d'administration"):
                 st.markdown(f"[Modifier le calendrier]({URL_GOOGLE_SHEET})")
 
-        # ---- SECTION ÉCHÉANCES CALCULÉES ----
-st.markdown("<br><p style='font-size:1.2rem; font-weight:700; color:#0F172A;'>📅 Prochaines échéances calculées</p>", unsafe_allow_html=True)
+        # ---- SECTION ÉCHÉANCES CALCULÉES ET CALENDRIER PLACÉS ICI ----
+        st.markdown("<br><p style='font-size:1.2rem; font-weight:700; color:#0F172A;'>📅 Prochaines échéances calculées</p>", unsafe_allow_html=True)
 
-PERIODICITE = {
-    "Installations électriques": 6,   # mois
-    "Equipements de levage":     12,
-    "Sécurité incendie":         12,
-    "Installations de gaz":      12,
-    "Appareil pression de gaz":  12,
-}
-
-COULEURS_CAT = {
-    "Installations électriques": "#2a78d6",
-    "Equipements de levage":     "#1baf7a",
-    "Sécurité incendie":         "#e34948",
-    "Installations de gaz":      "#eda100",
-    "Appareil pression de gaz":  "#4a3aa7",
-}
-
-if not df_rapports.empty:
-    col_cat_r  = [c for c in df_rapports.columns if "cat" in c.lower()]
-    col_date_r = [c for c in df_rapports.columns if "date" in c.lower()]
-    col_site_r = [c for c in df_rapports.columns if "site" in c.lower()]
-    col_label_r= [c for c in df_rapports.columns if "equip" in c.lower() or "label" in c.lower() or "nom" in c.lower()]
-
-    if col_cat_r and col_date_r:
-        df_ech = df_rapports.copy()
-        df_ech["_date"] = pd.to_datetime(df_ech[col_date_r[0]], dayfirst=True, errors='coerce')
-        df_ech = df_ech.dropna(subset=["_date"])
-
-        today_dt = pd.Timestamp.today().normalize()
-
-        def calc_prochaine(row):
-            cat = str(row[col_cat_r[0]]).strip()
-            mois = PERIODICITE.get(cat, 12)
-            return row["_date"] + pd.DateOffset(months=mois)
-
-        df_ech["Prochaine échéance"] = df_ech.apply(calc_prochaine, axis=1)
-        df_ech["Jours restants"]     = (df_ech["Prochaine échéance"] - today_dt).dt.days
-
-        def statut(j):
-            if j < 0:   return "⚠️ Dépassé"
-            if j < 30:  return "🔴 Urgent"
-            if j < 90:  return "🟡 Proche"
-            return "🟢 OK"
-
-        df_ech["Statut"] = df_ech["Jours restants"].apply(statut)
-
-        cols_affich = []
-        if col_site_r:  cols_affich.append(col_site_r[0])
-        if col_label_r: cols_affich.append(col_label_r[0])
-        cols_affich += [col_cat_r[0], "_date", "Prochaine échéance", "Jours restants", "Statut"]
-
-        df_show = df_ech[cols_affich].sort_values("Prochaine échéance")
-
-        col_cfg = {
-            "_date":              st.column_config.DateColumn("Dernier contrôle", format="DD/MM/YYYY"),
-            "Prochaine échéance": st.column_config.DateColumn("Prochaine échéance", format="DD/MM/YYYY"),
-            "Jours restants":     st.column_config.NumberColumn("Jours restants", format="%d j"),
-        }
-
-        left_col, right_col = st.columns([1.3, 1])
-
-        with left_col:
-            st.dataframe(df_show, column_config=col_cfg, hide_index=True, use_container_width=True)
-
-        with right_col:
-            import calendar
-            calendar.setfirstweekday(0)
-
-            if "cal_mois" not in st.session_state:
-                st.session_state.cal_mois = today_dt.month
-            if "cal_annee" not in st.session_state:
-                st.session_state.cal_annee = today_dt.year
-
-            nav1, nav2, nav3 = st.columns([1, 3, 1])
-            with nav1:
-                if st.button("◀", key="prev_month"):
-                    if st.session_state.cal_mois == 1:
-                        st.session_state.cal_mois = 12
-                        st.session_state.cal_annee -= 1
-                    else:
-                        st.session_state.cal_mois -= 1
-                    st.rerun()
-            with nav2:
-                MOIS_FR = ["","Janvier","Février","Mars","Avril","Mai","Juin",
-                           "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
-                st.markdown(f"<p style='text-align:center;font-weight:600;font-size:14px;padding-top:6px'>{MOIS_FR[st.session_state.cal_mois]} {st.session_state.cal_annee}</p>", unsafe_allow_html=True)
-            with nav3:
-                if st.button("▶", key="next_month"):
-                    if st.session_state.cal_mois == 12:
-                        st.session_state.cal_mois = 1
-                        st.session_state.cal_annee += 1
-                    else:
-                        st.session_state.cal_mois += 1
-                    st.rerun()
-
-            m_view = st.session_state.cal_mois
-            a_view = st.session_state.cal_annee
-
-            evenements = {}
-            for _, row in df_ech.iterrows():
-                d = row["Prochaine échéance"]
-                if pd.notna(d) and d.month == m_view and d.year == a_view:
-                    jour = d.day
-                    cat = str(row[col_cat_r[0]]).strip()
-                    couleur = COULEURS_CAT.get(cat, "#94a3b8")
-                    if jour not in evenements:
-                        evenements[jour] = []
-                    evenements[jour].append(couleur)
-
-            jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
-            cal_html = "<table style='width:100%;border-collapse:collapse;table-layout:fixed'>"
-            cal_html += "<tr>" + "".join(
-                f"<th style='color:#94a3b8;font-size:10px;padding:2px 0;text-align:center;font-weight:500'>{j}</th>"
-                for j in jours_abbr
-            ) + "</tr>"
-
-            cal_obj = calendar.monthcalendar(a_view, m_view)
-            for semaine in cal_obj:
-                cal_html += "<tr>"
-                for jour in semaine:
-                    if jour == 0:
-                        cal_html += "<td style='padding:2px;text-align:center'></td>"
-                    else:
-                        is_today = (jour == today_dt.day and m_view == today_dt.month and a_view == today_dt.year)
-                        evts = evenements.get(jour, [])
-
-                        if is_today:
-                            cell_style = "background:#1E3A8A;color:white;border-radius:50%;font-weight:600;"
-                        elif evts:
-                            cell_style = f"background:{evts[0]};color:white;border-radius:50%;font-weight:600;"
-                        else:
-                            cell_style = "color:#334155;"
-
-                        dot_html = ""
-                        if len(evts) > 1:
-                            dot_html = f"<div style='font-size:8px;color:white;line-height:1'>+{len(evts)-1}</div>"
-
-                        cal_html += f"""<td style='padding:2px;text-align:center'>
-                            <div style='width:26px;height:26px;margin:auto;display:flex;flex-direction:column;
-                                        align-items:center;justify-content:center;{cell_style}font-size:11px;'>
-                                {jour}{dot_html}
-                            </div></td>"""
-                cal_html += "</tr>"
-            cal_html += "</table>"
-
-            # Légende en liste verticale
-            cal_html += "<div style='margin-top:14px;display:flex;flex-direction:column;gap:6px'>"
-            cats_presentes = set()
-            for evts_list in evenements.values():
-                for c in evts_list:
-                    for cat_name, col in COULEURS_CAT.items():
-                        if col == c:
-                            cats_presentes.add(cat_name)
-
-            for cat, couleur in COULEURS_CAT.items():
-                opacity = "1" if cat in cats_presentes else "0.35"
-                cal_html += f"""<div style='display:flex;align-items:center;gap:8px;opacity:{opacity}'>
-                    <span style='width:12px;height:12px;border-radius:3px;background:{couleur};
-                                 display:inline-block;flex-shrink:0'></span>
-                    <span style='font-size:11px;color:#475569'>{cat}</span>
-                </div>"""
-            cal_html += "</div>"
-
-            st.markdown(cal_html, unsafe_allow_html=True)
+        if not df_rapports.empty:
+            col_cat_r = [c for c in df_rapports.columns if "cat" in c.lower()]
+            col_date_r = [c for c in df_rapports.columns if "date" in c.lower()]
+            col_site_r = [c for c in df_rapports.columns if "site" in c.lower()]
+            col_label_r= [c for c in df_rapports.columns if "equip" in c.lower() or "label" in c.lower() or "nom" in c.lower()]
             
-            evenements = {}
-            for _, row in df_ech.iterrows():
-                d = row["Prochaine échéance"]
-                if pd.notna(d) and d.month == mois_now and d.year == annee_now:
-                    key = d.day
+            if col_cat_r and col_date_r:
+                df_ech = df_rapports.copy()
+                df_ech["_date"] = pd.to_datetime(df_ech[col_date_r[0]], dayfirst=True, errors='coerce')
+                df_ech = df_ech.dropna(subset=["_date"])
+                today_dt = pd.Timestamp.today().normalize()
+
+                def calc_prochaine(row):
                     cat = str(row[col_cat_r[0]]).strip()
-                    couleur = COULEURS_CAT.get(cat, "#94a3b8")
-                    evenements[key] = couleur
+                    mois = PERIODICITE.get(cat, 12)
+                    return row["_date"] + pd.DateOffset(months=mois)
 
-            cal_obj = calendar.monthcalendar(annee_now, mois_now)
-            for semaine in cal_obj:
-                cal_html += "<tr>"
-                for jour in semaine:
-                    if jour == 0:
-                        cal_html += "<td style='padding:4px'></td>"
-                    elif jour == today_dt.day:
-                        cal_html += f"<td style='padding:4px;background:#1E3A8A;color:white;border-radius:50%;width:24px;height:24px;font-weight:600'>{jour}</td>"
-                    elif jour in evenements:
-                        cal_html += f"<td style='padding:4px;background:{evenements[jour]};color:white;border-radius:50%;width:24px;height:24px;font-weight:600' title='Contrôle planifié'>{jour}</td>"
-                    else:
-                        cal_html += f"<td style='padding:4px;color:#334155'>{jour}</td>"
-                cal_html += "</tr>"
-            cal_html += "</table>"
+                df_ech["Prochaine échéance"] = df_ech.apply(calc_prochaine, axis=1)
+                df_ech["Jours restants"] = (df_ech["Prochaine échéance"] - today_dt).dt.days
 
-            # Légende couleurs
-            cal_html += "<div style='margin-top:12px;display:flex;flex-wrap:wrap;gap:6px'>"
-            for cat, couleur in COULEURS_CAT.items():
-                label = cat[:20] + "…" if len(cat) > 20 else cat
-                cal_html += f"<span style='font-size:10px;display:flex;align-items:center;gap:4px'><span style='width:10px;height:10px;border-radius:2px;background:{couleur};display:inline-block'></span>{label}</span>"
-            cal_html += "</div></div>"
+                def statut(j):
+                    if j < 0: return "⚠️ Dépassé"
+                    if j < 30: return "🔴 Urgent"
+                    if j < 90: return "🟡 Proche"
+                    return "🟢 OK"
 
-            st.markdown(cal_html, unsafe_allow_html=True)
+                df_ech["Statut"] = df_ech["Jours restants"].apply(statut)
+
+                cols_affich = []
+                if col_site_r: cols_affich.append(col_site_r[0])
+                if col_label_r: cols_affich.append(col_label_r[0])
+                cols_affich += [col_cat_r[0], "_date", "Prochaine échéance", "Jours restants", "Statut"]
+                
+                df_show = df_ech[cols_affich].sort_values("Prochaine échéance")
+                col_cfg = {
+                    "_date": st.column_config.DateColumn("Dernier contrôle", format="DD/MM/YYYY"),
+                    "Prochaine échéance": st.column_config.DateColumn("Prochaine échéance", format="DD/MM/YYYY"),
+                    "Jours restants": st.column_config.NumberColumn("Jours restants", format="%d j"),
+                }
+
+                # Création des deux colonnes côte à côte à l'intérieur du tab2
+                left_col, right_col = st.columns([1.5, 1])
+                
+                with left_col:
+                    st.dataframe(df_show, column_config=col_cfg, hide_index=True, use_container_width=True)
+                    
+                with right_col:
+                    import calendar
+                    calendar.setfirstweekday(0)
+                    
+                    if "cal_mois" not in st.session_state: st.session_state.cal_mois = today_dt.month
+                    if "cal_annee" not in st.session_state: st.session_state.cal_annee = today_dt.year
+
+                    nav1, nav2, nav3 = st.columns([1, 3, 1])
+                    with nav1:
+                        if st.button("◀", key="prev_month"):
+                            if st.session_state.cal_mois == 1:
+                                st.session_state.cal_mois = 12
+                                st.session_state.cal_annee -= 1
+                            else:
+                                st.session_state.cal_mois -= 1
+                            st.rerun()
+                    with nav2:
+                        MOIS_FR = ["","Janvier","Février","Mars","Avril","Mai","Juin", "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+                        st.markdown(f"<p style='text-align:center;font-weight:600;font-size:14px;padding-top:6px'>{MOIS_FR[st.session_state.cal_mois]} {st.session_state.cal_annee}</p>", unsafe_allow_html=True)
+                    with nav3:
+                        if st.button("▶", key="next_month"):
+                            if st.session_state.cal_mois == 12:
+                                st.session_state.cal_mois = 1
+                                st.session_state.cal_annee += 1
+                            else:
+                                st.session_state.cal_mois += 1
+                            st.rerun()
+
+                    m_view = st.session_state.cal_mois
+                    a_view = st.session_state.cal_annee
+
+                    evenements = {}
+                    for _, row in df_ech.iterrows():
+                        d = row["Prochaine échéance"]
+                        if pd.notna(d) and d.month == m_view and d.year == a_view:
+                            jour = d.day
+                            cat = str(row[col_cat_r[0]]).strip()
+                            couleur = COULEURS_CAT.get(cat, "#94a3b8")
+                            if jour not in evenements:
+                                evenements[jour] = []
+                            evenements[jour].append(couleur)
+
+                    jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
+                    
+                    # MODIFICATION ICI : `width:12%` forcée sur chaque cellule th pour amincir les colonnes
+                    cal_html = "<table style='width:100%;border-collapse:collapse;table-layout:fixed'>"
+                    cal_html += "<tr>" + "".join(
+                        f"<th style='color:#94a3b8;font-size:10px;padding:2px 0;text-align:center;font-weight:500;width:14%;'>{j}</th>" for j in jours_abbr
+                    ) + "</tr>"
+
+                    cal_obj = calendar.monthcalendar(a_view, m_view)
+                    for semaine in cal_obj:
+                        cal_html += "<tr>"
+                        for jour in semaine:
+                            if jour == 0:
+                                cal_html += "<td style='padding:2px;text-align:center'></td>"
+                            else:
+                                is_today = (jour == today_dt.day and m_view == today_dt.month and a_view == today_dt.year)
+                                evts = evenements.get(jour, [])
+                                if is_today:
+                                    cell_style = "background:#1E3A8A;color:white;border-radius:50%;font-weight:600;"
+                                elif evts:
+                                    cell_style = f"background:{evts[0]};color:white;border-radius:50%;font-weight:600;"
+                                else:
+                                    cell_style = "color:#334155;"
+
+                                dot_html = ""
+                                if len(evts) > 1:
+                                    dot_html = f"<div style='font-size:8px;color:white;line-height:1'>+{len(evts)-1}</div>"
+                                
+                                cal_html += f"""<td style='padding:2px;text-align:center'>
+                                    <div style='width:24px;height:24px;margin:auto;display:flex;flex-direction:column;
+                                    align-items:center;justify-content:center;{cell_style}font-size:10px;'>
+                                        {jour}{dot_html}
+                                    </div></td>"""
+                        cal_html += "</tr>"
+                    cal_html += "</table>"
+
+                    # Légende en liste verticale
+                    cal_html += "<div style='margin-top:14px;display:flex;flex-direction:column;gap:6px'>"
+                    cats_presentes = set()
+                    for evts_list in evenements.values():
+                        for c in evts_list:
+                            for cat_name, col in COULEURS_CAT.items():
+                                if col == c:
+                                    cats_presentes.add(cat_name)
+
+                    for cat, couleur in COULEURS_CAT.items():
+                        opacity = "1" if cat in cats_presentes else "0.35"
+                        cal_html += f"""<div style='display:flex;align-items:center;gap:8px;opacity:{opacity}'>
+                            <span style='width:12px;height:12px;border-radius:3px;background:{couleur};
+                            display:inline-block;flex-shrink:0'></span>
+                            <span style='font-size:11px;color:#475569'>{cat}</span>
+                        </div>"""
+                    cal_html += "</div>"
+                    
+                    st.markdown(cal_html, unsafe_allow_html=True)
 
     # ---- ONGLET 3 : PRÉSENCE & VISITES ----
     if tab3 and role == "Responsable" and password_correct:
