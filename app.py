@@ -719,7 +719,7 @@ if acces_autorise:
                 "Jours restants":     st.column_config.NumberColumn("Jours restants", format="%d j"),
             }
 
-                left_col, right_col = st.columns([1.5, 1])
+            left_col, right_col = st.columns([1.5, 1])
 
                 with left_col:
                     st.dataframe(df_show, column_config=col_cfg, hide_index=True, use_container_width=True)
