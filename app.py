@@ -538,7 +538,7 @@ if acces_autorise:
     # --- ONGLETS ---
     liste_onglets = ["📋 Rapports de contrôle archivés", "📅 Suivi de performance & Planification"]
     if role == "Responsable" and password_correct:
-        liste_onglets.append("👥 Suivi des visites & Présence")
+        liste_onglets.append("👥 Statistiques")
 
     onglets = st.tabs(liste_onglets)
     tab1 = onglets[0]
