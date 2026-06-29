@@ -740,24 +740,28 @@ if acces_autorise:
                     m_view = st.session_state.cal_mois
                     a_view = st.session_state.cal_annee
 
+                    # Collecte des événements détaillés pour ce mois
                     evenements = {}
+                    details_evenements = {}  # Pour stocker les lignes complètes du contrôle
+                    
                     for _, row in df_ech.iterrows():
                         d = row["Prochaine échéance"]
                         if pd.notna(d) and d.month == m_view and d.year == a_view:
                             jour = d.day
                             cat = str(row[col_cat_r[0]]).strip()
                             couleur = COULEURS_CAT.get(cat, "#94a3b8")
+                            
                             if jour not in evenements:
                                 evenements[jour] = []
+                                details_evenements[jour] = []
                             evenements[jour].append(couleur)
+                            details_evenements[jour].append(row)
 
                     jours_abbr = ["Lu","Ma","Me","Je","Ve","Sa","Di"]
                     
-                    # AJUSTEMENT : Rapprochement et affinement maximal des colonnes (table-layout fixed + th width 14%)
-                    cal_html = "<table style='width:100%; border-collapse:collapse; table-layout:fixed; margin:auto;'>"
-                    cal_html += "<tr>" + "".join(
-                        f"<th style='color:#94a3b8; font-size:11px; padding:2px 0; text-align:center; font-weight:500; width:14%;'>{j}</th>" for j in jours_abbr
-                    ) + "</tr>"
+                    # Rapprochement et affinement maximal des colonnes
+                    cal_html = "<table style='width:100%; border-collapse:collapse; table-layout:fixed; margin:auto;'>\n<tr>"
+                    cal_html += "".join(f"<th style='color:#94a3b8; font-size:11px; padding:2px 0; text-align:center; font-weight:500; width:14%;'>{j}</th>" for j in jours_abbr) + "</tr>"
 
                     cal_obj = calendar.monthcalendar(a_view, m_view)
                     for semaine in cal_obj:
@@ -780,7 +784,6 @@ if acces_autorise:
                                 if len(evts) > 1:
                                     dot_html = f"<div style='font-size:8px; color:white; line-height:1;'>+{len(evts)-1}</div>"
 
-                                # Réduction de taille des bulles (24px) pour un rendu fin
                                 cal_html += f"""<td style='padding:3px 0; text-align:center;'>
                                     <div style='width:24px; height:24px; margin:auto; display:flex; flex-direction:column;
                                     align-items:center; justify-content:center; {cell_style} font-size:10px;'>
@@ -788,9 +791,45 @@ if acces_autorise:
                                     </div></td>"""
                         cal_html += "</tr>"
                     cal_html += "</table>"
+                    st.markdown(cal_html, unsafe_allow_html=True)
 
-                    # Légende verticale optimisée
-                    cal_html += "<div style='margin-top:14px; display:flex; flex-direction:column; gap:6px;'>"
+                    # ---- NOUVELLE CASE : INSPECTEUR DE DATE ----
+                    st.markdown("<div style='margin-top:15px; border-top:1px solid #E2E8F0; padding-top:10px;'></div>", unsafe_allow_html=True)
+                    
+                    # On crée une liste des jours du mois qui ont des contrôles pour faciliter la sélection
+                    jours_avec_controles = sorted(list(details_evenements.keys()))
+                    
+                    if jours_avec_controles:
+                        choix_jour = st.selectbox(
+                            "🔍 Sélectionner un jour avec contrôle :",
+                            options=jours_avec_controles,
+                            format_func=lambda x: f"Jour {x} ({len(details_evenements[x])} contrôle(s))",
+                            key="inspect_jour"
+                        )
+                        
+                        # Affichage des contrôles pour le jour sélectionné
+                        if choix_jour in details_evenements:
+                            st.markdown(f"<p style='font-size:12px; font-weight:600; color:#1E3A8A; margin-bottom:5px;'>📋 Contrôle(s) prévu(s) le {choix_jour}/{m_view}/{a_view} :</p>", unsafe_allow_html=True)
+                            
+                            for row_ctrl in details_evenements[choix_jour]:
+                                c_cat = str(row_ctrl[col_cat_r[0]]).strip()
+                                c_site = str(row_ctrl[col_site_r[0]]).strip() if col_site_r else ""
+                                c_label = str(row_ctrl[col_label_r[0]]).strip() if col_label_r else ""
+                                c_couleur = COULEURS_CAT.get(c_cat, "#94a3b8")
+                                
+                                # Carte descriptive fine du contrôle
+                                item_html = f"""
+                                <div style='background:#F8FAFC; border-left:4px solid {c_couleur}; padding:6px 10px; border-radius:4px; margin-bottom:6px;'>
+                                    <p style='margin:0; font-size:11px; font-weight:600; color:#1E293B;'>{c_cat}</p>
+                                    <p style='margin:2px 0 0 0; font-size:10px; color:#64748B;'>🏢 Site : <b>{c_site}</b> {'| ⚙️ ' + c_label if c_label else ""}</p>
+                                </div>
+                                """
+                                st.markdown(item_html, unsafe_allow_html=True)
+                    else:
+                        st.caption("ℹ️ Aucun contrôle prévu ce mois-ci.")
+
+                    # Légende verticale optimisée en dessous
+                    st.markdown("<div style='margin-top:15px; border-top:1px dashed #E2E8F0; padding-top:10px;'></div>", unsafe_allow_html=True)
                     cats_presentes = set()
                     for evts_list in evenements.values():
                         for c in evts_list:
@@ -800,13 +839,11 @@ if acces_autorise:
 
                     for cat, couleur in COULEURS_CAT.items():
                         opacity = "1" if cat in cats_presentes else "0.35"
-                        cal_html += f"""<div style='display:flex; align-items:center; gap:8px; opacity:{opacity};'>
-                            <span style='width:10px; height:10px; border-radius:2px; background:{couleur}; display:inline-block; flex-shrink:0;'></span>
-                            <span style='font-size:11px; color:#475569;'>{cat}</span>
-                        </div>"""
-                    cal_html += "</div>"
-
-                    st.markdown(cal_html, unsafe_allow_html=True)
+                        st.markdown(f"""
+                            <div style='display:flex; align-items:center; gap:8px; opacity:{opacity}; margin-bottom:4px;'>
+                                <span style='width:10px; height:10px; border-radius:2px; background:{couleur}; display:inline-block; flex-shrink:0;'></span>
+                                <span style='font-size:11px; color:#475569;'>{cat}</span>
+                            </div>""", unsafe_allow_html=True)
 
     # ---- ONGLET 3 : PRÉSENCE & VISITES ----
     if tab3 and role == "Responsable" and password_correct:
