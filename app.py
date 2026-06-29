@@ -493,21 +493,26 @@ if acces_autorise:
                             evenements.setdefault(j, []).append(col)
                             details_evt.setdefault(j, []).append(row)
 
-                    # CSS pour les boutons du calendrier
+                    # CSS ciblé uniquement sur le calendrier
                     st.markdown("""
                     <style>
-                    div[data-testid="stHorizontalBlock"] > div > div > div > button {
+                    [data-testid="stVerticalBlock"] button[kind="secondary"] {
                         padding: 0 !important;
-                        min-height: 32px !important;
-                        height: 32px !important;
-                        width: 32px !important;
+                        min-height: 28px !important;
+                        height: 28px !important;
+                        width: 28px !important;
                         border-radius: 50% !important;
                         font-size: 11px !important;
-                        font-weight: 500 !important;
-                        margin: auto !important;
+                        font-weight: 600 !important;
+                        line-height: 1 !important;
                         display: flex !important;
                         align-items: center !important;
                         justify-content: center !important;
+                        margin: auto !important;
+                        background-color: transparent !important;
+                        border: none !important;
+                        box-shadow: none !important;
+                        color: #334155 !important;
                     }
                     </style>
                     """, unsafe_allow_html=True)
@@ -526,32 +531,31 @@ if acces_autorise:
                         for i, jour in enumerate(semaine):
                             with cols_sem[i]:
                                 if jour == 0:
-                                    st.markdown("<div style='height:32px'></div>", unsafe_allow_html=True)
+                                    st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
                                 else:
-                                    evts       = evenements.get(jour, [])
-                                    is_today   = (jour == today_dt2.day and m_view == today_dt2.month and a_view == today_dt2.year)
-                                    is_sel     = (jour == st.session_state.jour_selectionne)
-                                    has_event  = len(evts) > 0
+                                    evts     = evenements.get(jour, [])
+                                    is_today = (jour == today_dt2.day and m_view == today_dt2.month and a_view == today_dt2.year)
+                                    is_sel   = (jour == st.session_state.jour_selectionne)
 
-                                    if is_sel:
-                                        bg = evts[0] if evts else "#1E3A8A"
-                                        style = f"background:{bg};color:white;border-radius:50%;border:3px solid #0F172A;width:32px;height:32px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;margin:auto;cursor:pointer;"
+                                    if is_sel and evts:
+                                        bg = evts[0]
+                                        cell = f"<div style='width:28px;height:28px;border-radius:50%;background:{bg};color:white;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;margin:auto;outline:2px solid #0F172A;outline-offset:1px;'>{jour}</div>"
+                                        st.markdown(cell, unsafe_allow_html=True)
+                                        # Bouton invisible pour garder le clic actif
+                                        if st.button("​", key=f"cal_{a_view}_{m_view}_{jour}"):
+                                            st.session_state.jour_selectionne = jour
+                                            st.rerun()
                                     elif is_today:
-                                        style = "background:#1E3A8A;color:white;border-radius:50%;border:none;width:32px;height:32px;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;margin:auto;"
-                                    elif has_event:
-                                        style = f"background:{evts[0]};color:white;border-radius:50%;border:none;width:32px;height:32px;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;margin:auto;cursor:pointer;"
-                                    else:
-                                        style = "background:transparent;color:#334155;border-radius:50%;border:none;width:32px;height:32px;font-size:11px;display:flex;align-items:center;justify-content:center;margin:auto;"
-
-                                    if has_event:
-                                        # Jour avec événement = bouton cliquable
-                                        if st.button(str(jour), key=f"cal_{a_view}_{m_view}_{jour}",
-                                                     help=f"{len(evts)} contrôle(s) ce jour"):
+                                        st.markdown(f"<div style='width:28px;height:28px;border-radius:50%;background:#1E3A8A;color:white;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;margin:auto;'>{jour}</div>", unsafe_allow_html=True)
+                                    elif evts:
+                                        # Bouton coloré cliquable
+                                        st.markdown(f"<div style='width:28px;height:28px;border-radius:50%;background:{evts[0]};color:white;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;margin:auto;margin-bottom:-28px;position:relative;z-index:1;pointer-events:none;'>{jour}</div>", unsafe_allow_html=True)
+                                        if st.button("​", key=f"cal_{a_view}_{m_view}_{jour}",
+                                                     help=f"{len(evts)} contrôle(s)"):
                                             st.session_state.jour_selectionne = jour
                                             st.rerun()
                                     else:
-                                        # Jour sans événement = texte simple
-                                        st.markdown(f"<div style='{style}'>{jour}</div>", unsafe_allow_html=True)
+                                        st.markdown(f"<div style='width:28px;height:28px;display:flex;align-items:center;justify-content:center;margin:auto;font-size:11px;color:#334155;'>{jour}</div>", unsafe_allow_html=True)
 
                     # Légende
                     st.markdown("<div style='margin-top:12px;border-top:1px dashed #E2E8F0;padding-top:8px;'></div>", unsafe_allow_html=True)
