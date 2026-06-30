@@ -7,7 +7,189 @@ import re
 import time
 import requests
 import calendar
+import base64
+from weasyprint import HTML
 
+def generer_rapport_equipements_pdf(df_exigences, site_filtre):
+    """
+    Génère un rapport PDF de 5 pages pour un site spécifique (SGB ou MEG).
+    """
+    categories = [
+        "Installations électriques",
+        "Equipements de levage",
+        "Sécurité incendie",
+        "Installations de gaz",
+        "Appareil pression de gaz"
+    ]
+    
+    # 1. Filtrer uniquement les lignes de type "Equipement"
+    df_eq = df_exigences[df_exigences.iloc[:, 0].astype(str).str.strip().str.lower() == "equipement"]
+    
+    # 2. Filtrer selon le Site (Colonne index 1)
+    df_eq = df_eq[df_eq.iloc[:, 1].astype(str).str.strip().str.upper() == site_filtre.upper()]
+
+    html_content = f"""
+    <html>
+    <head>
+    <style>
+        @page {{
+            size: A4 portrait;
+            margin: 20mm 15mm;
+            @bottom-right {{
+                content: "Page " counter(page) " / " counter(pages);
+                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                font-size: 9pt;
+                color: #64748B;
+            }}
+        }}
+        body {{
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #1E293B;
+            margin: 0;
+            padding: 0;
+            font-size: 10pt;
+        }}
+        .page {{
+            page-break-after: always;
+        }}
+        .page:last-child {{
+            page-break-after: avoid;
+        }}
+        .header-title {{
+            text-align: center;
+            font-size: 18pt;
+            font-weight: bold;
+            color: #1E3A8A;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            border-bottom: 2px solid #1E3A8A;
+            padding-bottom: 10px;
+        }}
+        .meta-info {{
+            margin-bottom: 25px;
+            background-color: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            padding: 15px;
+            border-radius: 6px;
+            line-height: 1.8;
+            font-size: 11pt;
+        }}
+        .category-title {{
+            font-size: 14pt;
+            color: #0EA5E9;
+            font-weight: bold;
+            margin-top: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid #0EA5E9;
+            padding-left: 8px;
+        }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }}
+        th, td {{
+            border: 1px solid #CBD5E1;
+            padding: 10px;
+            text-align: left;
+        }}
+        th {{
+            background-color: #1E3A8A;
+            color: white;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 9pt;
+        }}
+        .col-sub {{ width: 60%; }}
+        .col-nb {{ width: 20%; text-align: center; }}
+        .col-chk {{ width: 20%; text-align: center; }}
+        .td-center {{ text-align: center; }}
+        
+        .checkbox-box {{
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 1px solid #475569;
+            border-radius: 2px;
+            margin-top: 3px;
+        }}
+        .signature-section {{
+            margin-top: 40px;
+            width: 100%;
+            border-top: 1px dashed #CBD5E1;
+            padding-top: 15px;
+        }}
+        .signature-title {{
+            font-weight: bold;
+            text-decoration: underline;
+            margin-bottom: 60px;
+        }}
+    </style>
+    </head>
+    <body>
+    """
+
+    for cat in categories:
+        # Filtrer par catégorie parmi les équipements du site
+        df_cat = df_eq[df_eq.iloc[:, 2].astype(str).str.strip() == cat]
+        
+        html_content += f"""
+        <div class="page">
+            <div class="header-title">Rapport d'Inspection Réglementaire — Site {site_filtre.upper()}</div>
+            
+            <div class="meta-info">
+                <strong>Inspecteur technique :</strong> ............................................................<br>
+                <strong>Accompagnant :</strong> ........................................................................<br>
+                <strong>Date :</strong> .......................................................................................
+            </div>
+            
+            <div class="category-title">{cat}</div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th class="col-sub">Sous-équipements</th>
+                        <th class="col-nb">Nombre</th>
+                        <th class="col-chk">Case à cocher</th>
+                    </tr>
+                </thead>
+                <tbody>
+        """
+        
+        if not df_cat.empty:
+            for _, row in df_cat.iterrows():
+                sous_eq = row.iloc[3] if pd.notna(row.iloc[3]) else "-"
+                nombre = row.iloc[4] if pd.notna(row.iloc[4]) else "0"
+                html_content += f"""
+                    <tr>
+                        <td>{sous_eq}</td>
+                        <td class="td-center">{nombre}</td>
+                        <td class="td-center"><span class="checkbox-box"></span></td>
+                    </tr>
+                """
+        else:
+            html_content += """
+                <tr>
+                    <td colspan="3" style="text-align:center; color:#94A3B8; font-style: italic;">Aucun équipement enregistré pour cette catégorie sur ce site</td>
+                </tr>
+            """
+            
+        html_content += """
+                </tbody>
+            </table>
+            
+            <div class="signature-section">
+                <div class="signature-title">Zone pour signature :</div>
+            </div>
+        </div>
+        """
+        
+    html_content += """
+    </body>
+    </html>
+    """
+    
+    return HTML(string=html_content).write_pdf()
 st.set_page_config(
     page_title="Contrôle Réglementaire",
     page_icon="🛡️",
@@ -802,8 +984,48 @@ if acces_autorise:
                             st.error("Erreur lors de la suppression.")
 
         st.markdown("<br><hr style='border-color:#E2E8F0;'>", unsafe_allow_html=True)
+        
+        
+        if not df_exigences_actuel.empty:
+            st.markdown("### 📥 Téléchargement des Rapports par Site")
+            
+            # Création de deux colonnes pour aligner les boutons côte à côte
+            col_sgb, col_meg = st.columns(2)
+            date_str = datetime.date.today().strftime('%d_%m_%Y')
+            
+            with col_sgb:
+                with st.spinner("Préparation du rapport SGB..."):
+                    try:
+                        pdf_sgb = generer_rapport_equipements_pdf(df_exigences_actuel, "SGB")
+                        st.download_button(
+                            label="🏢 Télécharger le Rapport PDF - SGB (5 Pages)",
+                            data=pdf_sgb,
+                            file_name=f"Rapport_Inspection_SGB_{date_str}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error(f"Erreur PDF SGB : {e}")
+                        
+            with col_meg:
+                with st.spinner("Préparation du rapport MEG..."):
+                    try:
+                        pdf_meg = generer_rapport_equipements_pdf(df_exigences_actuel, "MEG")
+                        st.download_button(
+                            label="🏭 Télécharger le Rapport PDF - MEG (5 Pages)",
+                            data=pdf_meg,
+                            file_name=f"Rapport_Inspection_MEG_{date_str}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error(f"Erreur PDF MEG : {e}")
+                        
+            st.divider()
+            
+            # (Conservez ici le reste de votre code existant pour l'affichage de l'onglet Exigences)
 
-        # ===== SECTION 2 : LISTE DES ÉQUIPEMENTS (ARBORESCENCE) =====
+        # ===== SECTION 3 : LISTE DES ÉQUIPEMENTS (ARBORESCENCE) =====
         st.markdown("### 🏭 Liste des équipements soumis au contrôle")
 
         df_equip = pd.DataFrame()
