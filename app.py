@@ -10,13 +10,10 @@ import calendar
 import base64
 from weasyprint import HTML
 
-def generer_rapport_equipements_pdf(df_exigences):
+def generer_rapport_equipements_pdf(df_exigences, site_filtre):
     """
-    Génère un rapport PDF de 5 pages (une page par catégorie).
-    Chaque page contient un tableau à 3 colonnes avec une case à cocher,
-    ainsi qu'une zone de signature sous le tableau.
+    Génère un rapport PDF de 5 pages pour un site spécifique (SGB ou MEG).
     """
-    # Liste des 5 catégories attendues
     categories = [
         "Installations électriques",
         "Equipements de levage",
@@ -25,38 +22,40 @@ def generer_rapport_equipements_pdf(df_exigences):
         "Appareil pression de gaz"
     ]
     
-    # Filtrer uniquement les lignes d'équipements valides
-    # Structure de l'onglet : ['Type', 'Site', 'Categorie', 'Sous_eq', 'Nombre', ...]
+    # 1. Filtrer uniquement les lignes de type "Equipement"
     df_eq = df_exigences[df_exigences.iloc[:, 0].astype(str).str.strip().str.lower() == "equipement"]
+    
+    # 2. Filtrer selon le Site (Colonne index 1)
+    df_eq = df_eq[df_eq.iloc[:, 1].astype(str).str.strip().str.upper() == site_filtre.upper()]
 
-    html_content = """
+    html_content = f"""
     <html>
     <head>
     <style>
-        @page {
+        @page {{
             size: A4 portrait;
             margin: 20mm 15mm;
-            @bottom-right {
+            @bottom-right {{
                 content: "Page " counter(page) " / " counter(pages);
                 font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
                 font-size: 9pt;
                 color: #64748B;
-            }
-        }
-        body {
+            }}
+        }}
+        body {{
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
             color: #1E293B;
             margin: 0;
             padding: 0;
             font-size: 10pt;
-        }
-        .page {
+        }}
+        .page {{
             page-break-after: always;
-        }
-        .page:last-child {
+        }}
+        .page:last-child {{
             page-break-after: avoid;
-        }
-        .header-title {
+        }}
+        .header-title {{
             text-align: center;
             font-size: 18pt;
             font-weight: bold;
@@ -65,8 +64,8 @@ def generer_rapport_equipements_pdf(df_exigences):
             text-transform: uppercase;
             border-bottom: 2px solid #1E3A8A;
             padding-bottom: 10px;
-        }
-        .meta-info {
+        }}
+        .meta-info {{
             margin-bottom: 25px;
             background-color: #F8FAFC;
             border: 1px solid #E2E8F0;
@@ -74,8 +73,8 @@ def generer_rapport_equipements_pdf(df_exigences):
             border-radius: 6px;
             line-height: 1.8;
             font-size: 11pt;
-        }
-        .category-title {
+        }}
+        .category-title {{
             font-size: 14pt;
             color: #0EA5E9;
             font-weight: bold;
@@ -83,60 +82,60 @@ def generer_rapport_equipements_pdf(df_exigences):
             margin-bottom: 15px;
             border-left: 4px solid #0EA5E9;
             padding-left: 8px;
-        }
-        table {
+        }}
+        table {{
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 30px;
-        }
-        th, td {
+        }}
+        th, td {{
             border: 1px solid #CBD5E1;
             padding: 10px;
             text-align: left;
-        }
-        th {
+        }}
+        th {{
             background-color: #1E3A8A;
             color: white;
             font-weight: bold;
             text-transform: uppercase;
             font-size: 9pt;
-        }
-        .col-sub { width: 60%; }
-        .col-nb { width: 20%; text-align: center; }
-        .col-chk { width: 20%; text-align: center; }
-        .td-center { text-align: center; }
+        }}
+        .col-sub {{ width: 60%; }}
+        .col-nb {{ width: 20%; text-align: center; }}
+        .col-chk {{ width: 20%; text-align: center; }}
+        .td-center {{ text-align: center; }}
         
-        .checkbox-box {
+        .checkbox-box {{
             display: inline-block;
             width: 14px;
             height: 14px;
             border: 1px solid #475569;
             border-radius: 2px;
             margin-top: 3px;
-        }
-        .signature-section {
+        }}
+        .signature-section {{
             margin-top: 40px;
             width: 100%;
             border-top: 1px dashed #CBD5E1;
             padding-top: 15px;
-        }
-        .signature-title {
+        }}
+        .signature-title {{
             font-weight: bold;
             text-decoration: underline;
             margin-bottom: 60px;
-        }
+        }}
     </style>
     </head>
     <body>
     """
 
     for cat in categories:
-        # Filtrer les équipements pour la catégorie en cours
+        # Filtrer par catégorie parmi les équipements du site
         df_cat = df_eq[df_eq.iloc[:, 2].astype(str).str.strip() == cat]
         
         html_content += f"""
         <div class="page">
-            <div class="header-title">Rapport d'Inspection Réglementaire</div>
+            <div class="header-title">Rapport d'Inspection Réglementaire — Site {site_filtre.upper()}</div>
             
             <div class="meta-info">
                 <strong>Inspecteur technique :</strong> ............................................................<br>
@@ -171,7 +170,7 @@ def generer_rapport_equipements_pdf(df_exigences):
         else:
             html_content += """
                 <tr>
-                    <td colspan="3" style="text-align:center; color:#94A3B8; italic;">Aucun équipement enregistré dans cette catégorie</td>
+                    <td colspan="3" style="text-align:center; color:#94A3B8; font-style: italic;">Aucun équipement enregistré pour cette catégorie sur ce site</td>
                 </tr>
             """
             
@@ -190,9 +189,7 @@ def generer_rapport_equipements_pdf(df_exigences):
     </html>
     """
     
-    # Compilation du PDF en mémoire
-    pdf_bytes = HTML(string=html_content).write_pdf()
-    return pdf_bytes
+    return HTML(string=html_content).write_pdf()
 st.set_page_config(
     page_title="Contrôle Réglementaire",
     page_icon="🛡️",
@@ -933,31 +930,51 @@ if acces_autorise:
                 elif evenements and jour_sel is None:
                     st.info("💡 Cliquez sur un jour coloré du calendrier pour voir les détails du contrôle.")
     # ---- DANS L'ONGLET EXIGENCES ----
+    # ---- ONGLET 3 : EXIGENCES ----
     with tab_exigences:
         st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📌 Gestion des Équipements & Exigences</p>", unsafe_allow_html=True)
-    
-    # Lire les données actuelles depuis Google Sheets
-        df_exigences_actuel = lire_exigences()
-    
-        if not df_exigences_actuel.empty:
-        # Bouton de téléchargement du rapport réglementaire PDF
-            st.markdown("### 📥 Téléchargement du Rapport de Contrôle")
         
-            with st.spinner("Préparation du rapport PDF..."):
-                try:
-                    pdf_data = generer_rapport_equipements_pdf(df_exigences_actuel)
-                
-                    st.download_button(
-                        label="📄 Télécharger le Rapport PDF (5 Pages)",
-                        data=pdf_data,
-                        file_name=f"Rapport_Inspection_{datetime.date.today().strftime('%d_%m_%Y')}.pdf",
-                        mime="application/pdf",
-                        use_container_width=True
-                    )
-                except Exception as e:
-                    st.error(f"Erreur lors de la génération du PDF : {e}")
-                
+        # Lire les données actuelles depuis Google Sheets
+        df_exigences_actuel = lire_exigences()
+        
+        if not df_exigences_actuel.empty:
+            st.markdown("### 📥 Téléchargement des Rapports par Site")
+            
+            # Création de deux colonnes pour aligner les boutons côte à côte
+            col_sgb, col_meg = st.columns(2)
+            date_str = datetime.date.today().strftime('%d_%m_%Y')
+            
+            with col_sgb:
+                with st.spinner("Préparation du rapport SGB..."):
+                    try:
+                        pdf_sgb = generer_rapport_equipements_pdf(df_exigences_actuel, "SGB")
+                        st.download_button(
+                            label="🏢 Télécharger le Rapport PDF - SGB (5 Pages)",
+                            data=pdf_sgb,
+                            file_name=f"Rapport_Inspection_SGB_{date_str}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error(f"Erreur PDF SGB : {e}")
+                        
+            with col_meg:
+                with st.spinner("Préparation du rapport MEG..."):
+                    try:
+                        pdf_meg = generer_rapport_equipements_pdf(df_exigences_actuel, "MEG")
+                        st.download_button(
+                            label="🏭 Télécharger le Rapport PDF - MEG (5 Pages)",
+                            data=pdf_meg,
+                            file_name=f"Rapport_Inspection_MEG_{date_str}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error(f"Erreur PDF MEG : {e}")
+                        
             st.divider()
+            
+            # (Conservez ici le reste de votre code existant pour l'affichage de l'onglet Exigences)
         
         # Le reste de votre code qui affiche le tableau des exigences actuel...
             st.dataframe(df_exigences_actuel, use_container_width=True, hide_index=True)
