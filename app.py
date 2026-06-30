@@ -781,23 +781,26 @@ if acces_autorise:
                 nouveau_lien = st.text_input("Lien Google Drive du contrat PDF :",
                     value=lien_contrat if lien_contrat.lower() != "nan" else "",
                     placeholder="https://drive.google.com/file/d/...")
-                col_btn1, col_btn2 = st.columns(2)
+                bc1, bc2 = st.columns(2)
+                with bc1:
+                    if st.button("💾 Enregistrer le contrat", use_container_width=True):
+                        if nouveau_lien.strip():
+                            ok, err = ecrire_contrat(nouveau_lien.strip())
+                            if ok:
+                                st.success("✅ Contrat mis à jour !")
+                                st.rerun()
+                            else:
+                                st.error(f"Erreur : {err}")
+                        else:
+                            st.warning("Veuillez coller un lien.")
+                with bc2:
+                    if st.button("🗑️ Supprimer le contrat", use_container_width=True):
+                        if supprimer_contrat():
+                            st.success("✅ Contrat supprimé.")
+                            st.rerun()
+                        else:
+                            st.error("Erreur lors de la suppression.")
 
-                with col_btn1:
-    # Bouton d'action classique élargi
-                    if st.button("Soumettre la demande", use_container_width=True):
-                        st.success("Formulaire soumis avec succès !")
-
-                with col_btn2:
-    # Bouton de téléchargement direct élargi
-                    with open("contrat.pdf", "rb") as f:
-                        st.download_button(
-                            label="Télécharger le contrat",
-                            data=f,
-                            file_name="contrat_abonnement.pdf",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
         st.markdown("<br><hr style='border-color:#E2E8F0;'>", unsafe_allow_html=True)
 
         # ===== SECTION 2 : LISTE DES ÉQUIPEMENTS (ARBORESCENCE) =====
