@@ -7,7 +7,192 @@ import re
 import time
 import requests
 import calendar
+import base64
+from weasyprint import HTML
 
+def generer_rapport_equipements_pdf(df_exigences):
+    """
+    Génère un rapport PDF de 5 pages (une page par catégorie).
+    Chaque page contient un tableau à 3 colonnes avec une case à cocher,
+    ainsi qu'une zone de signature sous le tableau.
+    """
+    # Liste des 5 catégories attendues
+    categories = [
+        "Installations électriques",
+        "Equipements de levage",
+        "Sécurité incendie",
+        "Installations de gaz",
+        "Appareil pression de gaz"
+    ]
+    
+    # Filtrer uniquement les lignes d'équipements valides
+    # Structure de l'onglet : ['Type', 'Site', 'Categorie', 'Sous_eq', 'Nombre', ...]
+    df_eq = df_exigences[df_exigences.iloc[:, 0].astype(str).str.strip().str.lower() == "equipement"]
+
+    html_content = """
+    <html>
+    <head>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 20mm 15mm;
+            @bottom-right {
+                content: "Page " counter(page) " / " counter(pages);
+                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                font-size: 9pt;
+                color: #64748B;
+            }
+        }
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #1E293B;
+            margin: 0;
+            padding: 0;
+            font-size: 10pt;
+        }
+        .page {
+            page-break-after: always;
+        }
+        .page:last-child {
+            page-break-after: avoid;
+        }
+        .header-title {
+            text-align: center;
+            font-size: 18pt;
+            font-weight: bold;
+            color: #1E3A8A;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            border-bottom: 2px solid #1E3A8A;
+            padding-bottom: 10px;
+        }
+        .meta-info {
+            margin-bottom: 25px;
+            background-color: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            padding: 15px;
+            border-radius: 6px;
+            line-height: 1.8;
+            font-size: 11pt;
+        }
+        .category-title {
+            font-size: 14pt;
+            color: #0EA5E9;
+            font-weight: bold;
+            margin-top: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid #0EA5E9;
+            padding-left: 8px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+        th, td {
+            border: 1px solid #CBD5E1;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #1E3A8A;
+            color: white;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 9pt;
+        }
+        .col-sub { width: 60%; }
+        .col-nb { width: 20%; text-align: center; }
+        .col-chk { width: 20%; text-align: center; }
+        .td-center { text-align: center; }
+        
+        .checkbox-box {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 1px solid #475569;
+            border-radius: 2px;
+            margin-top: 3px;
+        }
+        .signature-section {
+            margin-top: 40px;
+            width: 100%;
+            border-top: 1px dashed #CBD5E1;
+            padding-top: 15px;
+        }
+        .signature-title {
+            font-weight: bold;
+            text-decoration: underline;
+            margin-bottom: 60px;
+        }
+    </style>
+    </head>
+    <body>
+    """
+
+    for cat in categories:
+        # Filtrer les équipements pour la catégorie en cours
+        df_cat = df_eq[df_eq.iloc[:, 2].astype(str).str.strip() == cat]
+        
+        html_content += f"""
+        <div class="page">
+            <div class="header-title">Rapport d'Inspection Réglementaire</div>
+            
+            <div class="meta-info">
+                <strong>Inspecteur technique :</strong> ............................................................<br>
+                <strong>Accompagnant :</strong> ........................................................................<br>
+                <strong>Date :</strong> .......................................................................................
+            </div>
+            
+            <div class="category-title">{cat}</div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th class="col-sub">Sous-équipements</th>
+                        <th class="col-nb">Nombre</th>
+                        <th class="col-chk">Case à cocher</th>
+                    </tr>
+                </thead>
+                <tbody>
+        """
+        
+        if not df_cat.empty:
+            for _, row in df_cat.iterrows():
+                sous_eq = row.iloc[3] if pd.notna(row.iloc[3]) else "-"
+                nombre = row.iloc[4] if pd.notna(row.iloc[4]) else "0"
+                html_content += f"""
+                    <tr>
+                        <td>{sous_eq}</td>
+                        <td class="td-center">{nombre}</td>
+                        <td class="td-center"><span class="checkbox-box"></span></td>
+                    </tr>
+                """
+        else:
+            html_content += """
+                <tr>
+                    <td colspan="3" style="text-align:center; color:#94A3B8; italic;">Aucun équipement enregistré dans cette catégorie</td>
+                </tr>
+            """
+            
+        html_content += """
+                </tbody>
+            </table>
+            
+            <div class="signature-section">
+                <div class="signature-title">Zone pour signature :</div>
+            </div>
+        </div>
+        """
+        
+    html_content += """
+    </body>
+    </html>
+    """
+    
+    # Compilation du PDF en mémoire
+    pdf_bytes = HTML(string=html_content).write_pdf()
+    return pdf_bytes
 st.set_page_config(
     page_title="Contrôle Réglementaire",
     page_icon="🛡️",
@@ -747,34 +932,37 @@ if acces_autorise:
                             </div>""",unsafe_allow_html=True)
                 elif evenements and jour_sel is None:
                     st.info("💡 Cliquez sur un jour coloré du calendrier pour voir les détails du contrôle.")
-    # ---- ONGLET EXIGENCES ----
+    # ---- DANS L'ONGLET EXIGENCES ----
     with tab_exigences:
-        st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;margin-bottom:15px;'>📌 Exigences réglementaires</p>", unsafe_allow_html=True)
-
-        df_exig = lire_exigences()
-
-        # ===== SECTION 1 : CONTRAT D'ABONNEMENT =====
-        st.markdown("### 📄 Contrat d'abonnement 2026")
-
-        lien_contrat = ""
-        if not df_exig.empty and "Type" in df_exig.columns:
-            ligne_c = df_exig[df_exig["Type"] == "Contrat"]
-            if not ligne_c.empty:
-                lien_contrat = str(ligne_c.iloc[0].get("Lien_PDF", "")).strip()
-
-        col_contrat, col_action = st.columns([5, 1])
-        with col_contrat:
-            if lien_contrat and lien_contrat.lower() != "nan":
-                st.markdown(f"""<div style='background:white;padding:16px 20px;border-radius:10px;
-                    box-shadow:0 2px 8px rgba(0,0,0,0.05);border-left:4px solid #1E3A8A;
-                    display:flex;align-items:center;justify-content:space-between;'>
-                    <span style='font-size:14px;font-weight:600;color:#1E293B;'>📑 Contrat d'abonnement 2026</span>
-                    <a href='{lien_contrat}' target='_blank' style='text-decoration:none;background:#1E3A8A;
-                        color:white;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;'>
-                        📥 Ouvrir / Télécharger</a>
-                </div>""", unsafe_allow_html=True)
-            else:
-                st.info("Aucun contrat n'a encore été ajouté.")
+        st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📌 Gestion des Équipements & Exigences</p>", unsafe_allow_html=True)
+    
+    # Lire les données actuelles depuis Google Sheets
+        df_exigences_actuel = lire_exigences()
+    
+        if not df_exigences_actuel.empty:
+        # Bouton de téléchargement du rapport réglementaire PDF
+            st.markdown("### 📥 Téléchargement du Rapport de Contrôle")
+        
+            with st.spinner("Préparation du rapport PDF..."):
+                try:
+                    pdf_data = generer_rapport_equipements_pdf(df_exigences_actuel)
+                
+                    st.download_button(
+                        label="📄 Télécharger le Rapport PDF (5 Pages)",
+                        data=pdf_data,
+                        file_name=f"Rapport_Inspection_{datetime.date.today().strftime('%d_%m_%Y')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"Erreur lors de la génération du PDF : {e}")
+                
+            st.divider()
+        
+        # Le reste de votre code qui affiche le tableau des exigences actuel...
+            st.dataframe(df_exigences_actuel, use_container_width=True, hide_index=True)
+        else:
+            st.info("Aucune donnée disponible dans l'onglet Exigences.")
 
         if role == "Responsable" and password_correct:
             with st.expander("✏️ Gérer le contrat (Responsable)"):
