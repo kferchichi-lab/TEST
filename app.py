@@ -274,12 +274,16 @@ st.markdown("""<style>
     div[data-testid="column"]{
         flex:0 1 auto!important;
         width:auto!important;
-        min-width:fit-content!important;
+        min-width:max-content!important;
     }
     .stButton, .stDownloadButton{
         width:auto!important;
     }
-    .stButton>button, .stDownloadButton>button{
+    .stButton>button, .stDownloadButton>button,
+    div[data-testid="stButton"] button,
+    div[data-testid="stDownloadButton"] button,
+    button[kind="primary"], button[kind="secondary"],
+    button[data-testid^="baseButton"]{
         white-space:nowrap!important;
         width:auto!important;
         min-width:unset!important;
@@ -290,6 +294,14 @@ st.markdown("""<style>
         display:inline-flex!important;
         align-items:center!important;
         justify-content:center!important;
+    }
+    /* Les libellés des boutons sont parfois dans un <p> ou <div> imbriqué
+       qui possède son propre comportement de retour à la ligne : on le neutralise. */
+    .stButton>button *, .stDownloadButton>button *,
+    div[data-testid="stButton"] button *,
+    div[data-testid="stDownloadButton"] button *,
+    button[kind="primary"] *, button[kind="secondary"] *{
+        white-space:nowrap!important;
     }
     .stDownloadButton>button{
         background-color:#1E3A8A!important;
