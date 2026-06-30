@@ -7,189 +7,7 @@ import re
 import time
 import requests
 import calendar
-import base64
-from weasyprint import HTML
 
-def generer_rapport_equipements_pdf(df_exigences, site_filtre):
-    """
-    Génère un rapport PDF de 5 pages pour un site spécifique (SGB ou MEG).
-    """
-    categories = [
-        "Installations électriques",
-        "Equipements de levage",
-        "Sécurité incendie",
-        "Installations de gaz",
-        "Appareil pression de gaz"
-    ]
-    
-    # 1. Filtrer uniquement les lignes de type "Equipement"
-    df_eq = df_exigences[df_exigences.iloc[:, 0].astype(str).str.strip().str.lower() == "equipement"]
-    
-    # 2. Filtrer selon le Site (Colonne index 1)
-    df_eq = df_eq[df_eq.iloc[:, 1].astype(str).str.strip().str.upper() == site_filtre.upper()]
-
-    html_content = f"""
-    <html>
-    <head>
-    <style>
-        @page {{
-            size: A4 portrait;
-            margin: 20mm 15mm;
-            @bottom-right {{
-                content: "Page " counter(page) " / " counter(pages);
-                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-                font-size: 9pt;
-                color: #64748B;
-            }}
-        }}
-        body {{
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            color: #1E293B;
-            margin: 0;
-            padding: 0;
-            font-size: 10pt;
-        }}
-        .page {{
-            page-break-after: always;
-        }}
-        .page:last-child {{
-            page-break-after: avoid;
-        }}
-        .header-title {{
-            text-align: center;
-            font-size: 18pt;
-            font-weight: bold;
-            color: #1E3A8A;
-            margin-bottom: 20px;
-            text-transform: uppercase;
-            border-bottom: 2px solid #1E3A8A;
-            padding-bottom: 10px;
-        }}
-        .meta-info {{
-            margin-bottom: 25px;
-            background-color: #F8FAFC;
-            border: 1px solid #E2E8F0;
-            padding: 15px;
-            border-radius: 6px;
-            line-height: 1.8;
-            font-size: 11pt;
-        }}
-        .category-title {{
-            font-size: 14pt;
-            color: #0EA5E9;
-            font-weight: bold;
-            margin-top: 10px;
-            margin-bottom: 15px;
-            border-left: 4px solid #0EA5E9;
-            padding-left: 8px;
-        }}
-        table {{
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 30px;
-        }}
-        th, td {{
-            border: 1px solid #CBD5E1;
-            padding: 10px;
-            text-align: left;
-        }}
-        th {{
-            background-color: #1E3A8A;
-            color: white;
-            font-weight: bold;
-            text-transform: uppercase;
-            font-size: 9pt;
-        }}
-        .col-sub {{ width: 60%; }}
-        .col-nb {{ width: 20%; text-align: center; }}
-        .col-chk {{ width: 20%; text-align: center; }}
-        .td-center {{ text-align: center; }}
-        
-        .checkbox-box {{
-            display: inline-block;
-            width: 14px;
-            height: 14px;
-            border: 1px solid #475569;
-            border-radius: 2px;
-            margin-top: 3px;
-        }}
-        .signature-section {{
-            margin-top: 40px;
-            width: 100%;
-            border-top: 1px dashed #CBD5E1;
-            padding-top: 15px;
-        }}
-        .signature-title {{
-            font-weight: bold;
-            text-decoration: underline;
-            margin-bottom: 60px;
-        }}
-    </style>
-    </head>
-    <body>
-    """
-
-    for cat in categories:
-        # Filtrer par catégorie parmi les équipements du site
-        df_cat = df_eq[df_eq.iloc[:, 2].astype(str).str.strip() == cat]
-        
-        html_content += f"""
-        <div class="page">
-            <div class="header-title">Rapport d'Inspection Réglementaire — Site {site_filtre.upper()}</div>
-            
-            <div class="meta-info">
-                <strong>Inspecteur technique :</strong> ............................................................<br>
-                <strong>Accompagnant :</strong> ........................................................................<br>
-                <strong>Date :</strong> .......................................................................................
-            </div>
-            
-            <div class="category-title">{cat}</div>
-            
-            <table>
-                <thead>
-                    <tr>
-                        <th class="col-sub">Sous-équipements</th>
-                        <th class="col-nb">Nombre</th>
-                        <th class="col-chk">Case à cocher</th>
-                    </tr>
-                </thead>
-                <tbody>
-        """
-        
-        if not df_cat.empty:
-            for _, row in df_cat.iterrows():
-                sous_eq = row.iloc[3] if pd.notna(row.iloc[3]) else "-"
-                nombre = row.iloc[4] if pd.notna(row.iloc[4]) else "0"
-                html_content += f"""
-                    <tr>
-                        <td>{sous_eq}</td>
-                        <td class="td-center">{nombre}</td>
-                        <td class="td-center"><span class="checkbox-box"></span></td>
-                    </tr>
-                """
-        else:
-            html_content += """
-                <tr>
-                    <td colspan="3" style="text-align:center; color:#94A3B8; font-style: italic;">Aucun équipement enregistré pour cette catégorie sur ce site</td>
-                </tr>
-            """
-            
-        html_content += """
-                </tbody>
-            </table>
-            
-            <div class="signature-section">
-                <div class="signature-title">Signature :</div>
-            </div>
-        </div>
-        """
-        
-    html_content += """
-    </body>
-    </html>
-    """
-    
-    return HTML(string=html_content).write_pdf()
 st.set_page_config(
     page_title="Contrôle Réglementaire",
     page_icon="🛡️",
@@ -929,155 +747,177 @@ if acces_autorise:
                             </div>""",unsafe_allow_html=True)
                 elif evenements and jour_sel is None:
                     st.info("💡 Cliquez sur un jour coloré du calendrier pour voir les détails du contrôle.")
-    # ---- DANS L'ONGLET EXIGENCES ----
-    # ---- ONGLET 3 : EXIGENCES ----
-    # ---- ONGLET 3 : EXIGENCES ----
-    # ==========================================
-    # ---- ONGLET 3 : EXIGENCES ----
-    # ==========================================
-    # ==========================================
-    # ---- ONGLET 3 : EXIGENCES ----
-    # ==========================================
+    # ---- ONGLET EXIGENCES ----
     with tab_exigences:
-        st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📌 Gestion des Équipements & Exigences</p>", unsafe_allow_html=True)
-        
-        # 1. Lire les données de l'onglet Exigences
-        df_exigences_actuel = lire_exigences()
-        
-        # 2. Zone de téléchargement des deux PDF par Site
-        if not df_exigences_actuel.empty:
-            st.markdown("### 📥 Téléchargement des Rapports par Site")
-            
-            # Création de deux colonnes pour aligner les boutons côte à côte
-            col_sgb, col_meg = st.columns(2)
-            date_str = datetime.date.today().strftime('%d_%m_%Y')
-            
-            with col_sgb:
-                with st.spinner("Préparation du rapport SGB..."):
-                    try:
-                        pdf_sgb = generer_rapport_equipements_pdf(df_exigences_actuel, "SGB")
-                        st.download_button(
-                            label="🏢 Télécharger le Rapport PDF - SGB (5 Pages)",
-                            data=pdf_sgb,
-                            file_name=f"Rapport_Inspection_SGB_{date_str}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                    except Exception as e:
-                        st.error(f"Erreur PDF SGB : {e}")
-                        
-            with col_meg:
-                with st.spinner("Préparation du rapport MEG..."):
-                    try:
-                        pdf_meg = generer_rapport_equipements_pdf(df_exigences_actuel, "MEG")
-                        st.download_button(
-                            label="🏭 Télécharger le Rapport PDF - MEG (5 Pages)",
-                            data=pdf_meg,
-                            file_name=f"Rapport_Inspection_MEG_{date_str}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                    except Exception as e:
-                        st.error(f"Erreur PDF MEG : {e}")
-                        
-            st.divider()
+        st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;margin-bottom:15px;'>📌 Exigences réglementaires</p>", unsafe_allow_html=True)
 
-        # 3. Restauration complète de la zone de Contrat et de la liste (Correction de df_exig)
-        if not df_exigences_actuel.empty and "Type" in df_exigences_actuel.columns:
-            
-            # --- SECTION DU CONTRAT ---
-            st.markdown("#### 📄 Document de Contrat Global")
-            ligne_contrat = df_exigences_actuel[df_exigences_actuel["Type"] == "Contrat"]
-            
-            if not ligne_contrat.empty:
-                lien_actuel = ligne_contrat.iloc[0]["Lien_PDF"] if "Lien_PDF" in df_exigences_actuel.columns else ligne_contrat.iloc[0].iloc[5]
-                if lien_actuel and str(lien_actuel).strip():
-                    st.success("✅ Un document de contrat est actuellement enregistré.")
-                    st.markdown(f"🔗 [Consulter ou télécharger le contrat rattaché]({convertir_lien(lien_actuel)})")
-                    if role == "Responsable" and password_correct:
-                        if st.button("🗑️ Supprimer le contrat actuel", key="btn_del_contrat"):
-                            if supprimer_contrat():
-                                st.success("Contrat supprimé avec succès !")
-                                st.rerun()
-                            else:
-                                st.error("Erreur lors de la suppression.")
-                else:
-                    st.info("ℹ️ Aucun document de contrat n'est attaché pour le moment.")
+        df_exig = lire_exigences()
+
+        # ===== SECTION 1 : CONTRAT D'ABONNEMENT =====
+        st.markdown("### 📄 Contrat d'abonnement 2026")
+
+        lien_contrat = ""
+        if not df_exig.empty and "Type" in df_exig.columns:
+            ligne_c = df_exig[df_exig["Type"] == "Contrat"]
+            if not ligne_c.empty:
+                lien_contrat = str(ligne_c.iloc[0].get("Lien_PDF", "")).strip()
+
+        col_contrat, col_action = st.columns([5, 1])
+        with col_contrat:
+            if lien_contrat and lien_contrat.lower() != "nan":
+                st.markdown(f"""<div style='background:white;padding:16px 20px;border-radius:10px;
+                    box-shadow:0 2px 8px rgba(0,0,0,0.05);border-left:4px solid #1E3A8A;
+                    display:flex;align-items:center;justify-content:space-between;'>
+                    <span style='font-size:14px;font-weight:600;color:#1E293B;'>📑 Contrat d'abonnement 2026</span>
+                    <a href='{lien_contrat}' target='_blank' style='text-decoration:none;background:#1E3A8A;
+                        color:white;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;'>
+                        📥 Ouvrir / Télécharger</a>
+                </div>""", unsafe_allow_html=True)
             else:
-                st.info("ℹ️ Aucun document de contrat n'est attaché pour le moment.")
-                
-            if role == "Responsable" and password_correct:
-                with st.expander("➕ Ajouter / Mettre à jour le contrat global"):
-                    lien_nouveau = st.text_input("Lien URL du contrat PDF (Google Drive, Dropbox, etc.) :", key="input_lien_contrat")
-                    if st.button("Enregistrer le contrat", type="primary", key="btn_save_contrat"):
-                        if lien_nouveau.strip():
-                            ok, err = ecrire_contrat(lien_nouveau.strip())
+                st.info("Aucun contrat n'a encore été ajouté.")
+
+        if role == "Responsable" and password_correct:
+            with st.expander("✏️ Gérer le contrat (Responsable)"):
+                nouveau_lien = st.text_input("Lien Google Drive du contrat PDF :",
+                    value=lien_contrat if lien_contrat.lower() != "nan" else "",
+                    placeholder="https://drive.google.com/file/d/...")
+                bc1, bc2 = st.columns(2)
+                with bc1:
+                    if st.button("💾", use_container_width=True):
+                        if nouveau_lien.strip():
+                            ok, err = ecrire_contrat(nouveau_lien.strip())
                             if ok:
-                                st.success("Contrat mis à jour !")
+                                st.success("✅ Contrat mis à jour !")
                                 st.rerun()
                             else:
                                 st.error(f"Erreur : {err}")
                         else:
-                            st.warning("Veuillez saisir un lien valide.")
-            
-            st.divider()
-            
-            # --- SECTION LISTE DES ÉQUIPEMENTS ---
-            st.markdown("#### ⚙️ Inventaire des Équipements enregistrés")
-            
-            # Filtrer uniquement les lignes de type "Equipement"
-            df_table_eq = df_exigences_actuel[df_exigences_actuel["Type"] == "Equipement"]
-            
-            if not df_table_eq.empty:
-                # Ajouter l'index réel du Google Sheet pour la suppression si Responsable
-                df_table_eq = df_table_eq.copy()
-                df_table_eq["Ligne"] = df_table_eq.index + 2
-                
-                # Sélection des colonnes propres à afficher
-                cols_visibles = ["Site", "Categorie", "Sous_eq", "Nombre"]
-                if "Site" not in df_table_eq.columns: # Si les colonnes n'ont pas de noms corrects
-                    df_table_eq.columns = ["Type", "Site", "Categorie", "Sous_eq", "Nombre", "Lien_PDF", "Ligne"][:len(df_table_eq.columns)]
-                
-                st.dataframe(df_table_eq[["Site", "Categorie", "Sous_eq", "Nombre"]], use_container_width=True, hide_index=True)
-                
-                # Formulaire de suppression pour le Responsable
-                if role == "Responsable" and password_correct:
-                    with st.expander("🗑️ Supprimer un équipement de la liste"):
-                        eq_options = {f"[{row['Site']}] {row['Categorie']} - {row['Sous_eq']} (Qté: {row['Nombre']})": row["Ligne"] for _, row in df_table_eq.iterrows()}
-                        eq_selectionne = st.selectbox("Sélectionnez l'équipement à retirer :", list(eq_options.keys()))
-                        if st.button("Confirmer la suppression de l'équipement", type="secondary"):
-                            ligne_a_supprimer = eq_options[eq_selectionne]
-                            if supprimer_equipement_ligne(ligne_a_supprimer):
-                                st.success("Équipement supprimé !")
-                                st.rerun()
-                            else:
-                                st.error("Erreur lors de la suppression.")
-            else:
-                st.info("Aucun équipement n'est enregistré dans la base.")
-                
-            # Formulaire d'ajout pour le Responsable
-            if role == "Responsable" and password_correct:
-                st.divider()
-                with st.expander("➕ Ajouter un nouvel équipement"):
-                    c_add1, c_add2 = st.columns(2)
-                    with c_add1:
-                        site_new = st.selectbox("Site distant :", ["SGB", "MEG"])
-                        cat_new = st.selectbox("Catégorie réglementaire :", list(SOUS_EQUIPEMENTS.keys()))
-                    with c_add2:
-                        opts_sous = SOUS_EQUIPEMENTS[cat_new] if SOUS_EQUIPEMENTS[cat_new] else [cat_new]
-                        sub_new = st.selectbox("Sous-équipement :", opts_sous)
-                        nb_new = st.number_input("Nombre d'unités :", min_value=1, value=1, step=1)
-                        
-                    if st.button("Ajouter cet équipement à l'inventaire", type="primary"):
-                        ok, err = ajouter_equipement(site_new, cat_new, sub_new, nb_new)
-                        if ok:
-                            st.success("Équipement ajouté avec succès !")
+                            st.warning("Veuillez coller un lien.")
+                with bc2:
+                    if st.button("🗑️", use_container_width=True):
+                        if supprimer_contrat():
+                            st.success("✅ Contrat supprimé.")
                             st.rerun()
                         else:
-                            st.error(f"Erreur lors de l'ajout : {err}")
-                            
+                            st.error("Erreur lors de la suppression.")
+
+        st.markdown("<br><hr style='border-color:#E2E8F0;'>", unsafe_allow_html=True)
+
+        # ===== SECTION 2 : LISTE DES ÉQUIPEMENTS (ARBORESCENCE) =====
+        st.markdown("### 🏭 Liste des équipements soumis au contrôle")
+
+        df_equip = pd.DataFrame()
+        if not df_exig.empty and "Type" in df_exig.columns:
+            df_equip = df_exig[df_exig["Type"] == "Equipement"].copy()
+            if "Nombre" in df_equip.columns:
+                df_equip["Nombre"] = pd.to_numeric(df_equip["Nombre"], errors="coerce").fillna(0).astype(int)
+
+        if "site_exig_sel" not in st.session_state: st.session_state.site_exig_sel = None
+        if "cat_exig_sel"  not in st.session_state: st.session_state.cat_exig_sel  = None
+
+        # Niveau 1 : choix du site
+        st.markdown("<p style='font-size:13px;color:#64748B;font-weight:600;margin-bottom:8px;'>Sélectionnez un site :</p>", unsafe_allow_html=True)
+        s1, s2, s3 = st.columns([1, 1, 3])
+        with s1:
+            actif_sgb = st.session_state.site_exig_sel == "SGB"
+            if st.button("🏢 SGB", use_container_width=True, type="primary" if actif_sgb else "secondary"):
+                st.session_state.site_exig_sel = "SGB"
+                st.session_state.cat_exig_sel = None
+                st.rerun()
+        with s2:
+            actif_meg = st.session_state.site_exig_sel == "MEG"
+            if st.button("🏢 MEG", use_container_width=True, type="primary" if actif_meg else "secondary"):
+                st.session_state.site_exig_sel = "MEG"
+                st.session_state.cat_exig_sel = None
+                st.rerun()
+
+        # Niveau 2 : choix de la catégorie
+        if st.session_state.site_exig_sel:
+            site_sel = st.session_state.site_exig_sel
+            st.markdown(f"<p style='font-size:13px;color:#64748B;font-weight:600;margin:16px 0 8px 0;'>Catégories — Site {site_sel} :</p>", unsafe_allow_html=True)
+
+            df_site = df_equip[df_equip["Site"] == site_sel] if not df_equip.empty else pd.DataFrame()
+
+            NOMS_COURTS_CAT = {
+                "Installations électriques": "⚡ Électriques",
+                "Equipements de levage":     "🏗️ Levage",
+                "Sécurité incendie":         "🔥 Incendie",
+                "Installations de gaz":      "🔵 Gaz",
+                "Appareil pression de gaz":  "⚙️ Pression gaz",
+            }
+
+            cat_cols = st.columns(3)
+            for i, (cat, couleur) in enumerate(COULEURS_CAT.items()):
+                with cat_cols[i % 3]:
+                    nb_total_cat = int(df_site[df_site["Categorie"] == cat]["Nombre"].sum()) if not df_site.empty else 0
+                    actif_cat = st.session_state.cat_exig_sel == cat
+                    label_court = NOMS_COURTS_CAT.get(cat, cat)
+                    if st.button(f"{label_court} ({nb_total_cat})", key=f"cat_btn_{cat}", use_container_width=True,
+                                 type="primary" if actif_cat else "secondary",
+                                 help=f"{nb_total_cat} équipement(s) au total"):
+                        st.session_state.cat_exig_sel = cat
+                        st.rerun()
+
+            # Niveau 3 : sous-équipements de la catégorie choisie
+            if st.session_state.cat_exig_sel:
+                cat_sel = st.session_state.cat_exig_sel
+                st.markdown(f"<p style='font-size:13px;color:#64748B;font-weight:600;margin:16px 0 8px 0;'>Sous-équipements — {cat_sel} ({site_sel}) :</p>", unsafe_allow_html=True)
+
+                df_cat = df_site[df_site["Categorie"] == cat_sel] if not df_site.empty else pd.DataFrame()
+                couleur_cat = COULEURS_CAT.get(cat_sel, "#94a3b8")
+
+                if df_cat.empty:
+                    st.info(f"Aucun sous-équipement enregistré pour {cat_sel} sur le site {site_sel}.")
+                else:
+                    eq_cols = st.columns(3)
+                    for idx, (_, row_eq) in enumerate(df_cat.iterrows()):
+                        with eq_cols[idx % 3]:
+                            st.markdown(f"""<div style='background:white;border-left:4px solid {couleur_cat};
+                                padding:14px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.05);margin-bottom:10px;'>
+                                <p style='margin:0;font-size:13px;font-weight:600;color:#1E293B;'>{row_eq.get('Sous_equipement','')}</p>
+                                <p style='margin:6px 0 0 0;font-size:24px;font-weight:800;color:{couleur_cat};'>{int(row_eq.get('Nombre',0))}</p>
+                            </div>""", unsafe_allow_html=True)
+
+                # Gestion (ajout/suppression) — responsable uniquement
+                if role == "Responsable" and password_correct:
+                    with st.expander("✏️ Gérer les sous-équipements (Responsable)"):
+                        st.markdown("**Ajouter un sous-équipement :**")
+                        ac1, ac2, ac3 = st.columns([2, 1, 1])
+                        with ac1:
+                            nouv_seq = st.text_input("Nom du sous-équipement", key="nouv_seq_nom")
+                        with ac2:
+                            nouv_nb = st.number_input("Nombre", min_value=1, value=1, key="nouv_seq_nb")
+                        with ac3:
+                            st.write("")
+                            st.write("")
+                            if st.button("➕ Ajouter", use_container_width=True):
+                                if nouv_seq.strip():
+                                    ok, err = ajouter_equipement(site_sel, cat_sel, nouv_seq.strip(), nouv_nb)
+                                    if ok:
+                                        st.success("✅ Ajouté !")
+                                        st.rerun()
+                                    else:
+                                        st.error(f"Erreur : {err}")
+                                else:
+                                    st.warning("Veuillez saisir un nom.")
+
+                        if not df_cat.empty:
+                            st.markdown("<br>**Supprimer un sous-équipement :**", unsafe_allow_html=True)
+                            for orig_idx, row_eq in df_cat.iterrows():
+                                dc1, dc2 = st.columns([5, 1])
+                                with dc1:
+                                    st.write(f"{row_eq.get('Sous_equipement','')} — {int(row_eq.get('Nombre',0))} unité(s)")
+                                with dc2:
+                                    if st.button("🗑️", key=f"del_eq_{orig_idx}"):
+                                        num_ligne_sheet = orig_idx + 2
+                                        if supprimer_equipement_ligne(num_ligne_sheet):
+                                            st.success("Supprimé !")
+                                            st.cache_data.clear()
+                                            st.rerun()
+                                        else:
+                                            st.error("Erreur lors de la suppression.")
         else:
-            st.info("Aucune donnée disponible dans l'onglet Exigences.")
+            st.info("👆 Sélectionnez un site (SGB ou MEG) pour voir les catégories d'équipements.")
 
     
     # ---- ONGLET 3 : PRÉSENCE & VISITES ----
