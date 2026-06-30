@@ -260,19 +260,36 @@ st.markdown("""<style>
     [data-testid="stForm"],.stCornerRadius{background-color:#FFFFFF!important;border:1px solid #E2E8F0!important;border-radius:12px!important;}
     .stButton>button{background-color:#1E3A8A!important;color:white!important;border-radius:8px!important;border:none!important;font-weight:500!important;padding:10px 24px!important;}
 
-    /* === Fix boutons larges / téléchargement qui se cassent verticalement === */
+    /* === FIX ROBUSTE : empêche les boutons de s'écraser/se casser verticalement ===
+       Cause réelle : les colonnes Streamlit rétrécissent (flex-shrink) au lieu de
+       passer à la ligne quand il n'y a pas assez de place horizontale.
+       Solution : autoriser le retour à la ligne (flex-wrap) + bloquer le rétrécissement
+       des colonnes + forcer le texte des boutons sur une seule ligne (nowrap). */
+
+    div[data-testid="stHorizontalBlock"]{
+        flex-wrap:wrap!important;
+        row-gap:10px!important;
+        column-gap:10px!important;
+    }
+    div[data-testid="column"]{
+        flex:0 1 auto!important;
+        width:auto!important;
+        min-width:fit-content!important;
+    }
+    .stButton, .stDownloadButton{
+        width:auto!important;
+    }
     .stButton>button, .stDownloadButton>button{
-        white-space:normal!important;
-        word-break:keep-all!important;
-        overflow-wrap:normal!important;
-        line-height:1.3!important;
-        min-height:42px!important;
+        white-space:nowrap!important;
+        width:auto!important;
+        min-width:unset!important;
         height:auto!important;
-        font-size:13px!important;
-        display:flex!important;
+        line-height:1.3!important;
+        font-size:14px!important;
+        padding:10px 18px!important;
+        display:inline-flex!important;
         align-items:center!important;
         justify-content:center!important;
-        text-align:center!important;
     }
     .stDownloadButton>button{
         background-color:#1E3A8A!important;
@@ -280,11 +297,8 @@ st.markdown("""<style>
         border-radius:8px!important;
         border:none!important;
         font-weight:600!important;
-        padding:10px 16px!important;
     }
     .stDownloadButton>button:hover{background-color:#1D4ED8!important;}
-    /* Empêche les colonnes de devenir trop étroites */
-    div[data-testid="column"]{min-width:120px!important;}
 </style>""", unsafe_allow_html=True)
 
 # ==========================================
