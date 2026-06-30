@@ -191,7 +191,64 @@ def lire_presence():
 
 def lire_logs():
     return sheets_lire("Logs","A:B")
+def lire_exigences():
+    """Lit l'onglet Exigences."""
+    return sheets_lire("Exigences", "A:F")
 
+def ecrire_contrat(lien_pdf):
+    """Met à jour ou crée la ligne du contrat dans l'onglet Exigences."""
+    df = lire_exigences()
+    token = obtenir_access_token()
+    if not token:
+        return False, "Token invalide"
+
+    if not df.empty and "Type" in df.columns:
+        ligne_contrat = df[df["Type"] == "Contrat"]
+        if not ligne_contrat.empty:
+            num_ligne = ligne_contrat.index[0] + 2
+            url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/Exigences!F{num_ligne}"
+            resp = requests.put(url,
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                params={"valueInputOption": "RAW"},
+                json={"values": [[lien_pdf]]}, timeout=15)
+            return (resp.status_code == 200), ""
+
+    return sheets_append("Exigences", ["Contrat", "", "", "", "", lien_pdf])
+
+
+def supprimer_contrat():
+    """Vide le lien du contrat."""
+    df = lire_exigences()
+    token = obtenir_access_token()
+    if not token or df.empty or "Type" not in df.columns:
+        return False
+    ligne_contrat = df[df["Type"] == "Contrat"]
+    if ligne_contrat.empty:
+        return False
+    num_ligne = ligne_contrat.index[0] + 2
+    url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/Exigences!F{num_ligne}"
+    resp = requests.put(url,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        params={"valueInputOption": "RAW"},
+        json={"values": [[""]]}, timeout=15)
+    return resp.status_code == 200
+
+
+def ajouter_equipement(site, categorie, sous_eq, nombre):
+    """Ajoute une ligne équipement dans Exigences."""
+    return sheets_append("Exigences", ["Equipement", site, categorie, sous_eq, str(nombre), ""])
+
+
+def supprimer_equipement_ligne(num_ligne_sheet):
+    """Vide une ligne équipement (remplace par des cellules vides)."""
+    token = obtenir_access_token()
+    if not token: return False
+    url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/Exigences!A{num_ligne_sheet}:F{num_ligne_sheet}"
+    resp = requests.put(url,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        params={"valueInputOption": "RAW"},
+        json={"values": [["", "", "", "", "", ""]]}, timeout=15)
+    return resp.status_code == 200
 # ==========================================
 # CHARGEMENT DONNÉES
 # ==========================================
@@ -313,11 +370,12 @@ if acces_autorise:
 
     st.markdown("<br>",unsafe_allow_html=True)
 
-    liste_onglets=["📋 Rapports de contrôle archivés","📅 Suivi de performance & Planification"]
-    if role=="Responsable" and password_correct: liste_onglets.append("👥 Statistiques")
-    onglets=st.tabs(liste_onglets)
-    tab1,tab2=onglets[0],onglets[1]
-    if len(onglets)>2: tab3=onglets[2]
+    liste_onglets = ["📋 Rapports de contrôle archivés","📅 Suivi de performance & Planification","📌 Exigences"]
+    if role == "Responsable" and password_correct:
+        liste_onglets.append("👥 Statistiques")
+    onglets = st.tabs(liste_onglets)
+    tab1, tab2, tab_exigences = onglets[0], onglets[1], onglets[2]
+    if len(onglets) > 3: tab3 = onglets[3]
 
     def convertir_lien(url):
         try:
@@ -689,7 +747,171 @@ if acces_autorise:
                             </div>""",unsafe_allow_html=True)
                 elif evenements and jour_sel is None:
                     st.info("💡 Cliquez sur un jour coloré du calendrier pour voir les détails du contrôle.")
+    # ---- ONGLET EXIGENCES ----
+    with tab_exigences:
+        st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;margin-bottom:15px;'>📌 Exigences réglementaires</p>", unsafe_allow_html=True)
 
+        df_exig = lire_exigences()
+
+        # ===== SECTION 1 : CONTRAT D'ABONNEMENT =====
+        st.markdown("### 📄 Contrat d'abonnement 2026")
+
+        lien_contrat = ""
+        if not df_exig.empty and "Type" in df_exig.columns:
+            ligne_c = df_exig[df_exig["Type"] == "Contrat"]
+            if not ligne_c.empty:
+                lien_contrat = str(ligne_c.iloc[0].get("Lien_PDF", "")).strip()
+
+        col_contrat, col_action = st.columns([5, 1])
+        with col_contrat:
+            if lien_contrat and lien_contrat.lower() != "nan":
+                st.markdown(f"""<div style='background:white;padding:16px 20px;border-radius:10px;
+                    box-shadow:0 2px 8px rgba(0,0,0,0.05);border-left:4px solid #1E3A8A;
+                    display:flex;align-items:center;justify-content:space-between;'>
+                    <span style='font-size:14px;font-weight:600;color:#1E293B;'>📑 Contrat d'abonnement 2026</span>
+                    <a href='{lien_contrat}' target='_blank' style='text-decoration:none;background:#1E3A8A;
+                        color:white;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;'>
+                        📥 Ouvrir / Télécharger</a>
+                </div>""", unsafe_allow_html=True)
+            else:
+                st.info("Aucun contrat n'a encore été ajouté.")
+
+        if role == "Responsable" and password_correct:
+            with st.expander("✏️ Gérer le contrat (Responsable)"):
+                nouveau_lien = st.text_input("Lien Google Drive du contrat PDF :",
+                    value=lien_contrat if lien_contrat.lower() != "nan" else "",
+                    placeholder="https://drive.google.com/file/d/...")
+                bc1, bc2 = st.columns(2)
+                with bc1:
+                    if st.button("💾 Enregistrer le contrat", use_container_width=True):
+                        if nouveau_lien.strip():
+                            ok, err = ecrire_contrat(nouveau_lien.strip())
+                            if ok:
+                                st.success("✅ Contrat mis à jour !")
+                                st.rerun()
+                            else:
+                                st.error(f"Erreur : {err}")
+                        else:
+                            st.warning("Veuillez coller un lien.")
+                with bc2:
+                    if st.button("🗑️ Supprimer le contrat", use_container_width=True):
+                        if supprimer_contrat():
+                            st.success("✅ Contrat supprimé.")
+                            st.rerun()
+                        else:
+                            st.error("Erreur lors de la suppression.")
+
+        st.markdown("<br><hr style='border-color:#E2E8F0;'>", unsafe_allow_html=True)
+
+        # ===== SECTION 2 : LISTE DES ÉQUIPEMENTS (ARBORESCENCE) =====
+        st.markdown("### 🏭 Liste des équipements")
+
+        df_equip = pd.DataFrame()
+        if not df_exig.empty and "Type" in df_exig.columns:
+            df_equip = df_exig[df_exig["Type"] == "Equipement"].copy()
+            if "Nombre" in df_equip.columns:
+                df_equip["Nombre"] = pd.to_numeric(df_equip["Nombre"], errors="coerce").fillna(0).astype(int)
+
+        if "site_exig_sel" not in st.session_state: st.session_state.site_exig_sel = None
+        if "cat_exig_sel"  not in st.session_state: st.session_state.cat_exig_sel  = None
+
+        # Niveau 1 : choix du site
+        st.markdown("<p style='font-size:13px;color:#64748B;font-weight:600;margin-bottom:8px;'>Sélectionnez un site :</p>", unsafe_allow_html=True)
+        s1, s2, _ = st.columns([1, 1, 4])
+        with s1:
+            actif_sgb = st.session_state.site_exig_sel == "SGB"
+            if st.button("🏢 SGB", use_container_width=True, type="primary" if actif_sgb else "secondary"):
+                st.session_state.site_exig_sel = "SGB"
+                st.session_state.cat_exig_sel = None
+                st.rerun()
+        with s2:
+            actif_meg = st.session_state.site_exig_sel == "MEG"
+            if st.button("🏢 MEG", use_container_width=True, type="primary" if actif_meg else "secondary"):
+                st.session_state.site_exig_sel = "MEG"
+                st.session_state.cat_exig_sel = None
+                st.rerun()
+
+        # Niveau 2 : choix de la catégorie
+        if st.session_state.site_exig_sel:
+            site_sel = st.session_state.site_exig_sel
+            st.markdown(f"<p style='font-size:13px;color:#64748B;font-weight:600;margin:16px 0 8px 0;'>Catégories — Site {site_sel} :</p>", unsafe_allow_html=True)
+
+            df_site = df_equip[df_equip["Site"] == site_sel] if not df_equip.empty else pd.DataFrame()
+
+            cat_cols = st.columns(5)
+            for i, (cat, couleur) in enumerate(COULEURS_CAT.items()):
+                with cat_cols[i % 5]:
+                    nb_total_cat = int(df_site[df_site["Categorie"] == cat]["Nombre"].sum()) if not df_site.empty else 0
+                    actif_cat = st.session_state.cat_exig_sel == cat
+                    label = f"{cat}\n({nb_total_cat})" if not actif_cat else f"✓ {cat} ({nb_total_cat})"
+                    if st.button(cat, key=f"cat_btn_{cat}", use_container_width=True,
+                                 type="primary" if actif_cat else "secondary",
+                                 help=f"{nb_total_cat} équipement(s) au total"):
+                        st.session_state.cat_exig_sel = cat
+                        st.rerun()
+
+            # Niveau 3 : sous-équipements de la catégorie choisie
+            if st.session_state.cat_exig_sel:
+                cat_sel = st.session_state.cat_exig_sel
+                st.markdown(f"<p style='font-size:13px;color:#64748B;font-weight:600;margin:16px 0 8px 0;'>Sous-équipements — {cat_sel} ({site_sel}) :</p>", unsafe_allow_html=True)
+
+                df_cat = df_site[df_site["Categorie"] == cat_sel] if not df_site.empty else pd.DataFrame()
+                couleur_cat = COULEURS_CAT.get(cat_sel, "#94a3b8")
+
+                if df_cat.empty:
+                    st.info(f"Aucun sous-équipement enregistré pour {cat_sel} sur le site {site_sel}.")
+                else:
+                    eq_cols = st.columns(3)
+                    for idx, (_, row_eq) in enumerate(df_cat.iterrows()):
+                        with eq_cols[idx % 3]:
+                            st.markdown(f"""<div style='background:white;border-left:4px solid {couleur_cat};
+                                padding:14px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.05);margin-bottom:10px;'>
+                                <p style='margin:0;font-size:13px;font-weight:600;color:#1E293B;'>{row_eq.get('Sous_equipement','')}</p>
+                                <p style='margin:6px 0 0 0;font-size:24px;font-weight:800;color:{couleur_cat};'>{int(row_eq.get('Nombre',0))}</p>
+                            </div>""", unsafe_allow_html=True)
+
+                # Gestion (ajout/suppression) — responsable uniquement
+                if role == "Responsable" and password_correct:
+                    with st.expander("✏️ Gérer les sous-équipements (Responsable)"):
+                        st.markdown("**Ajouter un sous-équipement :**")
+                        ac1, ac2, ac3 = st.columns([2, 1, 1])
+                        with ac1:
+                            nouv_seq = st.text_input("Nom du sous-équipement", key="nouv_seq_nom")
+                        with ac2:
+                            nouv_nb = st.number_input("Nombre", min_value=1, value=1, key="nouv_seq_nb")
+                        with ac3:
+                            st.write("")
+                            st.write("")
+                            if st.button("➕ Ajouter", use_container_width=True):
+                                if nouv_seq.strip():
+                                    ok, err = ajouter_equipement(site_sel, cat_sel, nouv_seq.strip(), nouv_nb)
+                                    if ok:
+                                        st.success("✅ Ajouté !")
+                                        st.rerun()
+                                    else:
+                                        st.error(f"Erreur : {err}")
+                                else:
+                                    st.warning("Veuillez saisir un nom.")
+
+                        if not df_cat.empty:
+                            st.markdown("<br>**Supprimer un sous-équipement :**", unsafe_allow_html=True)
+                            for orig_idx, row_eq in df_cat.iterrows():
+                                dc1, dc2 = st.columns([5, 1])
+                                with dc1:
+                                    st.write(f"{row_eq.get('Sous_equipement','')} — {int(row_eq.get('Nombre',0))} unité(s)")
+                                with dc2:
+                                    if st.button("🗑️", key=f"del_eq_{orig_idx}"):
+                                        num_ligne_sheet = orig_idx + 2
+                                        if supprimer_equipement_ligne(num_ligne_sheet):
+                                            st.success("Supprimé !")
+                                            st.cache_data.clear()
+                                            st.rerun()
+                                        else:
+                                            st.error("Erreur lors de la suppression.")
+        else:
+            st.info("👆 Sélectionnez un site (SGB ou MEG) pour voir les catégories d'équipements.")
+
+    
     # ---- ONGLET 3 : PRÉSENCE & VISITES ----
     if tab3 and role=="Responsable" and password_correct:
         with tab3:
