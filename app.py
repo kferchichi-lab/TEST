@@ -179,7 +179,7 @@ def generer_rapport_equipements_pdf(df_exigences, site_filtre):
             </table>
             
             <div class="signature-section">
-                <div class="signature-title">Zone pour signature :</div>
+                <div class="signature-title">Signature :</div>
             </div>
         </div>
         """
