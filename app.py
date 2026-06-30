@@ -960,25 +960,32 @@ if acces_autorise:
                             reel_fmt=c_reel.strftime("%d/%m/%Y") if pd.notna(c_reel) else None
                             next_fmt=c_next.strftime("%d/%m/%Y") if pd.notna(c_next) else "—"
                             j_txt  =f"⚠️ {abs(c_jours)}j de retard" if c_jours<0 else f"Dans {c_jours} j"
-                            date_ctrl_html=f"""
-                                <p style='margin:0 0 2px 0;font-size:10px;color:#94a3b8;'>Date réelle visite</p>
-                                <p style='margin:0 0 6px 0;font-size:11px;color:#059669;font-weight:600;'>✅ {reel_fmt}</p>
-                                <p style='margin:0 0 2px 0;font-size:10px;color:#94a3b8;'>Date planifiée initiale</p>
-                                <p style='margin:0 0 6px 0;font-size:11px;color:#94a3b8;text-decoration:line-through;'>{date_fmt}</p>
-                            """ if reel_fmt else f"""
-                                <p style='margin:0 0 2px 0;font-size:10px;color:#94a3b8;'>Date planifiée</p>
-                                <p style='margin:0 0 6px 0;font-size:11px;color:#334155;font-weight:500;'>{date_fmt}</p>
-                            """
-                            st.markdown(f"""<div style='background:white;border-top:4px solid {c_col};padding:14px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:8px;'>
-                                <p style='margin:0 0 8px 0;font-size:12px;font-weight:700;color:#1E293B;'>{c_cat}</p>
-                                <p style='margin:0 0 4px 0;font-size:11px;color:#475569;'>🏢 <b>{c_site}</b></p>
-                                {"<p style='margin:0 0 4px 0;font-size:11px;color:#64748B;'>⚙️ "+c_label+"</p>" if c_label else ""}
-                                <hr style='border:none;border-top:1px solid #F1F5F9;margin:8px 0;'>
-                                {date_ctrl_html}
-                                <p style='margin:0 0 2px 0;font-size:10px;color:#94a3b8;'>Prochaine échéance</p>
-                                <p style='margin:0 0 6px 0;font-size:11px;color:#334155;font-weight:500;'>{next_fmt}</p>
-                                <span style='display:inline-block;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;background:{c_col}22;color:{c_col};'>{c_stat} — {j_txt}</span>
-                            </div>""",unsafe_allow_html=True)
+                            if reel_fmt:
+                                date_ctrl_html=(
+                                    "<p style='margin:0 0 2px 0;font-size:10px;color:#94a3b8;'>Date réelle visite</p>"
+                                    f"<p style='margin:0 0 6px 0;font-size:11px;color:#059669;font-weight:600;'>✅ {reel_fmt}</p>"
+                                    "<p style='margin:0 0 2px 0;font-size:10px;color:#94a3b8;'>Date planifiée initiale</p>"
+                                    f"<p style='margin:0 0 6px 0;font-size:11px;color:#94a3b8;text-decoration:line-through;'>{date_fmt}</p>"
+                                )
+                            else:
+                                date_ctrl_html=(
+                                    "<p style='margin:0 0 2px 0;font-size:10px;color:#94a3b8;'>Date planifiée</p>"
+                                    f"<p style='margin:0 0 6px 0;font-size:11px;color:#334155;font-weight:500;'>{date_fmt}</p>"
+                                )
+                            label_html = ("<p style='margin:0 0 4px 0;font-size:11px;color:#64748B;'>⚙️ "+c_label+"</p>") if c_label else ""
+                            carte_html=(
+                                f"<div style='background:white;border-top:4px solid {c_col};padding:14px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:8px;'>"
+                                f"<p style='margin:0 0 8px 0;font-size:12px;font-weight:700;color:#1E293B;'>{c_cat}</p>"
+                                f"<p style='margin:0 0 4px 0;font-size:11px;color:#475569;'>🏢 <b>{c_site}</b></p>"
+                                f"{label_html}"
+                                "<hr style='border:none;border-top:1px solid #F1F5F9;margin:8px 0;'>"
+                                f"{date_ctrl_html}"
+                                "<p style='margin:0 0 2px 0;font-size:10px;color:#94a3b8;'>Prochaine échéance</p>"
+                                f"<p style='margin:0 0 6px 0;font-size:11px;color:#334155;font-weight:500;'>{next_fmt}</p>"
+                                f"<span style='display:inline-block;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;background:{c_col}22;color:{c_col};'>{c_stat} — {j_txt}</span>"
+                                "</div>"
+                            )
+                            st.markdown(carte_html, unsafe_allow_html=True)
                 elif evenements and jour_sel is None:
                     st.info("💡 Cliquez sur un jour coloré du calendrier pour voir les détails du contrôle.")
     # ---- ONGLET EXIGENCES ----
@@ -1013,14 +1020,15 @@ if acces_autorise:
         with col_contrat:
             if lien_contrat and lien_contrat.lower() != "nan":
                 lien_dl = lien_telechargement_direct(lien_contrat)
-                st.markdown(f"""<div style='background:white;padding:16px 20px;border-radius:10px;
-                    box-shadow:0 2px 8px rgba(0,0,0,0.05);border-left:4px solid #1E3A8A;
-                    display:flex;align-items:center;justify-content:space-between;'>
-                    <span style='font-size:14px;font-weight:600;color:#1E293B;'>📑 Contrat d'abonnement 2026</span>
-                    <a href='{lien_dl}' download target='_blank' rel='noopener' style='text-decoration:none;background:#1E3A8A;
-                        color:white;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;'>
-                        📥 Ouvrir / Télécharger</a>
-                </div>""", unsafe_allow_html=True)
+                st.markdown(
+                    "<div style='background:white;padding:16px 20px;border-radius:10px;"
+                    "box-shadow:0 2px 8px rgba(0,0,0,0.05);border-left:4px solid #1E3A8A;"
+                    "display:flex;align-items:center;justify-content:space-between;'>"
+                    "<span style='font-size:14px;font-weight:600;color:#1E293B;'>📑 Contrat d'abonnement 2026</span>"
+                    f"<a href='{lien_dl}' download target='_blank' rel='noopener' style='text-decoration:none;background:#1E3A8A;"
+                    "color:white;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;'>"
+                    "📥 Ouvrir / Télécharger</a>"
+                    "</div>", unsafe_allow_html=True)
             else:
                 st.info("Aucun contrat n'a encore été ajouté.")
 
@@ -1163,11 +1171,12 @@ if acces_autorise:
                     eq_cols = st.columns(3)
                     for idx, (_, row_eq) in enumerate(df_cat.iterrows()):
                         with eq_cols[idx % 3]:
-                            st.markdown(f"""<div style='background:white;border-left:4px solid {couleur_cat};
-                                padding:14px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.05);margin-bottom:10px;'>
-                                <p style='margin:0;font-size:13px;font-weight:600;color:#1E293B;'>{row_eq.get('Sous_equipement','')}</p>
-                                <p style='margin:6px 0 0 0;font-size:24px;font-weight:800;color:{couleur_cat};'>{int(row_eq.get('Nombre',0))}</p>
-                            </div>""", unsafe_allow_html=True)
+                            st.markdown(
+                                f"<div style='background:white;border-left:4px solid {couleur_cat};"
+                                "padding:14px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.05);margin-bottom:10px;'>"
+                                f"<p style='margin:0;font-size:13px;font-weight:600;color:#1E293B;'>{row_eq.get('Sous_equipement','')}</p>"
+                                f"<p style='margin:6px 0 0 0;font-size:24px;font-weight:800;color:{couleur_cat};'>{int(row_eq.get('Nombre',0))}</p>"
+                                "</div>", unsafe_allow_html=True)
 
             # Gestion (ajout/suppression) — responsable uniquement
                 if role == "Responsable" and password_correct:
