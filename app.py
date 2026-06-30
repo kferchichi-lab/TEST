@@ -783,7 +783,7 @@ if acces_autorise:
                     placeholder="https://drive.google.com/file/d/...")
                 bc1, bc2 = st.columns(2)
                 with bc1:
-                    if st.button("💾 Enregistrer le contrat", use_container_width=True):
+                    if st.button("💾", use_container_width=True):
                         if nouveau_lien.strip():
                             ok, err = ecrire_contrat(nouveau_lien.strip())
                             if ok:
@@ -794,7 +794,7 @@ if acces_autorise:
                         else:
                             st.warning("Veuillez coller un lien.")
                 with bc2:
-                    if st.button("🗑️ Supprimer le contrat", use_container_width=True):
+                    if st.button("🗑️", use_container_width=True):
                         if supprimer_contrat():
                             st.success("✅ Contrat supprimé.")
                             st.rerun()
