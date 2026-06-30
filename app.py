@@ -179,7 +179,7 @@ def generer_rapport_equipements_pdf(df_exigences, site_filtre):
             </table>
             
             <div class="signature-section">
-                <div class="signature-title">Zone pour signature :</div>
+                <div class="signature-title">Signature :</div>
             </div>
         </div>
         """
@@ -995,7 +995,7 @@ if acces_autorise:
                     try:
                         pdf_sgb = generer_rapport_equipements_pdf(df_exig, "SGB")
                         st.download_button(
-                            label="🏢 Télécharger le Rapport PDF - SGB (5 Pages)",
+                            label="🏢 Télécharger le Rapport PDF - SGB",
                             data=pdf_sgb,
                             file_name=f"Rapport_Inspection_SGB_{date_str}.pdf",
                             mime="application/pdf",
@@ -1009,7 +1009,7 @@ if acces_autorise:
                     try:
                         pdf_meg = generer_rapport_equipements_pdf(df_exig, "MEG")
                         st.download_button(
-                            label="🏭 Télécharger le Rapport PDF - MEG (5 Pages)",
+                            label="🏭 Télécharger le Rapport PDF - MEG",
                             data=pdf_meg,
                             file_name=f"Rapport_Inspection_MEG_{date_str}.pdf",
                             mime="application/pdf",
