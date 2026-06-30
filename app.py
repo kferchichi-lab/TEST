@@ -259,167 +259,68 @@ st.markdown("""<style>
     html,body,[data-testid="stAppViewContainer"],[data-testid="stSidebarView"]{font-family:'Inter',sans-serif!important;background-color:#F8FAFC!important;}
     [data-testid="stForm"],.stCornerRadius{background-color:#FFFFFF!important;border:1px solid #E2E8F0!important;border-radius:12px!important;}
 
-    div[data-testid="stHorizontalBlock"]{
-        flex-wrap:wrap!important;
-        row-gap:12px!important;
-        column-gap:12px!important;
-    }
-    div[data-testid="column"]{
-        flex:1 1 auto!important;
-        width:auto!important;
-    }
-
     /* ============================================================
-       BASE PREMIUM — tous les boutons (forme, ombre, transitions)
+       STYLE PREMIUM — uniquement cosmétique (couleurs, ombres,
+       arrondis, survol). On NE touche PAS à la largeur, au flex,
+       ni aux colonnes : Streamlit gère déjà très bien la mise en
+       page de base, donc on n'interfère pas avec elle.
        ============================================================ */
-    .stButton>button, .stDownloadButton>button,
-    div[data-testid="stButton"] button,
-    div[data-testid="stDownloadButton"] button,
-    button[kind="primary"], button[kind="secondary"],
-    button[data-testid^="baseButton"]{
-        width:100%!important;
-        height:auto!important;
-        line-height:1.3!important;
-        font-size:14px!important;
-        font-weight:600!important;
-        letter-spacing:.2px!important;
-        padding:11px 22px!important;
-        white-space:normal!important;
-        word-break:break-word!important;
-        display:flex!important;
-        align-items:center!important;
-        justify-content:center!important;
+    .stButton>button, .stDownloadButton>button{
         border-radius:10px!important;
+        font-weight:600!important;
         border:1.5px solid transparent!important;
-        transition:transform .15s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease, color .2s ease!important;
+        transition:box-shadow .2s ease, background .2s ease, border-color .2s ease, color .2s ease!important;
         box-shadow:0 1px 2px rgba(15,23,42,.06)!important;
-        cursor:pointer!important;
     }
-    .stButton>button:hover, .stDownloadButton>button:hover,
-    button[kind="primary"]:hover, button[kind="secondary"]:hover{
-        transform:translateY(-2px)!important;
-    }
-    .stButton>button:active, .stDownloadButton>button:active,
-    button[kind="primary"]:active, button[kind="secondary"]:active{
-        transform:translateY(0)!important;
+    .stButton>button:hover, .stDownloadButton>button:hover{
+        box-shadow:0 4px 12px rgba(30,58,138,.18)!important;
     }
     .stButton>button:focus, .stDownloadButton>button:focus{
         outline:none!important;
         box-shadow:0 0 0 3px rgba(30,58,138,.18)!important;
     }
 
-    /* --- État SECONDARY (inactif) : carte claire, sobre, premium --- */
+    /* --- Bouton de téléchargement (style existant, qui fonctionne bien) --- */
+    .stDownloadButton>button{
+        background-color:#1E3A8A!important;
+        color:white!important;
+        border:none!important;
+        font-weight:600!important;
+    }
+    .stDownloadButton>button:hover{background-color:#1D4ED8!important;}
+
+    /* --- État SECONDARY (inactif) : sobre, clair --- */
     button[kind="secondary"]{
         background:#FFFFFF!important;
         color:#334155!important;
         border:1.5px solid #E2E8F0!important;
-        box-shadow:0 1px 3px rgba(15,23,42,.05)!important;
     }
     button[kind="secondary"]:hover{
         border-color:#1E3A8A!important;
         color:#1E3A8A!important;
-        box-shadow:0 6px 16px rgba(30,58,138,.12)!important;
     }
 
-    /* --- État PRIMARY (actif / sélectionné) : dégradé signature + glow --- */
+    /* --- État PRIMARY (actif / sélectionné) : couleur pleine --- */
     button[kind="primary"]{
-        background:linear-gradient(135deg,#1E3A8A 0%,#2563EB 100%)!important;
+        background:#1E3A8A!important;
         color:#FFFFFF!important;
         border:1.5px solid #1E3A8A!important;
-        box-shadow:0 6px 18px rgba(30,58,138,.32), inset 0 1px 0 rgba(255,255,255,.15)!important;
-        position:relative!important;
     }
     button[kind="primary"]:hover{
-        box-shadow:0 10px 24px rgba(30,58,138,.4), inset 0 1px 0 rgba(255,255,255,.2)!important;
-        background:linear-gradient(135deg,#1D4ED8 0%,#3B82F6 100%)!important;
-    }
-    button[kind="primary"] p::before{
-        content:"✓ ";
-        font-weight:800;
+        background:#1D4ED8!important;
     }
 
-    /* ============================================================
-       TÉLÉCHARGEMENT DES RAPPORTS — boutons "carte" premium
-       ============================================================ */
-    .st-key-rapports_section .stDownloadButton>button{
-        background:linear-gradient(135deg,#0F172A 0%,#1E3A8A 60%,#2563EB 100%)!important;
-        color:#FFFFFF!important;
-        border:none!important;
-        border-radius:12px!important;
-        padding:18px 22px!important;
-        font-size:15px!important;
-        font-weight:700!important;
-        box-shadow:0 8px 20px rgba(15,23,42,.18)!important;
-        letter-spacing:.3px!important;
-    }
-    .st-key-rapports_section .stDownloadButton>button:hover{
-        background:linear-gradient(135deg,#1E3A8A 0%,#2563EB 60%,#3B82F6 100%)!important;
-        box-shadow:0 12px 28px rgba(37,99,235,.32)!important;
-        transform:translateY(-3px)!important;
-    }
-    .st-key-rapports_section .stDownloadButton>button p::after{
-        content:" ⬇";
-        opacity:.85;
-    }
-
-    /* ============================================================
-       SÉLECTEUR DE SITE (SGB / MEG) — boutons premium
-       ============================================================ */
-    .st-key-site_selector_section div[data-testid="column"]{
-        flex:0 1 auto!important;
-        min-width:140px!important;
-    }
-    .st-key-site_selector_section .stButton>button{
-        padding:13px 30px!important;
-        font-size:15px!important;
-        border-radius:10px!important;
-        width:auto!important;
-        white-space:nowrap!important;
-    }
-    .st-key-site_selector_section button[kind="secondary"]{
-        background:#F8FAFC!important;
-        border:1.5px solid #CBD5E1!important;
-    }
-    .st-key-site_selector_section button[kind="primary"]{
-        background:linear-gradient(135deg,#0EA5E9 0%,#1E3A8A 100%)!important;
-        border-color:#0369A1!important;
-        box-shadow:0 8px 20px rgba(14,165,233,.35)!important;
-    }
-
-    /* ============================================================
-       CATÉGORIES D'ÉQUIPEMENTS — chips colorés par catégorie
-       ============================================================ */
-    .st-key-categories_section div[data-testid="column"]{
-        flex:0 1 auto!important;
-        min-width:150px!important;
-    }
-    .st-key-categories_section .stButton>button{
-        border-radius:10px!important;
-        padding:11px 18px!important;
-        font-size:13.5px!important;
-        width:auto!important;
-        white-space:nowrap!important;
-    }
-    /* 1) Électriques — ambre */
+    /* --- Couleurs par catégorie d'équipement (état inactif) --- */
     .st-key-categories_section div[data-testid="column"]:nth-child(1) button[kind="secondary"]{color:#B45309!important;border-color:#FDE68A!important;background:#FFFBEB!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(1) button[kind="secondary"]:hover{border-color:#F59E0B!important;box-shadow:0 6px 16px rgba(245,158,11,.2)!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(1) button[kind="primary"]{background:linear-gradient(135deg,#F59E0B 0%,#D97706 100%)!important;border-color:#B45309!important;box-shadow:0 8px 20px rgba(245,158,11,.4)!important;}
-    /* 2) Levage — orange */
+    .st-key-categories_section div[data-testid="column"]:nth-child(1) button[kind="primary"]{background:#D97706!important;border-color:#B45309!important;}
     .st-key-categories_section div[data-testid="column"]:nth-child(2) button[kind="secondary"]{color:#C2410C!important;border-color:#FED7AA!important;background:#FFF7ED!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(2) button[kind="secondary"]:hover{border-color:#EA580C!important;box-shadow:0 6px 16px rgba(234,88,12,.2)!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(2) button[kind="primary"]{background:linear-gradient(135deg,#EA580C 0%,#C2410C 100%)!important;border-color:#9A3412!important;box-shadow:0 8px 20px rgba(234,88,12,.4)!important;}
-    /* 3) Incendie — rouge */
+    .st-key-categories_section div[data-testid="column"]:nth-child(2) button[kind="primary"]{background:#C2410C!important;border-color:#9A3412!important;}
     .st-key-categories_section div[data-testid="column"]:nth-child(3) button[kind="secondary"]{color:#B91C1C!important;border-color:#FECACA!important;background:#FEF2F2!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(3) button[kind="secondary"]:hover{border-color:#DC2626!important;box-shadow:0 6px 16px rgba(220,38,38,.2)!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(3) button[kind="primary"]{background:linear-gradient(135deg,#DC2626 0%,#B91C1C 100%)!important;border-color:#991B1B!important;box-shadow:0 8px 20px rgba(220,38,38,.4)!important;}
-    /* 4) Gaz — bleu */
+    .st-key-categories_section div[data-testid="column"]:nth-child(3) button[kind="primary"]{background:#B91C1C!important;border-color:#991B1B!important;}
     .st-key-categories_section div[data-testid="column"]:nth-child(4) button[kind="secondary"]{color:#1D4ED8!important;border-color:#BFDBFE!important;background:#EFF6FF!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(4) button[kind="secondary"]:hover{border-color:#2563EB!important;box-shadow:0 6px 16px rgba(37,99,235,.2)!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(4) button[kind="primary"]{background:linear-gradient(135deg,#2563EB 0%,#1D4ED8 100%)!important;border-color:#1E40AF!important;box-shadow:0 8px 20px rgba(37,99,235,.4)!important;}
-    /* 5) Pression gaz — violet */
+    .st-key-categories_section div[data-testid="column"]:nth-child(4) button[kind="primary"]{background:#1D4ED8!important;border-color:#1E40AF!important;}
     .st-key-categories_section div[data-testid="column"]:nth-child(5) button[kind="secondary"]{color:#6D28D9!important;border-color:#DDD6FE!important;background:#F5F3FF!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(5) button[kind="secondary"]:hover{border-color:#7C3AED!important;box-shadow:0 6px 16px rgba(124,58,237,.2)!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(5) button[kind="primary"]{background:linear-gradient(135deg,#7C3AED 0%,#6D28D9 100%)!important;border-color:#5B21B6!important;box-shadow:0 8px 20px rgba(124,58,237,.4)!important;}
+    .st-key-categories_section div[data-testid="column"]:nth-child(5) button[kind="primary"]{background:#6D28D9!important;border-color:#5B21B6!important;}
 </style>""", unsafe_allow_html=True)
 
 # ==========================================
