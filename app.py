@@ -255,10 +255,9 @@ st.html("""<style>
 </style>""")
 
 st.markdown("""<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     html,body,[data-testid="stAppViewContainer"],[data-testid="stSidebarView"]{font-family:'Inter',sans-serif!important;background-color:#F8FAFC!important;}
     [data-testid="stForm"],.stCornerRadius{background-color:#FFFFFF!important;border:1px solid #E2E8F0!important;border-radius:12px!important;}
-    .stButton>button{background-color:#1E3A8A!important;color:white!important;border-radius:8px!important;border:none!important;font-weight:500!important;padding:10px 24px!important;}
 
     /* === FIX ROBUSTE : empêche les boutons de s'écraser/se casser verticalement ===
        Cause réelle : les colonnes Streamlit rétrécissent (flex-shrink) au lieu de
@@ -268,8 +267,8 @@ st.markdown("""<style>
 
     div[data-testid="stHorizontalBlock"]{
         flex-wrap:wrap!important;
-        row-gap:10px!important;
-        column-gap:10px!important;
+        row-gap:12px!important;
+        column-gap:12px!important;
     }
     div[data-testid="column"]{
         flex:0 1 auto!important;
@@ -279,6 +278,10 @@ st.markdown("""<style>
     .stButton, .stDownloadButton{
         width:auto!important;
     }
+
+    /* ============================================================
+       BASE PREMIUM — tous les boutons (forme, ombre, transitions)
+       ============================================================ */
     .stButton>button, .stDownloadButton>button,
     div[data-testid="stButton"] button,
     div[data-testid="stDownloadButton"] button,
@@ -290,27 +293,139 @@ st.markdown("""<style>
         height:auto!important;
         line-height:1.3!important;
         font-size:14px!important;
-        padding:10px 18px!important;
+        font-weight:600!important;
+        letter-spacing:.2px!important;
+        padding:11px 22px!important;
         display:inline-flex!important;
         align-items:center!important;
         justify-content:center!important;
+        border-radius:12px!important;
+        border:1.5px solid transparent!important;
+        transition:transform .15s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease, color .2s ease!important;
+        box-shadow:0 1px 2px rgba(15,23,42,.06)!important;
+        cursor:pointer!important;
     }
-    /* Les libellés des boutons sont parfois dans un <p> ou <div> imbriqué
-       qui possède son propre comportement de retour à la ligne : on le neutralise. */
     .stButton>button *, .stDownloadButton>button *,
     div[data-testid="stButton"] button *,
     div[data-testid="stDownloadButton"] button *,
     button[kind="primary"] *, button[kind="secondary"] *{
         white-space:nowrap!important;
     }
-    .stDownloadButton>button{
-        background-color:#1E3A8A!important;
-        color:white!important;
-        border-radius:8px!important;
-        border:none!important;
-        font-weight:600!important;
+    .stButton>button:hover, .stDownloadButton>button:hover,
+    button[kind="primary"]:hover, button[kind="secondary"]:hover{
+        transform:translateY(-2px)!important;
     }
-    .stDownloadButton>button:hover{background-color:#1D4ED8!important;}
+    .stButton>button:active, .stDownloadButton>button:active,
+    button[kind="primary"]:active, button[kind="secondary"]:active{
+        transform:translateY(0)!important;
+    }
+    .stButton>button:focus, .stDownloadButton>button:focus{
+        outline:none!important;
+        box-shadow:0 0 0 3px rgba(30,58,138,.18)!important;
+    }
+
+    /* --- État SECONDARY (inactif) : carte claire, sobre, premium --- */
+    button[kind="secondary"]{
+        background:#FFFFFF!important;
+        color:#334155!important;
+        border:1.5px solid #E2E8F0!important;
+        box-shadow:0 1px 3px rgba(15,23,42,.05)!important;
+    }
+    button[kind="secondary"]:hover{
+        border-color:#1E3A8A!important;
+        color:#1E3A8A!important;
+        box-shadow:0 6px 16px rgba(30,58,138,.12)!important;
+    }
+
+    /* --- État PRIMARY (actif / sélectionné) : dégradé signature + glow --- */
+    button[kind="primary"]{
+        background:linear-gradient(135deg,#1E3A8A 0%,#2563EB 100%)!important;
+        color:#FFFFFF!important;
+        border:1.5px solid #1E3A8A!important;
+        box-shadow:0 6px 18px rgba(30,58,138,.32), inset 0 1px 0 rgba(255,255,255,.15)!important;
+        position:relative!important;
+    }
+    button[kind="primary"]:hover{
+        box-shadow:0 10px 24px rgba(30,58,138,.4), inset 0 1px 0 rgba(255,255,255,.2)!important;
+        background:linear-gradient(135deg,#1D4ED8 0%,#3B82F6 100%)!important;
+    }
+    /* petite coche pour repérer immédiatement le bouton sélectionné */
+    button[kind="primary"] p::before{
+        content:"✓ ";
+        font-weight:800;
+    }
+
+    /* ============================================================
+       TÉLÉCHARGEMENT DES RAPPORTS — boutons "carte" premium
+       ============================================================ */
+    .st-key-rapports_section .stDownloadButton>button{
+        background:linear-gradient(135deg,#0F172A 0%,#1E3A8A 60%,#2563EB 100%)!important;
+        color:#FFFFFF!important;
+        border:none!important;
+        border-radius:14px!important;
+        padding:18px 22px!important;
+        font-size:15px!important;
+        font-weight:700!important;
+        box-shadow:0 8px 20px rgba(15,23,42,.18)!important;
+        letter-spacing:.3px!important;
+    }
+    .st-key-rapports_section .stDownloadButton>button:hover{
+        background:linear-gradient(135deg,#1E3A8A 0%,#2563EB 60%,#3B82F6 100%)!important;
+        box-shadow:0 12px 28px rgba(37,99,235,.32)!important;
+        transform:translateY(-3px)!important;
+    }
+    .st-key-rapports_section .stDownloadButton>button p::after{
+        content:" ⬇";
+        opacity:.85;
+    }
+
+    /* ============================================================
+       SÉLECTEUR DE SITE (SGB / MEG) — boutons "pilule" premium
+       ============================================================ */
+    .st-key-site_selector_section .stButton>button{
+        padding:13px 30px!important;
+        font-size:15px!important;
+        border-radius:999px!important;
+    }
+    .st-key-site_selector_section button[kind="secondary"]{
+        background:#F8FAFC!important;
+        border:1.5px solid #CBD5E1!important;
+    }
+    .st-key-site_selector_section button[kind="primary"]{
+        background:linear-gradient(135deg,#0EA5E9 0%,#1E3A8A 100%)!important;
+        border-color:#0369A1!important;
+        box-shadow:0 8px 20px rgba(14,165,233,.35)!important;
+    }
+
+    /* ============================================================
+       CATÉGORIES D'ÉQUIPEMENTS — chips colorés par catégorie,
+       pour les "repérer parfaitement" en un coup d'œil
+       ============================================================ */
+    .st-key-categories_section .stButton>button{
+        border-radius:999px!important;
+        padding:11px 18px!important;
+        font-size:13.5px!important;
+    }
+    /* 1) Électriques — ambre */
+    .st-key-categories_section div[data-testid="column"]:nth-child(1) button[kind="secondary"]{color:#B45309!important;border-color:#FDE68A!important;background:#FFFBEB!important;}
+    .st-key-categories_section div[data-testid="column"]:nth-child(1) button[kind="secondary"]:hover{border-color:#F59E0B!important;box-shadow:0 6px 16px rgba(245,158,11,.2)!important;}
+    .st-key-categories_section div[data-testid="column"]:nth-child(1) button[kind="primary"]{background:linear-gradient(135deg,#F59E0B 0%,#D97706 100%)!important;border-color:#B45309!important;box-shadow:0 8px 20px rgba(245,158,11,.4)!important;}
+    /* 2) Levage — orange */
+    .st-key-categories_section div[data-testid="column"]:nth-child(2) button[kind="secondary"]{color:#C2410C!important;border-color:#FED7AA!important;background:#FFF7ED!important;}
+    .st-key-categories_section div[data-testid="column"]:nth-child(2) button[kind="secondary"]:hover{border-color:#EA580C!important;box-shadow:0 6px 16px rgba(234,88,12,.2)!important;}
+    .st-key-categories_section div[data-testid="column"]:nth-child(2) button[kind="primary"]{background:linear-gradient(135deg,#EA580C 0%,#C2410C 100%)!important;border-color:#9A3412!important;box-shadow:0 8px 20px rgba(234,88,12,.4)!important;}
+    /* 3) Incendie — rouge */
+    .st-key-categories_section div[data-testid="column"]:nth-child(3) button[kind="secondary"]{color:#B91C1C!important;border-color:#FECACA!important;background:#FEF2F2!important;}
+    .st-key-categories_section div[data-testid="column"]:nth-child(3) button[kind="secondary"]:hover{border-color:#DC2626!important;box-shadow:0 6px 16px rgba(220,38,38,.2)!important;}
+    .st-key-categories_section div[data-testid="column"]:nth-child(3) button[kind="primary"]{background:linear-gradient(135deg,#DC2626 0%,#B91C1C 100%)!important;border-color:#991B1B!important;box-shadow:0 8px 20px rgba(220,38,38,.4)!important;}
+    /* 4) Gaz — bleu */
+    .st-key-categories_section div[data-testid="column"]:nth-child(4) button[kind="secondary"]{color:#1D4ED8!important;border-color:#BFDBFE!important;background:#EFF6FF!important;}
+    .st-key-categories_section div[data-testid="column"]:nth-child(4) button[kind="secondary"]:hover{border-color:#2563EB!important;box-shadow:0 6px 16px rgba(37,99,235,.2)!important;}
+    .st-key-categories_section div[data-testid="column"]:nth-child(4) button[kind="primary"]{background:linear-gradient(135deg,#2563EB 0%,#1D4ED8 100%)!important;border-color:#1E40AF!important;box-shadow:0 8px 20px rgba(37,99,235,.4)!important;}
+    /* 5) Pression gaz — violet */
+    .st-key-categories_section div[data-testid="column"]:nth-child(5) button[kind="secondary"]{color:#6D28D9!important;border-color:#DDD6FE!important;background:#F5F3FF!important;}
+    .st-key-categories_section div[data-testid="column"]:nth-child(5) button[kind="secondary"]:hover{border-color:#7C3AED!important;box-shadow:0 6px 16px rgba(124,58,237,.2)!important;}
+    .st-key-categories_section div[data-testid="column"]:nth-child(5) button[kind="primary"]{background:linear-gradient(135deg,#7C3AED 0%,#6D28D9 100%)!important;border-color:#5B21B6!important;box-shadow:0 8px 20px rgba(124,58,237,.4)!important;}
 </style>""", unsafe_allow_html=True)
 
 # ==========================================
@@ -1061,37 +1176,38 @@ if acces_autorise:
         if not df_exig.empty:
             st.markdown("### 📥 Téléchargement des Rapports par Site")
         
-            col_sgb, col_meg = st.columns(2)
-            date_str = datetime.date.today().strftime('%d_%m_%Y')
-        
-            with col_sgb:
-                with st.spinner("Préparation du rapport SGB..."):
-                    try:
-                        pdf_sgb = generer_rapport_equipements_pdf(df_exig, "SGB")
-                        st.download_button(
-                            label="📄 Rapport PDF — SGB",
-                            data=pdf_sgb,
-                            file_name=f"Rapport_Inspection_SGB_{date_str}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                    except Exception as e:
-                        st.error(f"Erreur PDF SGB : {e}")
-                    
-            with col_meg:
-                with st.spinner("Préparation du rapport MEG..."):
-                    try:
-                        pdf_meg = generer_rapport_equipements_pdf(df_exig, "MEG")
-                        st.download_button(
-                            label="📄 Rapport PDF — MEG",
-                            data=pdf_meg,
-                            file_name=f"Rapport_Inspection_MEG_{date_str}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                    except Exception as e:
-                        st.error(f"Erreur PDF MEG : {e}")
-                    
+            with st.container(key="rapports_section"):
+                col_sgb, col_meg = st.columns(2)
+                date_str = datetime.date.today().strftime('%d_%m_%Y')
+
+                with col_sgb:
+                    with st.spinner("Préparation du rapport SGB..."):
+                        try:
+                            pdf_sgb = generer_rapport_equipements_pdf(df_exig, "SGB")
+                            st.download_button(
+                                label="Rapport PDF — SGB",
+                                data=pdf_sgb,
+                                file_name=f"Rapport_Inspection_SGB_{date_str}.pdf",
+                                mime="application/pdf",
+                                use_container_width=True
+                            )
+                        except Exception as e:
+                            st.error(f"Erreur PDF SGB : {e}")
+
+                with col_meg:
+                    with st.spinner("Préparation du rapport MEG..."):
+                        try:
+                            pdf_meg = generer_rapport_equipements_pdf(df_exig, "MEG")
+                            st.download_button(
+                                label="Rapport PDF — MEG",
+                                data=pdf_meg,
+                                file_name=f"Rapport_Inspection_MEG_{date_str}.pdf",
+                                mime="application/pdf",
+                                use_container_width=True
+                            )
+                        except Exception as e:
+                            st.error(f"Erreur PDF MEG : {e}")
+
             st.divider()
 
     # ===== SECTION 3 : LISTE DES ÉQUIPEMENTS (ARBORESCENCE) =====
@@ -1111,21 +1227,22 @@ if acces_autorise:
 
     # Niveau 1 : choix du site
         st.markdown("<p style='font-size:13px;color:#64748B;font-weight:600;margin-bottom:8px;'>Sélectionnez un site :</p>", unsafe_allow_html=True)
-        s1, s2, s3 = st.columns([1, 1, 3])
-    
-        with s1:
-            actif_sgb = (st.session_state.site_exig_sel == "SGB")
-            if st.button("🏢 SGB", use_container_width=True, type="primary" if actif_sgb else "secondary"):
-                st.session_state.site_exig_sel = "SGB"
-                st.session_state.cat_exig_sel = None  # Reset la catégorie si on change de site
-                st.rerun()
-            
-        with s2:
-            actif_meg = (st.session_state.site_exig_sel == "MEG")
-            if st.button("🏢 MEG", use_container_width=True, type="primary" if actif_meg else "secondary"):
-                st.session_state.site_exig_sel = "MEG"
-                st.session_state.cat_exig_sel = None  # Reset la catégorie si on change de site
-                st.rerun()
+        with st.container(key="site_selector_section"):
+            s1, s2, s3 = st.columns([1, 1, 3])
+
+            with s1:
+                actif_sgb = (st.session_state.site_exig_sel == "SGB")
+                if st.button("🏢 SGB", use_container_width=True, type="primary" if actif_sgb else "secondary"):
+                    st.session_state.site_exig_sel = "SGB"
+                    st.session_state.cat_exig_sel = None  # Reset la catégorie si on change de site
+                    st.rerun()
+
+            with s2:
+                actif_meg = (st.session_state.site_exig_sel == "MEG")
+                if st.button("🏢 MEG", use_container_width=True, type="primary" if actif_meg else "secondary"):
+                    st.session_state.site_exig_sel = "MEG"
+                    st.session_state.cat_exig_sel = None  # Reset la catégorie si on change de site
+                    st.rerun()
 
     # --- CORRECTION DE LA LOGIQUE D'AFFICHAGE ---
     # On se base TOUJOURS sur le session_state actuel, pas sur le clic du bouton direct
@@ -1144,18 +1261,19 @@ if acces_autorise:
             }
 
         # Création dynamique des boutons de catégories
-            cat_cols = st.columns(5)
-            for i, (cat, couleur) in enumerate(COULEURS_CAT.items()):
-                with cat_cols[i % 5]:
-                    nb_total_cat = int(df_site[df_site["Categorie"] == cat]["Nombre"].sum()) if not df_site.empty else 0
-                    actif_cat = (st.session_state.cat_exig_sel == cat)
-                    label_court = NOMS_COURTS_CAT.get(cat, cat)
-                
-                    if st.button(f"{label_court} ({nb_total_cat})", key=f"cat_btn_{cat}", use_container_width=True,
-                                 type="primary" if actif_cat else "secondary",
-                                 help=f"{nb_total_cat} équipement(s) au total"):
-                        st.session_state.cat_exig_sel = cat
-                        st.rerun()
+            with st.container(key="categories_section"):
+                cat_cols = st.columns(5)
+                for i, (cat, couleur) in enumerate(COULEURS_CAT.items()):
+                    with cat_cols[i % 5]:
+                        nb_total_cat = int(df_site[df_site["Categorie"] == cat]["Nombre"].sum()) if not df_site.empty else 0
+                        actif_cat = (st.session_state.cat_exig_sel == cat)
+                        label_court = NOMS_COURTS_CAT.get(cat, cat)
+
+                        if st.button(f"{label_court} ({nb_total_cat})", key=f"cat_btn_{cat}", use_container_width=True,
+                                     type="primary" if actif_cat else "secondary",
+                                     help=f"{nb_total_cat} équipement(s) au total"):
+                            st.session_state.cat_exig_sel = cat
+                            st.rerun()
 
         # Niveau 3 : sous-équipements de la catégorie choisie
             if st.session_state.cat_exig_sel:
