@@ -259,45 +259,11 @@ st.markdown("""<style>
     html,body,[data-testid="stAppViewContainer"],[data-testid="stSidebarView"]{font-family:'Inter',sans-serif!important;background-color:#F8FAFC!important;}
     [data-testid="stForm"],.stCornerRadius{background-color:#FFFFFF!important;border:1px solid #E2E8F0!important;border-radius:12px!important;}
 
-    /* === FIX : st.container(key=...) ne propage pas toujours sa largeur
-       complète à ses enfants, ce qui faisait s'écraser les colonnes de
-       boutons (texte vertical illisible). On force explicitement 100%
-       de largeur sur ces conteneurs et tout ce qu'ils contiennent. === */
-    .st-key-rapports_section,
-    .st-key-site_selector_section,
-    .st-key-categories_section{
-        width:100%!important;
-    }
-    .st-key-rapports_section [data-testid="stVerticalBlock"],
-    .st-key-site_selector_section [data-testid="stVerticalBlock"],
-    .st-key-categories_section [data-testid="stVerticalBlock"],
-    .st-key-rapports_section [data-testid="stHorizontalBlock"],
-    .st-key-site_selector_section [data-testid="stHorizontalBlock"],
-    .st-key-categories_section [data-testid="stHorizontalBlock"]{
-        width:100%!important;
-    }
-    .st-key-rapports_section div[data-testid="column"],
-    .st-key-site_selector_section div[data-testid="column"],
-    .st-key-categories_section div[data-testid="column"]{
-        flex:1 1 0%!important;
-        width:auto!important;
-        min-width:0!important;
-    }
-    .st-key-rapports_section .stDownloadButton,
-    .st-key-rapports_section .stDownloadButton>button,
-    .st-key-site_selector_section .stButton,
-    .st-key-site_selector_section .stButton>button,
-    .st-key-categories_section .stButton,
-    .st-key-categories_section .stButton>button{
-        width:100%!important;
-        white-space:normal!important;
-    }
-
     /* ============================================================
        STYLE PREMIUM — uniquement cosmétique (couleurs, ombres,
-       arrondis, survol). On NE touche PAS à la largeur, au flex,
-       ni aux colonnes : Streamlit gère déjà très bien la mise en
-       page de base, donc on n'interfère pas avec elle.
+       arrondis, survol). AUCUNE règle de largeur, flex, colonne ou
+       conteneur n'est touchée : Streamlit gère seul la mise en page,
+       donc tous les boutons restent uniformes et bien dimensionnés.
        ============================================================ */
     .stButton>button, .stDownloadButton>button{
         border-radius:10px!important;
@@ -314,7 +280,7 @@ st.markdown("""<style>
         box-shadow:0 0 0 3px rgba(30,58,138,.18)!important;
     }
 
-    /* --- Bouton de téléchargement (style existant, qui fonctionne bien) --- */
+    /* --- Bouton de téléchargement --- */
     .stDownloadButton>button{
         background-color:#1E3A8A!important;
         color:white!important;
@@ -323,7 +289,7 @@ st.markdown("""<style>
     }
     .stDownloadButton>button:hover{background-color:#1D4ED8!important;}
 
-    /* --- État SECONDARY (inactif) : sobre, clair --- */
+    /* --- État SECONDARY (inactif) : sobre, clair, identique pour tous --- */
     button[kind="secondary"]{
         background:#FFFFFF!important;
         color:#334155!important;
@@ -334,7 +300,7 @@ st.markdown("""<style>
         color:#1E3A8A!important;
     }
 
-    /* --- État PRIMARY (actif / sélectionné) : couleur pleine --- */
+    /* --- État PRIMARY (actif / sélectionné) : couleur pleine, identique pour tous --- */
     button[kind="primary"]{
         background:#1E3A8A!important;
         color:#FFFFFF!important;
@@ -343,18 +309,6 @@ st.markdown("""<style>
     button[kind="primary"]:hover{
         background:#1D4ED8!important;
     }
-
-    /* --- Couleurs par catégorie d'équipement (état inactif) --- */
-    .st-key-categories_section div[data-testid="column"]:nth-child(1) button[kind="secondary"]{color:#B45309!important;border-color:#FDE68A!important;background:#FFFBEB!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(1) button[kind="primary"]{background:#D97706!important;border-color:#B45309!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(2) button[kind="secondary"]{color:#C2410C!important;border-color:#FED7AA!important;background:#FFF7ED!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(2) button[kind="primary"]{background:#C2410C!important;border-color:#9A3412!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(3) button[kind="secondary"]{color:#B91C1C!important;border-color:#FECACA!important;background:#FEF2F2!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(3) button[kind="primary"]{background:#B91C1C!important;border-color:#991B1B!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(4) button[kind="secondary"]{color:#1D4ED8!important;border-color:#BFDBFE!important;background:#EFF6FF!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(4) button[kind="primary"]{background:#1D4ED8!important;border-color:#1E40AF!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(5) button[kind="secondary"]{color:#6D28D9!important;border-color:#DDD6FE!important;background:#F5F3FF!important;}
-    .st-key-categories_section div[data-testid="column"]:nth-child(5) button[kind="primary"]{background:#6D28D9!important;border-color:#5B21B6!important;}
 </style>""", unsafe_allow_html=True)
 
 # ==========================================
@@ -1105,37 +1059,36 @@ if acces_autorise:
         if not df_exig.empty:
             st.markdown("### 📥 Téléchargement des Rapports par Site")
         
-            with st.container(key="rapports_section"):
-                col_sgb, col_meg = st.columns(2)
-                date_str = datetime.date.today().strftime('%d_%m_%Y')
+            col_sgb, col_meg = st.columns(2)
+            date_str = datetime.date.today().strftime('%d_%m_%Y')
 
-                with col_sgb:
-                    with st.spinner("Préparation du rapport SGB..."):
-                        try:
-                            pdf_sgb = generer_rapport_equipements_pdf(df_exig, "SGB")
-                            st.download_button(
-                                label="Rapport PDF — SGB",
-                                data=pdf_sgb,
-                                file_name=f"Rapport_Inspection_SGB_{date_str}.pdf",
-                                mime="application/pdf",
-                                use_container_width=True
-                            )
-                        except Exception as e:
-                            st.error(f"Erreur PDF SGB : {e}")
+            with col_sgb:
+                with st.spinner("Préparation du rapport SGB..."):
+                    try:
+                        pdf_sgb = generer_rapport_equipements_pdf(df_exig, "SGB")
+                        st.download_button(
+                            label="📄 Rapport PDF — SGB",
+                            data=pdf_sgb,
+                            file_name=f"Rapport_Inspection_SGB_{date_str}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error(f"Erreur PDF SGB : {e}")
 
-                with col_meg:
-                    with st.spinner("Préparation du rapport MEG..."):
-                        try:
-                            pdf_meg = generer_rapport_equipements_pdf(df_exig, "MEG")
-                            st.download_button(
-                                label="Rapport PDF — MEG",
-                                data=pdf_meg,
-                                file_name=f"Rapport_Inspection_MEG_{date_str}.pdf",
-                                mime="application/pdf",
-                                use_container_width=True
-                            )
-                        except Exception as e:
-                            st.error(f"Erreur PDF MEG : {e}")
+            with col_meg:
+                with st.spinner("Préparation du rapport MEG..."):
+                    try:
+                        pdf_meg = generer_rapport_equipements_pdf(df_exig, "MEG")
+                        st.download_button(
+                            label="📄 Rapport PDF — MEG",
+                            data=pdf_meg,
+                            file_name=f"Rapport_Inspection_MEG_{date_str}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error(f"Erreur PDF MEG : {e}")
 
             st.divider()
 
@@ -1156,22 +1109,21 @@ if acces_autorise:
 
     # Niveau 1 : choix du site
         st.markdown("<p style='font-size:13px;color:#64748B;font-weight:600;margin-bottom:8px;'>Sélectionnez un site :</p>", unsafe_allow_html=True)
-        with st.container(key="site_selector_section"):
-            s1, s2, s3 = st.columns([1, 1, 3])
+        s1, s2 = st.columns(2)
 
-            with s1:
-                actif_sgb = (st.session_state.site_exig_sel == "SGB")
-                if st.button("🏢 SGB", use_container_width=True, type="primary" if actif_sgb else "secondary"):
-                    st.session_state.site_exig_sel = "SGB"
-                    st.session_state.cat_exig_sel = None  # Reset la catégorie si on change de site
-                    st.rerun()
+        with s1:
+            actif_sgb = (st.session_state.site_exig_sel == "SGB")
+            if st.button("🏢 SGB", use_container_width=True, type="primary" if actif_sgb else "secondary"):
+                st.session_state.site_exig_sel = "SGB"
+                st.session_state.cat_exig_sel = None  # Reset la catégorie si on change de site
+                st.rerun()
 
-            with s2:
-                actif_meg = (st.session_state.site_exig_sel == "MEG")
-                if st.button("🏢 MEG", use_container_width=True, type="primary" if actif_meg else "secondary"):
-                    st.session_state.site_exig_sel = "MEG"
-                    st.session_state.cat_exig_sel = None  # Reset la catégorie si on change de site
-                    st.rerun()
+        with s2:
+            actif_meg = (st.session_state.site_exig_sel == "MEG")
+            if st.button("🏢 MEG", use_container_width=True, type="primary" if actif_meg else "secondary"):
+                st.session_state.site_exig_sel = "MEG"
+                st.session_state.cat_exig_sel = None  # Reset la catégorie si on change de site
+                st.rerun()
 
     # --- CORRECTION DE LA LOGIQUE D'AFFICHAGE ---
     # On se base TOUJOURS sur le session_state actuel, pas sur le clic du bouton direct
@@ -1190,19 +1142,18 @@ if acces_autorise:
             }
 
         # Création dynamique des boutons de catégories
-            with st.container(key="categories_section"):
-                cat_cols = st.columns(5)
-                for i, (cat, couleur) in enumerate(COULEURS_CAT.items()):
-                    with cat_cols[i % 5]:
-                        nb_total_cat = int(df_site[df_site["Categorie"] == cat]["Nombre"].sum()) if not df_site.empty else 0
-                        actif_cat = (st.session_state.cat_exig_sel == cat)
-                        label_court = NOMS_COURTS_CAT.get(cat, cat)
+            cat_cols = st.columns(5)
+            for i, (cat, couleur) in enumerate(COULEURS_CAT.items()):
+                with cat_cols[i % 5]:
+                    nb_total_cat = int(df_site[df_site["Categorie"] == cat]["Nombre"].sum()) if not df_site.empty else 0
+                    actif_cat = (st.session_state.cat_exig_sel == cat)
+                    label_court = NOMS_COURTS_CAT.get(cat, cat)
 
-                        if st.button(f"{label_court} ({nb_total_cat})", key=f"cat_btn_{cat}", use_container_width=True,
-                                     type="primary" if actif_cat else "secondary",
-                                     help=f"{nb_total_cat} équipement(s) au total"):
-                            st.session_state.cat_exig_sel = cat
-                            st.rerun()
+                    if st.button(f"{label_court} ({nb_total_cat})", key=f"cat_btn_{cat}", use_container_width=True,
+                                 type="primary" if actif_cat else "secondary",
+                                 help=f"{nb_total_cat} équipement(s) au total"):
+                        st.session_state.cat_exig_sel = cat
+                        st.rerun()
 
         # Niveau 3 : sous-équipements de la catégorie choisie
             if st.session_state.cat_exig_sel:
