@@ -259,23 +259,13 @@ st.markdown("""<style>
     html,body,[data-testid="stAppViewContainer"],[data-testid="stSidebarView"]{font-family:'Inter',sans-serif!important;background-color:#F8FAFC!important;}
     [data-testid="stForm"],.stCornerRadius{background-color:#FFFFFF!important;border:1px solid #E2E8F0!important;border-radius:12px!important;}
 
-    /* === FIX ROBUSTE : empêche les boutons de s'écraser/se casser verticalement ===
-       Cause réelle : les colonnes Streamlit rétrécissent (flex-shrink) au lieu de
-       passer à la ligne quand il n'y a pas assez de place horizontale.
-       Solution : autoriser le retour à la ligne (flex-wrap) + bloquer le rétrécissement
-       des colonnes + forcer le texte des boutons sur une seule ligne (nowrap). */
-
     div[data-testid="stHorizontalBlock"]{
         flex-wrap:wrap!important;
         row-gap:12px!important;
         column-gap:12px!important;
     }
     div[data-testid="column"]{
-        flex:0 1 auto!important;
-        width:auto!important;
-        min-width:max-content!important;
-    }
-    .stButton, .stDownloadButton{
+        flex:1 1 auto!important;
         width:auto!important;
     }
 
@@ -287,29 +277,23 @@ st.markdown("""<style>
     div[data-testid="stDownloadButton"] button,
     button[kind="primary"], button[kind="secondary"],
     button[data-testid^="baseButton"]{
-        white-space:nowrap!important;
-        width:auto!important;
-        min-width:unset!important;
+        width:100%!important;
         height:auto!important;
         line-height:1.3!important;
         font-size:14px!important;
         font-weight:600!important;
         letter-spacing:.2px!important;
         padding:11px 22px!important;
-        display:inline-flex!important;
+        white-space:normal!important;
+        word-break:break-word!important;
+        display:flex!important;
         align-items:center!important;
         justify-content:center!important;
-        border-radius:12px!important;
+        border-radius:10px!important;
         border:1.5px solid transparent!important;
         transition:transform .15s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease, color .2s ease!important;
         box-shadow:0 1px 2px rgba(15,23,42,.06)!important;
         cursor:pointer!important;
-    }
-    .stButton>button *, .stDownloadButton>button *,
-    div[data-testid="stButton"] button *,
-    div[data-testid="stDownloadButton"] button *,
-    button[kind="primary"] *, button[kind="secondary"] *{
-        white-space:nowrap!important;
     }
     .stButton>button:hover, .stDownloadButton>button:hover,
     button[kind="primary"]:hover, button[kind="secondary"]:hover{
@@ -349,7 +333,6 @@ st.markdown("""<style>
         box-shadow:0 10px 24px rgba(30,58,138,.4), inset 0 1px 0 rgba(255,255,255,.2)!important;
         background:linear-gradient(135deg,#1D4ED8 0%,#3B82F6 100%)!important;
     }
-    /* petite coche pour repérer immédiatement le bouton sélectionné */
     button[kind="primary"] p::before{
         content:"✓ ";
         font-weight:800;
@@ -362,7 +345,7 @@ st.markdown("""<style>
         background:linear-gradient(135deg,#0F172A 0%,#1E3A8A 60%,#2563EB 100%)!important;
         color:#FFFFFF!important;
         border:none!important;
-        border-radius:14px!important;
+        border-radius:12px!important;
         padding:18px 22px!important;
         font-size:15px!important;
         font-weight:700!important;
@@ -380,12 +363,18 @@ st.markdown("""<style>
     }
 
     /* ============================================================
-       SÉLECTEUR DE SITE (SGB / MEG) — boutons "pilule" premium
+       SÉLECTEUR DE SITE (SGB / MEG) — boutons premium
        ============================================================ */
+    .st-key-site_selector_section div[data-testid="column"]{
+        flex:0 1 auto!important;
+        min-width:140px!important;
+    }
     .st-key-site_selector_section .stButton>button{
         padding:13px 30px!important;
         font-size:15px!important;
-        border-radius:999px!important;
+        border-radius:10px!important;
+        width:auto!important;
+        white-space:nowrap!important;
     }
     .st-key-site_selector_section button[kind="secondary"]{
         background:#F8FAFC!important;
@@ -398,13 +387,18 @@ st.markdown("""<style>
     }
 
     /* ============================================================
-       CATÉGORIES D'ÉQUIPEMENTS — chips colorés par catégorie,
-       pour les "repérer parfaitement" en un coup d'œil
+       CATÉGORIES D'ÉQUIPEMENTS — chips colorés par catégorie
        ============================================================ */
+    .st-key-categories_section div[data-testid="column"]{
+        flex:0 1 auto!important;
+        min-width:150px!important;
+    }
     .st-key-categories_section .stButton>button{
-        border-radius:999px!important;
+        border-radius:10px!important;
         padding:11px 18px!important;
         font-size:13.5px!important;
+        width:auto!important;
+        white-space:nowrap!important;
     }
     /* 1) Électriques — ambre */
     .st-key-categories_section div[data-testid="column"]:nth-child(1) button[kind="secondary"]{color:#B45309!important;border-color:#FDE68A!important;background:#FFFBEB!important;}
