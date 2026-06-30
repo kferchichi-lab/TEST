@@ -259,6 +259,40 @@ st.markdown("""<style>
     html,body,[data-testid="stAppViewContainer"],[data-testid="stSidebarView"]{font-family:'Inter',sans-serif!important;background-color:#F8FAFC!important;}
     [data-testid="stForm"],.stCornerRadius{background-color:#FFFFFF!important;border:1px solid #E2E8F0!important;border-radius:12px!important;}
 
+    /* === FIX : st.container(key=...) ne propage pas toujours sa largeur
+       complète à ses enfants, ce qui faisait s'écraser les colonnes de
+       boutons (texte vertical illisible). On force explicitement 100%
+       de largeur sur ces conteneurs et tout ce qu'ils contiennent. === */
+    .st-key-rapports_section,
+    .st-key-site_selector_section,
+    .st-key-categories_section{
+        width:100%!important;
+    }
+    .st-key-rapports_section [data-testid="stVerticalBlock"],
+    .st-key-site_selector_section [data-testid="stVerticalBlock"],
+    .st-key-categories_section [data-testid="stVerticalBlock"],
+    .st-key-rapports_section [data-testid="stHorizontalBlock"],
+    .st-key-site_selector_section [data-testid="stHorizontalBlock"],
+    .st-key-categories_section [data-testid="stHorizontalBlock"]{
+        width:100%!important;
+    }
+    .st-key-rapports_section div[data-testid="column"],
+    .st-key-site_selector_section div[data-testid="column"],
+    .st-key-categories_section div[data-testid="column"]{
+        flex:1 1 0%!important;
+        width:auto!important;
+        min-width:0!important;
+    }
+    .st-key-rapports_section .stDownloadButton,
+    .st-key-rapports_section .stDownloadButton>button,
+    .st-key-site_selector_section .stButton,
+    .st-key-site_selector_section .stButton>button,
+    .st-key-categories_section .stButton,
+    .st-key-categories_section .stButton>button{
+        width:100%!important;
+        white-space:normal!important;
+    }
+
     /* ============================================================
        STYLE PREMIUM — uniquement cosmétique (couleurs, ombres,
        arrondis, survol). On NE touche PAS à la largeur, au flex,
