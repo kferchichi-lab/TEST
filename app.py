@@ -259,6 +259,32 @@ st.markdown("""<style>
     html,body,[data-testid="stAppViewContainer"],[data-testid="stSidebarView"]{font-family:'Inter',sans-serif!important;background-color:#F8FAFC!important;}
     [data-testid="stForm"],.stCornerRadius{background-color:#FFFFFF!important;border:1px solid #E2E8F0!important;border-radius:12px!important;}
     .stButton>button{background-color:#1E3A8A!important;color:white!important;border-radius:8px!important;border:none!important;font-weight:500!important;padding:10px 24px!important;}
+
+    /* === Fix boutons larges / téléchargement qui se cassent verticalement === */
+    .stButton>button, .stDownloadButton>button{
+        white-space:normal!important;
+        word-break:keep-all!important;
+        overflow-wrap:normal!important;
+        line-height:1.3!important;
+        min-height:42px!important;
+        height:auto!important;
+        font-size:13px!important;
+        display:flex!important;
+        align-items:center!important;
+        justify-content:center!important;
+        text-align:center!important;
+    }
+    .stDownloadButton>button{
+        background-color:#1E3A8A!important;
+        color:white!important;
+        border-radius:8px!important;
+        border:none!important;
+        font-weight:600!important;
+        padding:10px 16px!important;
+    }
+    .stDownloadButton>button:hover{background-color:#1D4ED8!important;}
+    /* Empêche les colonnes de devenir trop étroites */
+    div[data-testid="column"]{min-width:120px!important;}
 </style>""", unsafe_allow_html=True)
 
 # ==========================================
@@ -995,7 +1021,7 @@ if acces_autorise:
                     try:
                         pdf_sgb = generer_rapport_equipements_pdf(df_exig, "SGB")
                         st.download_button(
-                            label="🏢 Télécharger le Rapport PDF - SGB",
+                            label="📄 Rapport PDF — SGB",
                             data=pdf_sgb,
                             file_name=f"Rapport_Inspection_SGB_{date_str}.pdf",
                             mime="application/pdf",
@@ -1009,7 +1035,7 @@ if acces_autorise:
                     try:
                         pdf_meg = generer_rapport_equipements_pdf(df_exig, "MEG")
                         st.download_button(
-                            label="🏭 Télécharger le Rapport PDF - MEG",
+                            label="📄 Rapport PDF — MEG",
                             data=pdf_meg,
                             file_name=f"Rapport_Inspection_MEG_{date_str}.pdf",
                             mime="application/pdf",
@@ -1070,9 +1096,9 @@ if acces_autorise:
             }
 
         # Création dynamique des boutons de catégories
-            cat_cols = st.columns(3)
+            cat_cols = st.columns(5)
             for i, (cat, couleur) in enumerate(COULEURS_CAT.items()):
-                with cat_cols[i % 3]:
+                with cat_cols[i % 5]:
                     nb_total_cat = int(df_site[df_site["Categorie"] == cat]["Nombre"].sum()) if not df_site.empty else 0
                     actif_cat = (st.session_state.cat_exig_sel == cat)
                     label_court = NOMS_COURTS_CAT.get(cat, cat)
