@@ -122,15 +122,22 @@ def sheets_lire(onglet, plage="A:Z"):
         return pd.DataFrame()
 
 def sheets_ecrire_cellule(onglet, cellule, valeur):
+    ok, _ = sheets_ecrire_cellule_v2(onglet, cellule, valeur)
+    return ok
+
+def sheets_ecrire_cellule_v2(onglet, cellule, valeur):
+    """Écrit une valeur dans une cellule précise. Retourne (ok, message_erreur)."""
     token = obtenir_access_token()
-    if not token: return False
+    if not token: return False, "Token invalide"
     try:
         url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{onglet}!{cellule}"
         resp = requests.put(url,headers={"Authorization":f"Bearer {token}","Content-Type":"application/json"},
             params={"valueInputOption":"RAW"},json={"values":[[valeur]]},timeout=15)
-        return resp.status_code==200
-    except Exception:
-        return False
+        if resp.status_code == 200:
+            return True, ""
+        return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
+    except Exception as e:
+        return False, str(e)
 
 def sheets_trouver_ligne_email(onglet, email):
     token = obtenir_access_token()
@@ -417,6 +424,8 @@ if acces_autorise:
 
             if col_cat_r and col_date_r:
                 df_ech=df_rapports.copy()
+                # Identifiant stable = numéro de ligne réel dans le Sheet (header=ligne1, donc +2)
+                df_ech["_ligne_sheet"]=df_ech.index+2
                 df_ech["_date_brute"]=pd.to_datetime(df_ech[col_date_r[0]],dayfirst=True,errors='coerce')
 
                 if col_reelle:
@@ -453,7 +462,7 @@ if acces_autorise:
                 cols_affich=[]
                 if col_site_r:  cols_affich.append(col_site_r[0])
                 if col_label_r: cols_affich.append(col_label_r[0])
-                cols_affich+=[col_cat_r[0],"_date_brute","_date_reelle","Date du contrôle","Prochaine échéance","Jours restants","Statut"]
+                cols_affich+=[col_cat_r[0],"_date_brute","_date_reelle","Date du contrôle","Prochaine échéance","Jours restants","Statut","_ligne_sheet"]
                 df_show=df_ech[cols_affich].sort_values("Prochaine échéance")
 
                 # ---- APPLICATION DES FILTRES ----
@@ -512,7 +521,7 @@ if acces_autorise:
                         cols_resp=[]
                         if col_site_r:  cols_resp.append(col_site_r[0])
                         if col_label_r: cols_resp.append(col_label_r[0])
-                        cols_resp+=[col_cat_r[0],"_date_brute","_date_reelle","Prochaine échéance","Jours restants","Statut"]
+                        cols_resp+=[col_cat_r[0],"_date_brute","_date_reelle","Prochaine échéance","Jours restants","Statut","_ligne_sheet"]
                         df_editable=df_show_filtre[cols_resp].copy()
                         df_editable["_date_reelle"]=pd.to_datetime(df_editable["_date_reelle"],errors='coerce')
                         edited_df=st.data_editor(df_editable,column_config={
@@ -520,11 +529,13 @@ if acces_autorise:
                             "_date_reelle":       st.column_config.DateColumn("✅ Date réelle visite",format="DD/MM/YYYY",help="Saisissez ici la date réelle du contrôle effectué"),
                             "Prochaine échéance": st.column_config.DateColumn("⏭️ Prochaine échéance",format="DD/MM/YYYY"),
                             "Jours restants":     st.column_config.NumberColumn("Jours restants",format="%d j"),
+                            "_ligne_sheet":       None,
                         },disabled=[c for c in df_editable.columns if c!="_date_reelle"],hide_index=True,use_container_width=True,key="editor_dates_reelles")
 
                         if st.button("💾 Sauvegarder les dates réelles",type="primary"):
                             with st.spinner("Mise à jour dans Google Sheets..."):
                                 nb_maj=0
+                                erreurs=[]
                                 for idx,row_edit in edited_df.iterrows():
                                     nouvelle_date=row_edit["_date_reelle"]
                                     ancienne_date=df_editable.loc[idx,"_date_reelle"]
@@ -533,25 +544,23 @@ if acces_autorise:
                                     elif pd.isna(nouvelle_date)!=pd.isna(ancienne_date): dates_diff=True
                                     elif not pd.isna(nouvelle_date) and nouvelle_date!=ancienne_date: dates_diff=True
                                     if dates_diff and not pd.isna(nouvelle_date):
-                                        site_val =str(row_edit[col_site_r[0]]).strip()  if col_site_r  else ""
-                                        label_val=str(row_edit[col_label_r[0]]).strip() if col_label_r else ""
-                                        cat_val  =str(row_edit[col_cat_r[0]]).strip()
-                                        masque   =df_rapports[col_cat_r[0]].astype(str).str.strip()==cat_val
-                                        if col_site_r:  masque&=df_rapports[col_site_r[0]].astype(str).str.strip()==site_val
-                                        if col_label_r: masque&=df_rapports[col_label_r[0]].astype(str).str.strip()==label_val
-                                        lignes=df_rapports[masque]
-                                        if not lignes.empty:
-                                            num_ligne_sheet=lignes.index[-1]+2
-                                            if col_reelle:
-                                                num_col=df_rapports.columns.tolist().index(col_reelle[0])+1
-                                            else:
-                                                num_col=len(df_rapports.columns)+1
-                                            lettre_col=chr(64+num_col)
-                                            date_str=nouvelle_date.strftime("%d/%m/%Y")
-                                            sheets_ecrire_cellule("Rapports",f"{lettre_col}{num_ligne_sheet}",date_str)
+                                        num_ligne_sheet=int(row_edit["_ligne_sheet"])
+                                        if col_reelle:
+                                            num_col=df_rapports.columns.tolist().index(col_reelle[0])+1
+                                        else:
+                                            num_col=len(df_rapports.columns)+1
+                                        lettre_col=chr(64+num_col)
+                                        date_str=nouvelle_date.strftime("%d/%m/%Y")
+                                        ok, msg = sheets_ecrire_cellule_v2("Rapports",f"{lettre_col}{num_ligne_sheet}",date_str)
+                                        if ok:
                                             nb_maj+=1
+                                        else:
+                                            erreurs.append(f"Ligne {num_ligne_sheet}: {msg}")
                             if nb_maj>0:
                                 st.success(f"✅ {nb_maj} date(s) enregistrée(s) !")
+                            if erreurs:
+                                st.error("❌ Erreurs : " + " | ".join(erreurs))
+                            if nb_maj>0 or erreurs:
                                 st.cache_data.clear()
                                 st.rerun()
                             else:
@@ -659,37 +668,25 @@ if acces_autorise:
                             reel_fmt=c_reel.strftime("%d/%m/%Y") if pd.notna(c_reel) else None
                             next_fmt=c_next.strftime("%d/%m/%Y") if pd.notna(c_next) else "—"
                             j_txt  =f"⚠️ {abs(c_jours)}j de retard" if c_jours<0 else f"Dans {c_jours} j"
-
-                            if reel_fmt:
-                                date_ctrl_html = (
-                                    "<p style='margin:0 0 2px 0;font-size:10px;color:#94a3b8;'>Date réelle visite</p>"
-                                    f"<p style='margin:0 0 6px 0;font-size:11px;color:#059669;font-weight:600;'>✅ {reel_fmt}</p>"
-                                    "<p style='margin:0 0 2px 0;font-size:10px;color:#94a3b8;'>Date planifiée initiale</p>"
-                                    f"<p style='margin:0 0 6px 0;font-size:11px;color:#94a3b8;text-decoration:line-through;'>{date_fmt}</p>"
-                                )
-                            else:
-                                date_ctrl_html = (
-                                    "<p style='margin:0 0 2px 0;font-size:10px;color:#94a3b8;'>Date planifiée</p>"
-                                    f"<p style='margin:0 0 6px 0;font-size:11px;color:#334155;font-weight:500;'>{date_fmt}</p>"
-                                )
-
-                            label_html = f"<p style='margin:0 0 4px 0;font-size:11px;color:#64748B;'>⚙️ {c_label}</p>" if c_label else ""
-
-                            carte_html = (
-                                f"<div style='background:white;border-top:4px solid {c_col};padding:14px;border-radius:8px;"
-                                f"box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:8px;'>"
-                                f"<p style='margin:0 0 8px 0;font-size:12px;font-weight:700;color:#1E293B;'>{c_cat}</p>"
-                                f"<p style='margin:0 0 4px 0;font-size:11px;color:#475569;'>🏢 <b>{c_site}</b></p>"
-                                f"{label_html}"
-                                f"<hr style='border:none;border-top:1px solid #F1F5F9;margin:8px 0;'>"
-                                f"{date_ctrl_html}"
-                                f"<p style='margin:0 0 2px 0;font-size:10px;color:#94a3b8;'>Prochaine échéance</p>"
-                                f"<p style='margin:0 0 6px 0;font-size:11px;color:#334155;font-weight:500;'>{next_fmt}</p>"
-                                f"<span style='display:inline-block;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;"
-                                f"background:{c_col}22;color:{c_col};'>{c_stat} — {j_txt}</span>"
-                                f"</div>"
-                            )
-                            st.markdown(carte_html, unsafe_allow_html=True)
+                            date_ctrl_html=f"""
+                                <p style='margin:0 0 2px 0;font-size:10px;color:#94a3b8;'>Date réelle visite</p>
+                                <p style='margin:0 0 6px 0;font-size:11px;color:#059669;font-weight:600;'>✅ {reel_fmt}</p>
+                                <p style='margin:0 0 2px 0;font-size:10px;color:#94a3b8;'>Date planifiée initiale</p>
+                                <p style='margin:0 0 6px 0;font-size:11px;color:#94a3b8;text-decoration:line-through;'>{date_fmt}</p>
+                            """ if reel_fmt else f"""
+                                <p style='margin:0 0 2px 0;font-size:10px;color:#94a3b8;'>Date planifiée</p>
+                                <p style='margin:0 0 6px 0;font-size:11px;color:#334155;font-weight:500;'>{date_fmt}</p>
+                            """
+                            st.markdown(f"""<div style='background:white;border-top:4px solid {c_col};padding:14px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:8px;'>
+                                <p style='margin:0 0 8px 0;font-size:12px;font-weight:700;color:#1E293B;'>{c_cat}</p>
+                                <p style='margin:0 0 4px 0;font-size:11px;color:#475569;'>🏢 <b>{c_site}</b></p>
+                                {"<p style='margin:0 0 4px 0;font-size:11px;color:#64748B;'>⚙️ "+c_label+"</p>" if c_label else ""}
+                                <hr style='border:none;border-top:1px solid #F1F5F9;margin:8px 0;'>
+                                {date_ctrl_html}
+                                <p style='margin:0 0 2px 0;font-size:10px;color:#94a3b8;'>Prochaine échéance</p>
+                                <p style='margin:0 0 6px 0;font-size:11px;color:#334155;font-weight:500;'>{next_fmt}</p>
+                                <span style='display:inline-block;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;background:{c_col}22;color:{c_col};'>{c_stat} — {j_txt}</span>
+                            </div>""",unsafe_allow_html=True)
                 elif evenements and jour_sel is None:
                     st.info("💡 Cliquez sur un jour coloré du calendrier pour voir les détails du contrôle.")
 
