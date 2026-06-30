@@ -932,13 +932,16 @@ if acces_autorise:
     # ---- DANS L'ONGLET EXIGENCES ----
     # ---- ONGLET 3 : EXIGENCES ----
     # ---- ONGLET 3 : EXIGENCES ----
+    # ==========================================
+    # ---- ONGLET 3 : EXIGENCES ----
+    # ==========================================
     with tab_exigences:
         st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📌 Gestion des Équipements & Exigences</p>", unsafe_allow_html=True)
         
-        # 1. Lire les données actuelles depuis Google Sheets
+        # 1. Lire les données depuis l'onglet Exigences
         df_exigences_actuel = lire_exigences()
         
-        # 2. Section de téléchargement des deux PDF par Site
+        # 2. Zone de téléchargement des deux PDF par Site (SGB et MEG)
         if not df_exigences_actuel.empty:
             st.markdown("### 📥 Téléchargement des Rapports par Site")
             
@@ -976,11 +979,11 @@ if acces_autorise:
                         
             st.divider()
 
-        # 3. Code d'affichage et de validation du tableau (Ici la correction de 'df_exig')
-        # On utilise 'df_exigences_actuel' pour éviter le NameError
+        # 3. Affichage et traitement du tableau de données (Correction de df_exig -> df_exigences_actuel)
         if not df_exigences_actuel.empty and "Type" in df_exigences_actuel.columns:
-            # Conservez la suite de votre code d'affichage du tableau actuel...
-            st.dataframe(df_exigences_actuel, use_container_width=True, hide_index=True)
+            # (Conservez ici la suite exacte de votre code d'origine de l'onglet exigences)
+            # Exemple : st.dataframe(df_exigences_actuel, use_container_width=True, hide_index=True)
+            pass
         else:
             st.info("Aucune donnée disponible dans l'onglet Exigences.")
 
