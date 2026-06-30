@@ -817,7 +817,7 @@ if acces_autorise:
 
         # Niveau 1 : choix du site
         st.markdown("<p style='font-size:13px;color:#64748B;font-weight:600;margin-bottom:8px;'>Sélectionnez un site :</p>", unsafe_allow_html=True)
-        s1, s2, _ = st.columns([1, 1, 4])
+        s1, s2, s3 = st.columns([1, 1, 3])
         with s1:
             actif_sgb = st.session_state.site_exig_sel == "SGB"
             if st.button("🏢 SGB", use_container_width=True, type="primary" if actif_sgb else "secondary"):
@@ -838,13 +838,21 @@ if acces_autorise:
 
             df_site = df_equip[df_equip["Site"] == site_sel] if not df_equip.empty else pd.DataFrame()
 
-            cat_cols = st.columns(5)
+            NOMS_COURTS_CAT = {
+                "Installations électriques": "⚡ Électriques",
+                "Equipements de levage":     "🏗️ Levage",
+                "Sécurité incendie":         "🔥 Incendie",
+                "Installations de gaz":      "🔵 Gaz",
+                "Appareil pression de gaz":  "⚙️ Pression gaz",
+            }
+
+            cat_cols = st.columns(3)
             for i, (cat, couleur) in enumerate(COULEURS_CAT.items()):
-                with cat_cols[i % 5]:
+                with cat_cols[i % 3]:
                     nb_total_cat = int(df_site[df_site["Categorie"] == cat]["Nombre"].sum()) if not df_site.empty else 0
                     actif_cat = st.session_state.cat_exig_sel == cat
-                    label = f"{cat}\n({nb_total_cat})" if not actif_cat else f"✓ {cat} ({nb_total_cat})"
-                    if st.button(cat, key=f"cat_btn_{cat}", use_container_width=True,
+                    label_court = NOMS_COURTS_CAT.get(cat, cat)
+                    if st.button(f"{label_court} ({nb_total_cat})", key=f"cat_btn_{cat}", use_container_width=True,
                                  type="primary" if actif_cat else "secondary",
                                  help=f"{nb_total_cat} équipement(s) au total"):
                         st.session_state.cat_exig_sel = cat
