@@ -926,7 +926,7 @@ if acces_autorise:
             st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#1E3A8A;'>👥 Suivi des visites & Présence en temps réel</p>",unsafe_allow_html=True)
             col_r,_=st.columns([1,5])
             with col_r:
-                if st.button("🔄 Actualiser"): st.rerun()
+                if st.button("🔄"): st.rerun()
             st.markdown("### 🟢 Présence en temps réel")
             with st.spinner("Chargement..."):
                 df_presence=lire_presence()
