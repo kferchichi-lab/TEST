@@ -990,6 +990,19 @@ if acces_autorise:
     # ===== SECTION 1 : CONTRAT D'ABONNEMENT =====
         st.markdown("### 📄 Contrat d'abonnement 2026")
 
+        def lien_telechargement_direct(lien: str) -> str:
+            """Convertit un lien Google Drive (vue/partage) en lien de téléchargement direct.
+            Si ce n'est pas un lien Google Drive reconnu, renvoie le lien tel quel."""
+            if not lien:
+                return lien
+            m = re.search(r"/file/d/([a-zA-Z0-9_-]+)", lien)
+            if not m:
+                m = re.search(r"[?&]id=([a-zA-Z0-9_-]+)", lien)
+            if m:
+                file_id = m.group(1)
+                return f"https://drive.google.com/uc?export=download&id={file_id}"
+            return lien
+
         lien_contrat = ""
         if not df_exig.empty and "Type" in df_exig.columns:
             ligne_c = df_exig[df_exig["Type"] == "Contrat"]
@@ -999,11 +1012,12 @@ if acces_autorise:
         col_contrat, col_action = st.columns([5, 1])
         with col_contrat:
             if lien_contrat and lien_contrat.lower() != "nan":
+                lien_dl = lien_telechargement_direct(lien_contrat)
                 st.markdown(f"""<div style='background:white;padding:16px 20px;border-radius:10px;
                     box-shadow:0 2px 8px rgba(0,0,0,0.05);border-left:4px solid #1E3A8A;
                     display:flex;align-items:center;justify-content:space-between;'>
                     <span style='font-size:14px;font-weight:600;color:#1E293B;'>📑 Contrat d'abonnement 2026</span>
-                    <a href='{lien_contrat}' target='_blank' style='text-decoration:none;background:#1E3A8A;
+                    <a href='{lien_dl}' download target='_blank' rel='noopener' style='text-decoration:none;background:#1E3A8A;
                         color:white;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;'>
                         📥 Ouvrir / Télécharger</a>
                 </div>""", unsafe_allow_html=True)
