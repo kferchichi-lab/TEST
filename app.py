@@ -984,7 +984,7 @@ if acces_autorise:
                             st.error("Erreur lors de la suppression.")
 
         st.markdown("<br><hr style='border-color:#E2E8F0;'>", unsafe_allow_html=True)     
-        if not df_exigences_actuel.empty:
+        if not df_exig.empty:
             st.markdown("### 📥 Téléchargement des Rapports par Site")
         
             col_sgb, col_meg = st.columns(2)
@@ -993,7 +993,7 @@ if acces_autorise:
             with col_sgb:
                 with st.spinner("Préparation du rapport SGB..."):
                     try:
-                        pdf_sgb = generer_rapport_equipements_pdf(df_exigences_actuel, "SGB")
+                        pdf_sgb = generer_rapport_equipements_pdf(df_exig, "SGB")
                         st.download_button(
                             label="🏢 Télécharger le Rapport PDF - SGB (5 Pages)",
                             data=pdf_sgb,
@@ -1007,7 +1007,7 @@ if acces_autorise:
             with col_meg:
                 with st.spinner("Préparation du rapport MEG..."):
                     try:
-                        pdf_meg = generer_rapport_equipements_pdf(df_exigences_actuel, "MEG")
+                        pdf_meg = generer_rapport_equipements_pdf(df_exig, "MEG")
                         st.download_button(
                             label="🏭 Télécharger le Rapport PDF - MEG (5 Pages)",
                             data=pdf_meg,
