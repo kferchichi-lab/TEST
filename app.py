@@ -804,7 +804,7 @@ if acces_autorise:
         st.markdown("<br><hr style='border-color:#E2E8F0;'>", unsafe_allow_html=True)
 
         # ===== SECTION 2 : LISTE DES ÉQUIPEMENTS (ARBORESCENCE) =====
-        st.markdown("### 🏭 Liste des équipements")
+        st.markdown("### 🏭 Liste des équipements soumis au contrôle")
 
         df_equip = pd.DataFrame()
         if not df_exig.empty and "Type" in df_exig.columns:
