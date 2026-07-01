@@ -1185,6 +1185,8 @@ if acces_autorise:
         else:
             st.info("👆 Sélectionnez un site (SGB ou MEG) pour voir les catégories d'équipements.")
 
+        st.divider()
+
         if not df_exig.empty:
             st.markdown("### 📥 Téléchargement des check-lists")
         
@@ -1219,7 +1221,7 @@ if acces_autorise:
                     except Exception as e:
                         st.error(f"Erreur PDF MEG : {e}")
                     
-            st.divider()
+
 
     
 
