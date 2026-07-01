@@ -483,6 +483,32 @@ def supprimer_equipement_ligne(num_ligne_sheet):
         params={"valueInputOption": "RAW"},
         json={"values": [["", "", "", "", "", ""]]}, timeout=15)
     return resp.status_code == 200
+
+
+# ==========================================
+# POINTS DE RÉSERVE (onglet dédié "PointsReserve")
+# ==========================================
+def lire_points_reserve():
+    """Lit l'onglet PointsReserve : Site | Categorie | Sous_equipement | Nombre."""
+    return sheets_lire("PointsReserve", "A:D")
+
+
+def ajouter_point_reserve(site, categorie, sous_eq, nombre):
+    """Ajoute une ligne dans l'onglet PointsReserve."""
+    return sheets_append("PointsReserve", [site, categorie, sous_eq, str(nombre)])
+
+
+def supprimer_ligne_generique(onglet, num_ligne_sheet, nb_colonnes):
+    """Vide une ligne (remplace par des cellules vides) dans un onglet donné, sur nb_colonnes colonnes (A..)."""
+    token = obtenir_access_token()
+    if not token: return False
+    derniere_col = chr(ord('A') + nb_colonnes - 1)
+    url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{onglet}!A{num_ligne_sheet}:{derniere_col}{num_ligne_sheet}"
+    resp = requests.put(url,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        params={"valueInputOption": "RAW"},
+        json={"values": [[""] * nb_colonnes]}, timeout=15)
+    return resp.status_code == 200
 # ==========================================
 # CHARGEMENT DONNÉES
 # ==========================================
@@ -607,9 +633,12 @@ if acces_autorise:
     liste_onglets = ["📋 Rapports de contrôle archivés","📅 Suivi de performance & Planification","📌 Exigences"]
     if role == "Responsable" and password_correct:
         liste_onglets.append("👥 Statistiques")
+        liste_onglets.append("📊 KPI")
     onglets = st.tabs(liste_onglets)
     tab1, tab2, tab_exigences = onglets[0], onglets[1], onglets[2]
+    tab_kpi = None
     if len(onglets) > 3: tab3 = onglets[3]
+    if len(onglets) > 4: tab_kpi = onglets[4]
 
     def convertir_lien(url):
         try:
@@ -1285,3 +1314,198 @@ if acces_autorise:
                     "Date":st.column_config.TextColumn("📅 Date & Heure"),
                     "Email":st.column_config.TextColumn("📧 E-mail")},
                     hide_index=True,use_container_width=True)
+
+    # ---- ONGLET 4 : KPI (Responsable uniquement) ----
+    if tab_kpi and role=="Responsable" and password_correct:
+        with tab_kpi:
+            st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#1E3A8A;'>📊 Indicateurs clés de performance (KPI)</p>",unsafe_allow_html=True)
+            col_r_kpi,_=st.columns([1,5])
+            with col_r_kpi:
+                if st.button("🔄",key="refresh_kpi"): st.cache_data.clear(); st.rerun()
+
+            # ---- Préparation des données de contrôle (même logique que l'onglet Planification) ----
+            col_cat_k   = [c for c in df_rapports.columns if "cat" in c.lower()]
+            col_date_k  = [c for c in df_rapports.columns if "date" in c.lower()]
+            col_site_k  = [c for c in df_rapports.columns if "site" in c.lower()]
+            col_label_k = [c for c in df_rapports.columns if "equip" in c.lower() or "label" in c.lower() or "nom" in c.lower()]
+            col_reelle_k= [c for c in df_rapports.columns if "reelle" in c.lower() or "réelle" in c.lower()]
+
+            if df_rapports.empty or not col_cat_k or not col_date_k:
+                st.info("Données insuffisantes dans l'onglet « Rapports » pour calculer les KPI.")
+            else:
+                df_k = df_rapports.copy()
+                df_k["_date_brute"]  = pd.to_datetime(df_k[col_date_k[0]], dayfirst=True, errors='coerce')
+                df_k["_date_reelle"] = pd.to_datetime(df_k[col_reelle_k[0]], dayfirst=True, errors='coerce') if col_reelle_k else pd.NaT
+                df_k = df_k.dropna(subset=["_date_brute"])
+
+                cles_k=[]
+                if col_site_k:  cles_k.append(col_site_k[0])
+                cles_k.append(col_cat_k[0])
+                if col_label_k: cles_k.append(col_label_k[0])
+                df_k = df_k.sort_values("_date_brute", ascending=True)
+                df_k = df_k.drop_duplicates(subset=cles_k, keep="last")
+
+                # ---- KPI 1 : Taux de réalisation 2026 (échéances théoriques comprises entre 01/01/2026 et 31/12/2026) ----
+                df_2026 = df_k[df_k["_date_brute"].dt.year == 2026]
+                nb_total_2026    = len(df_2026)
+                nb_realises_2026 = int(df_2026["_date_reelle"].notna().sum())
+                nb_restants_2026 = nb_total_2026 - nb_realises_2026
+
+                # ---- KPI 2 : Taux planifié — dates réelles saisies vs estimées via la dernière visite ----
+                nb_total_all   = len(df_k)
+                nb_avec_reelle = int(df_k["_date_reelle"].notna().sum())
+                nb_estimes     = nb_total_all - nb_avec_reelle
+
+                # ---- KPI 3 : Taux de respect de délai de visite (écart ≤ 3j vs échéance théorique initiale) ----
+                df_realises_k = df_k[df_k["_date_reelle"].notna()].copy()
+                nb_visites_realisees = len(df_realises_k)
+                if nb_visites_realisees > 0:
+                    df_realises_k["_ecart"] = (df_realises_k["_date_reelle"] - df_realises_k["_date_brute"]).dt.days.abs()
+                    nb_respectes = int((df_realises_k["_ecart"] <= 3).sum())
+                else:
+                    nb_respectes = 0
+                nb_non_respectes = nb_visites_realisees - nb_respectes
+
+                k1c,k2c,k3c = st.columns(3)
+
+                with k1c:
+                    st.markdown("<p style='text-align:center;font-weight:600;color:#1E293B;font-size:14px;'>Taux de réalisation 2026</p>",unsafe_allow_html=True)
+                    if nb_total_2026>0:
+                        dfp1=pd.DataFrame({"Statut":["Réalisés","Restants"],"Nombre":[nb_realises_2026,nb_restants_2026]})
+                        fig1=px.pie(dfp1,values="Nombre",names="Statut",hole=0.6,color="Statut",
+                                    color_discrete_map={"Réalisés":"#10B981","Restants":"#EF4444"})
+                        fig1.update_traces(textposition='inside',textinfo='percent+label')
+                        fig1.update_layout(margin=dict(t=10,b=10,l=10,r=10),height=260,showlegend=False,
+                                            paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(fig1,use_container_width=True,config={'displayModeBar':False})
+                        taux1=round(nb_realises_2026/nb_total_2026*100,1)
+                        st.markdown(f"<p style='text-align:center;font-size:13px;color:#64748B;'>{taux1}% réalisés ({nb_realises_2026}/{nb_total_2026})</p>",unsafe_allow_html=True)
+                    else:
+                        st.info("Aucun contrôle avec échéance théorique en 2026.")
+
+                with k2c:
+                    st.markdown("<p style='text-align:center;font-weight:600;color:#1E293B;font-size:14px;'>Taux planifié</p>",unsafe_allow_html=True)
+                    if nb_total_all>0:
+                        dfp2=pd.DataFrame({"Statut":["Date réelle saisie","Estimée (dernière visite)"],"Nombre":[nb_avec_reelle,nb_estimes]})
+                        fig2=px.pie(dfp2,values="Nombre",names="Statut",hole=0.6,color="Statut",
+                                    color_discrete_map={"Date réelle saisie":"#1E3A8A","Estimée (dernière visite)":"#F59E0B"})
+                        fig2.update_traces(textposition='inside',textinfo='percent+label')
+                        fig2.update_layout(margin=dict(t=10,b=10,l=10,r=10),height=260,showlegend=False,
+                                            paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(fig2,use_container_width=True,config={'displayModeBar':False})
+                        taux2=round(nb_avec_reelle/nb_total_all*100,1)
+                        st.markdown(f"<p style='text-align:center;font-size:13px;color:#64748B;'>{taux2}% avec date réelle ({nb_avec_reelle}/{nb_total_all})</p>",unsafe_allow_html=True)
+                    else:
+                        st.info("Aucune donnée disponible.")
+
+                with k3c:
+                    st.markdown("<p style='text-align:center;font-weight:600;color:#1E293B;font-size:14px;'>Respect délai de visite (≤3j)</p>",unsafe_allow_html=True)
+                    if nb_visites_realisees>0:
+                        dfp3=pd.DataFrame({"Statut":["Respecté","Non respecté"],"Nombre":[nb_respectes,nb_non_respectes]})
+                        fig3=px.pie(dfp3,values="Nombre",names="Statut",hole=0.6,color="Statut",
+                                    color_discrete_map={"Respecté":"#0EA5E9","Non respecté":"#EF4444"})
+                        fig3.update_traces(textposition='inside',textinfo='percent+label')
+                        fig3.update_layout(margin=dict(t=10,b=10,l=10,r=10),height=260,showlegend=False,
+                                            paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(fig3,use_container_width=True,config={'displayModeBar':False})
+                        taux3=round(nb_respectes/nb_visites_realisees*100,1)
+                        st.markdown(f"<p style='text-align:center;font-size:13px;color:#64748B;'>{taux3}% respecté ({nb_respectes}/{nb_visites_realisees})</p>",unsafe_allow_html=True)
+                    else:
+                        st.info("Aucune visite réalisée à ce jour.")
+
+            st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
+
+            # ================= POINTS DE RÉSERVE =================
+            st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📌 Points de réserve</p>",unsafe_allow_html=True)
+
+            with st.spinner("Chargement des points de réserve..."):
+                df_reserve = lire_points_reserve()
+
+            with st.expander("➕ Ajouter un point de réserve"):
+                r1,r2,r3,r4 = st.columns([1,1.5,1.5,1])
+                with r1:
+                    res_site = st.selectbox("Site",["SGB","MEG"],key="res_site_new")
+                with r2:
+                    res_cat = st.selectbox("Catégorie",list(PERIODICITE.keys()),key="res_cat_new")
+                with r3:
+                    res_seq = st.text_input("Sous-équipement",key="res_seq_new")
+                with r4:
+                    res_nb = st.number_input("Nb points",min_value=1,value=1,key="res_nb_new")
+                if st.button("💾 Enregistrer",key="btn_add_reserve"):
+                    if res_seq.strip():
+                        ok,err = ajouter_point_reserve(res_site,res_cat,res_seq.strip(),res_nb)
+                        if ok:
+                            st.success("✅ Point de réserve ajouté !")
+                            st.cache_data.clear()
+                            st.rerun()
+                        else:
+                            st.error(f"Erreur : {err}")
+                    else:
+                        st.warning("Veuillez saisir un sous-équipement.")
+
+            if df_reserve.empty:
+                st.info("Aucun point de réserve enregistré. Utilisez le formulaire ci-dessus pour en ajouter.")
+            else:
+                if "Nombre" in df_reserve.columns:
+                    df_reserve["Nombre"] = pd.to_numeric(df_reserve["Nombre"],errors="coerce").fillna(0).astype(int)
+
+                with st.container(border=True):
+                    st.markdown("<p style='font-weight:600;color:#1E293B;margin:0 0 10px 0;font-size:13px;'>🔍 Filtrer les points de réserve</p>",unsafe_allow_html=True)
+                    fr1,fr2,fr3 = st.columns(3)
+                    sites_dispo = ["Tous"]+sorted(df_reserve["Site"].dropna().unique().tolist()) if "Site" in df_reserve.columns else ["Tous"]
+                    cats_dispo  = ["Tous"]+sorted(df_reserve["Categorie"].dropna().unique().tolist()) if "Categorie" in df_reserve.columns else ["Tous"]
+                    with fr1: f_res_site = st.selectbox("Site",sites_dispo,key="f_res_site")
+                    with fr2: f_res_cat  = st.selectbox("Catégorie",cats_dispo,key="f_res_cat")
+                    with fr3: f_res_seq  = st.text_input("Recherche sous-équipement",key="f_res_seq")
+
+                df_reserve_f = df_reserve.copy()
+                if f_res_site!="Tous" and "Site" in df_reserve_f.columns:
+                    df_reserve_f = df_reserve_f[df_reserve_f["Site"]==f_res_site]
+                if f_res_cat!="Tous" and "Categorie" in df_reserve_f.columns:
+                    df_reserve_f = df_reserve_f[df_reserve_f["Categorie"]==f_res_cat]
+                if f_res_seq.strip() and "Sous_equipement" in df_reserve_f.columns:
+                    df_reserve_f = df_reserve_f[df_reserve_f["Sous_equipement"].astype(str).str.contains(f_res_seq.strip(),case=False,na=False)]
+
+                st.dataframe(df_reserve_f.rename(columns={
+                    "Site":"Site","Categorie":"Catégorie","Sous_equipement":"Sous équipement","Nombre":"Nbre points de réserve"
+                }),hide_index=True,use_container_width=True)
+
+                st.markdown("<br>",unsafe_allow_html=True)
+                gr1,gr2 = st.columns(2)
+                with gr1:
+                    if "Site" in df_reserve_f.columns and not df_reserve_f.empty:
+                        df_by_site = df_reserve_f.groupby("Site")["Nombre"].sum().reset_index()
+                        figS = px.pie(df_by_site,values="Nombre",names="Site",hole=0.6,
+                                      color_discrete_sequence=['#1E3A8A','#0EA5E9','#94A3B8'])
+                        figS.update_traces(textposition='inside',textinfo='percent+label')
+                        figS.update_layout(title="Répartition par site",margin=dict(t=40,b=10,l=10,r=10),height=280,
+                                            paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(figS,use_container_width=True,config={'displayModeBar':False})
+                    else:
+                        st.info("Aucune donnée à afficher pour le graphe par site.")
+                with gr2:
+                    if "Categorie" in df_reserve_f.columns and not df_reserve_f.empty:
+                        df_by_cat = df_reserve_f.groupby("Categorie")["Nombre"].sum().reset_index()
+                        figC = px.pie(df_by_cat,values="Nombre",names="Categorie",hole=0.6,
+                                      color_discrete_sequence=px.colors.qualitative.Set2)
+                        figC.update_traces(textposition='inside',textinfo='percent+label')
+                        figC.update_layout(title="Répartition par catégorie",margin=dict(t=40,b=10,l=10,r=10),height=280,
+                                            paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(figC,use_container_width=True,config={'displayModeBar':False})
+                    else:
+                        st.info("Aucune donnée à afficher pour le graphe par catégorie.")
+
+                with st.expander("🗑️ Supprimer un point de réserve"):
+                    for orig_idx,row_r in df_reserve.iterrows():
+                        dcx1,dcx2 = st.columns([5,1])
+                        with dcx1:
+                            st.write(f"{row_r.get('Site','')} — {row_r.get('Categorie','')} — {row_r.get('Sous_equipement','')} — {row_r.get('Nombre',0)} pt(s)")
+                        with dcx2:
+                            if st.button("🗑️",key=f"del_res_{orig_idx}"):
+                                num_ligne_sheet = orig_idx+2
+                                if supprimer_ligne_generique("PointsReserve",num_ligne_sheet,4):
+                                    st.success("Supprimé !")
+                                    st.cache_data.clear()
+                                    st.rerun()
+                                else:
+                                    st.error("Erreur lors de la suppression.")
