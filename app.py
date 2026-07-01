@@ -244,7 +244,7 @@ LUCID_CARTOGRAPHIE_URL = "https://lucid.app/lucidspark/088f02a4-bdb7-4c79-8e28-6
 def _charger_cartographie_b64():
     """Charge l'image de cartographie du taux de non-conformité en base64 (fichier local)."""
     try:
-        with open("Cartographie.png", "rb") as f:
+        with open("Cartographie (1).png", "rb") as f:
             return base64.b64encode(f.read()).decode("ascii")
     except Exception:
         return None
