@@ -1731,7 +1731,7 @@ if acces_autorise:
                         df_by_cat = df_reserve_f.groupby("Categorie")["Nombre"].sum().reset_index()
                         figC = px.pie(df_by_cat,values="Nombre",names="Categorie",hole=0.6,
                                       color_discrete_sequence=px.colors.qualitative.Set2)
-                        figC.update_traces(textposition='inside',textinfo='percent+label')
+                        figC.update_traces(textposition='inside',textinfo='percent')
                         figC.update_layout(title="Répartition par catégorie",margin=dict(t=40,b=10,l=10,r=10),height=280,
                                             paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(figC,use_container_width=True,config={'displayModeBar':False})
@@ -1755,13 +1755,12 @@ if acces_autorise:
 
             # ================= RAPPORT PDF PREMIUM =================
             st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
-            st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📄 Rapport PDF Premium</p>",unsafe_allow_html=True)
-            st.markdown("<p style='font-size:13px;color:#64748B;margin-bottom:14px;'>Génère un rapport PDF complet reprenant l'ensemble des indicateurs de cet onglet (taux de réalisation, taux planifié, respect des délais, cartographie de non-conformité et points de réserve), avec le logo TPR en en-tête.</p>",unsafe_allow_html=True)
-
+            st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📄 Rapport PDF </p>",unsafe_allow_html=True)
+           
             if kpi_data is None:
                 st.info("Le rapport PDF nécessite des données KPI disponibles (onglet « Rapports » non vide).")
             else:
-                with st.spinner("Préparation du rapport PDF Premium..."):
+                with st.spinner("Préparation du rapport PDF..."):
                     try:
                         pdf_kpi = generer_rapport_kpi_pdf(
                             kpi_data,
@@ -1770,7 +1769,7 @@ if acces_autorise:
                             "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6q1BtDSDgVnJZFo0hOBfQJoDS6OYiub-qfQ&s"
                         )
                         st.download_button(
-                            label="📄 Télécharger le rapport PDF Premium",
+                            label="📄 Télécharger le rapport PDF",
                             data=pdf_kpi,
                             file_name=f"Rapport_KPI_{datetime.date.today().strftime('%d_%m_%Y')}.pdf",
                             mime="application/pdf",
