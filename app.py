@@ -255,60 +255,62 @@ st.html("""<style>
 </style>""")
 
 st.markdown("""<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     html,body,[data-testid="stAppViewContainer"],[data-testid="stSidebarView"]{font-family:'Inter',sans-serif!important;background-color:#F8FAFC!important;}
     [data-testid="stForm"],.stCornerRadius{background-color:#FFFFFF!important;border:1px solid #E2E8F0!important;border-radius:12px!important;}
+    .stButton>button{background-color:#1E3A8A!important;color:white!important;border-radius:8px!important;border:none!important;font-weight:500!important;padding:10px 24px!important;}
 
-    /* ============================================================
-       STYLE PREMIUM — uniquement cosmétique (couleurs, ombres,
-       arrondis, survol). AUCUNE règle de largeur, flex, colonne ou
-       conteneur n'est touchée : Streamlit gère seul la mise en page,
-       donc tous les boutons restent uniformes et bien dimensionnés.
-       ============================================================ */
-    .stButton>button, .stDownloadButton>button{
-        border-radius:10px!important;
-        font-weight:600!important;
-        border:1.5px solid transparent!important;
-        transition:box-shadow .2s ease, background .2s ease, border-color .2s ease, color .2s ease!important;
-        box-shadow:0 1px 2px rgba(15,23,42,.06)!important;
-    }
-    .stButton>button:hover, .stDownloadButton>button:hover{
-        box-shadow:0 4px 12px rgba(30,58,138,.18)!important;
-    }
-    .stButton>button:focus, .stDownloadButton>button:focus{
-        outline:none!important;
-        box-shadow:0 0 0 3px rgba(30,58,138,.18)!important;
-    }
+    /* === FIX ROBUSTE : empêche les boutons de s'écraser/se casser verticalement ===
+       Cause réelle : les colonnes Streamlit rétrécissent (flex-shrink) au lieu de
+       passer à la ligne quand il n'y a pas assez de place horizontale.
+       Solution : autoriser le retour à la ligne (flex-wrap) + bloquer le rétrécissement
+       des colonnes + forcer le texte des boutons sur une seule ligne (nowrap). */
 
-    /* --- Bouton de téléchargement --- */
+    div[data-testid="stHorizontalBlock"]{
+        flex-wrap:wrap!important;
+        row-gap:10px!important;
+        column-gap:10px!important;
+    }
+    div[data-testid="column"]{
+        flex:0 1 auto!important;
+        width:auto!important;
+        min-width:max-content!important;
+    }
+    .stButton, .stDownloadButton{
+        width:auto!important;
+    }
+    .stButton>button, .stDownloadButton>button,
+    div[data-testid="stButton"] button,
+    div[data-testid="stDownloadButton"] button,
+    button[kind="primary"], button[kind="secondary"],
+    button[data-testid^="baseButton"]{
+        white-space:nowrap!important;
+        width:auto!important;
+        min-width:unset!important;
+        height:auto!important;
+        line-height:1.3!important;
+        font-size:14px!important;
+        padding:10px 18px!important;
+        display:inline-flex!important;
+        align-items:center!important;
+        justify-content:center!important;
+    }
+    /* Les libellés des boutons sont parfois dans un <p> ou <div> imbriqué
+       qui possède son propre comportement de retour à la ligne : on le neutralise. */
+    .stButton>button *, .stDownloadButton>button *,
+    div[data-testid="stButton"] button *,
+    div[data-testid="stDownloadButton"] button *,
+    button[kind="primary"] *, button[kind="secondary"] *{
+        white-space:nowrap!important;
+    }
     .stDownloadButton>button{
         background-color:#1E3A8A!important;
         color:white!important;
+        border-radius:8px!important;
         border:none!important;
         font-weight:600!important;
     }
     .stDownloadButton>button:hover{background-color:#1D4ED8!important;}
-
-    /* --- État SECONDARY (inactif) : sobre, clair, identique pour tous --- */
-    button[kind="secondary"]{
-        background:#FFFFFF!important;
-        color:#334155!important;
-        border:1.5px solid #E2E8F0!important;
-    }
-    button[kind="secondary"]:hover{
-        border-color:#1E3A8A!important;
-        color:#1E3A8A!important;
-    }
-
-    /* --- État PRIMARY (actif / sélectionné) : couleur pleine, identique pour tous --- */
-    button[kind="primary"]{
-        background:#1E3A8A!important;
-        color:#FFFFFF!important;
-        border:1.5px solid #1E3A8A!important;
-    }
-    button[kind="primary"]:hover{
-        background:#1D4ED8!important;
-    }
 </style>""", unsafe_allow_html=True)
 
 # ==========================================
@@ -1061,7 +1063,7 @@ if acces_autorise:
         
             col_sgb, col_meg = st.columns(2)
             date_str = datetime.date.today().strftime('%d_%m_%Y')
-
+        
             with col_sgb:
                 with st.spinner("Préparation du rapport SGB..."):
                     try:
@@ -1075,7 +1077,7 @@ if acces_autorise:
                         )
                     except Exception as e:
                         st.error(f"Erreur PDF SGB : {e}")
-
+                    
             with col_meg:
                 with st.spinner("Préparation du rapport MEG..."):
                     try:
@@ -1089,7 +1091,7 @@ if acces_autorise:
                         )
                     except Exception as e:
                         st.error(f"Erreur PDF MEG : {e}")
-
+                    
             st.divider()
 
     # ===== SECTION 3 : LISTE DES ÉQUIPEMENTS (ARBORESCENCE) =====
@@ -1109,15 +1111,15 @@ if acces_autorise:
 
     # Niveau 1 : choix du site
         st.markdown("<p style='font-size:13px;color:#64748B;font-weight:600;margin-bottom:8px;'>Sélectionnez un site :</p>", unsafe_allow_html=True)
-        s1, s2 = st.columns(2)
-
+        s1, s2, s3 = st.columns([1, 1, 3])
+    
         with s1:
             actif_sgb = (st.session_state.site_exig_sel == "SGB")
             if st.button("🏢 SGB", use_container_width=True, type="primary" if actif_sgb else "secondary"):
                 st.session_state.site_exig_sel = "SGB"
                 st.session_state.cat_exig_sel = None  # Reset la catégorie si on change de site
                 st.rerun()
-
+            
         with s2:
             actif_meg = (st.session_state.site_exig_sel == "MEG")
             if st.button("🏢 MEG", use_container_width=True, type="primary" if actif_meg else "secondary"):
@@ -1148,7 +1150,7 @@ if acces_autorise:
                     nb_total_cat = int(df_site[df_site["Categorie"] == cat]["Nombre"].sum()) if not df_site.empty else 0
                     actif_cat = (st.session_state.cat_exig_sel == cat)
                     label_court = NOMS_COURTS_CAT.get(cat, cat)
-
+                
                     if st.button(f"{label_court} ({nb_total_cat})", key=f"cat_btn_{cat}", use_container_width=True,
                                  type="primary" if actif_cat else "secondary",
                                  help=f"{nb_total_cat} équipement(s) au total"):
