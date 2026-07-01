@@ -1486,12 +1486,15 @@ if acces_autorise:
                 with gr2:
                     if "Categorie" in df_reserve_f.columns and not df_reserve_f.empty:
                         df_by_cat = df_reserve_f.groupby("Categorie")["Nombre"].sum().reset_index()
-                        figC = px.pie(df_by_cat,values="Nombre",names="Categorie",hole=0.6,
-                                      color_discrete_sequence=px.colors.qualitative.Set2)
-                        figC.update_traces(textposition='inside',textinfo='percent+label')
-                        figC.update_layout(title="Répartition par catégorie",margin=dict(t=40,b=10,l=10,r=10),height=280,
-                                            paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
-                        st.plotly_chart(figC,use_container_width=True,config={'displayModeBar':False})
+                        figC = px.pie(df_by_cat, values="Nombre", names="Categorie", hole=0.6,
+                          color_discrete_sequence=px.colors.qualitative.Set2)
+        
+        # MODIFICATION ICI : On garde uniquement 'percent'
+                        figC.update_traces(textposition='inside', textinfo='percent')
+        
+                        figC.update_layout(title="Répartition par catégorie", margin=dict(t=40, b=10, l=10, r=10), height=280,
+                           paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(figC, use_container_width=True, config={'displayModeBar': False})
                     else:
                         st.info("Aucune donnée à afficher pour le graphe par catégorie.")
 
