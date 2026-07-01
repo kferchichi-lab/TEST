@@ -809,7 +809,8 @@ if acces_autorise:
     def convertir_lien(url):
         try:
             if "drive.google.com" in str(url) and "/file/d/" in str(url):
-                return f"https://drive.google.com/uc?export=download&id={str(url).split('/file/d/')[1].split('/')[0]}"
+                file_id = str(url).split('/file/d/')[1].split('/')[0]
+                return f"https://drive.google.com/file/d/{file_id}/view"
         except Exception: pass
         return url
 
@@ -846,7 +847,7 @@ if acces_autorise:
             if col_date: df_f[col_date[0]]=pd.to_datetime(df_f[col_date[0]],dayfirst=True,errors='coerce')
         if not df_f.empty:
             st.dataframe(df_f,column_config={
-                (col_lien[0] if col_lien else "Lien PDF"):st.column_config.LinkColumn("Action",display_text="📥 Télécharger PDF"),
+                (col_lien[0] if col_lien else "Lien PDF"):st.column_config.LinkColumn("Action",display_text="👁️ Voir le rapport"),
                 (col_ex[0]   if col_ex   else "Exercice"):st.column_config.NumberColumn("Exercice",format="%d"),
                 (col_date[0] if col_date else "Date"):    st.column_config.DateColumn("Date de dernier contrôle",format="DD/MM/YYYY"),
             },hide_index=True,use_container_width=True)
