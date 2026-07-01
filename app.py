@@ -191,6 +191,161 @@ def generer_rapport_equipements_pdf(df_exigences, site_filtre):
     """
     
     return HTML(string=html_content).write_pdf()
+
+
+def generer_rapport_kpi_pdf(kpi_data, df_reserve, carto_b64, logo_url):
+    """
+    Génère un rapport PDF premium regroupant tous les KPI de l'onglet KPI :
+    Taux de réalisation 2026, Taux planifié, Taux de respect de délai,
+    cartographie du taux de non-conformité, et points de réserve.
+    """
+    date_str = datetime.date.today().strftime('%d/%m/%Y')
+
+    def barre(pct, couleur):
+        pct = max(0, min(100, pct))
+        return f"""<div style="background:#E2E8F0;border-radius:6px;height:14px;width:100%;overflow:hidden;">
+            <div style="background:{couleur};height:100%;width:{pct}%;"></div></div>"""
+
+    k1 = kpi_data["kpi1"]; k2 = kpi_data["kpi2"]; k3 = kpi_data["kpi3"]
+
+    html_reserve_rows = ""
+    if df_reserve is not None and not df_reserve.empty:
+        for _, r in df_reserve.iterrows():
+            html_reserve_rows += (f"<tr><td>{r.get('Site','')}</td><td>{r.get('Categorie','')}</td>"
+                                   f"<td>{r.get('Sous_equipement','')}</td>"
+                                   f"<td style='text-align:center;'>{r.get('Nombre',0)}</td></tr>")
+    else:
+        html_reserve_rows = "<tr><td colspan='4' style='text-align:center;color:#94A3B8;'>Aucun point de réserve enregistré</td></tr>"
+
+    site_rows, cat_rows = "", ""
+    if df_reserve is not None and not df_reserve.empty and "Site" in df_reserve.columns:
+        tot = df_reserve["Nombre"].sum()
+        for site, grp in df_reserve.groupby("Site")["Nombre"].sum().items():
+            pct = round(grp/tot*100,1) if tot else 0
+            site_rows += (f"""<div style="margin-bottom:10px;">
+                <div style="display:flex;justify-content:space-between;font-size:10pt;margin-bottom:3px;">
+                <span>{site}</span><span>{pct}% ({grp})</span></div>{barre(pct,'#1E3A8A')}</div>""")
+    if df_reserve is not None and not df_reserve.empty and "Categorie" in df_reserve.columns:
+        tot = df_reserve["Nombre"].sum()
+        for cat, grp in df_reserve.groupby("Categorie")["Nombre"].sum().items():
+            pct = round(grp/tot*100,1) if tot else 0
+            cat_rows += (f"""<div style="margin-bottom:10px;">
+                <div style="display:flex;justify-content:space-between;font-size:10pt;margin-bottom:3px;">
+                <span>{cat}</span><span>{pct}% ({grp})</span></div>{barre(pct,'#0EA5E9')}</div>""")
+
+    carto_html = ""
+    if carto_b64:
+        carto_html = f"""
+        <div class="page">
+            <div class="category-title">🗺️ Taux de non-conformité de site</div>
+            <p style="font-size:10pt;color:#475569;margin-bottom:15px;">
+            Cartographie de synthèse du taux de non-conformité par site et par catégorie d'équipement,
+            établie lors de la campagne de contrôle réglementaire 2026.</p>
+            <img src="data:image/png;base64,{carto_b64}" style="width:100%;border-radius:8px;border:1px solid #E2E8F0;"/>
+        </div>"""
+
+    html_content = f"""
+    <html><head><style>
+        @page {{ size: A4 portrait; margin: 20mm 15mm;
+            @bottom-right {{ content: "Page " counter(page) " / " counter(pages);
+                font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:9pt; color:#64748B; }} }}
+        body {{ font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; color:#1E293B; margin:0; padding:0; font-size:10pt; }}
+        .page {{ page-break-after: always; }}
+        .page:last-child {{ page-break-after: avoid; }}
+        .logo-box {{ text-align:center; margin-bottom:8px; }}
+        .logo-box img {{ height:58px; }}
+        .header-title {{ text-align:center; font-size:20pt; font-weight:bold; color:#1E3A8A; margin:6px 0 4px 0;
+            text-transform:uppercase; letter-spacing:0.5px; }}
+        .header-sub {{ text-align:center; font-size:11pt; color:#64748B; margin-bottom:22px; }}
+        .meta-info {{ background:#F8FAFC; border:1px solid #E2E8F0; border-radius:6px; padding:14px 16px;
+            font-size:10pt; line-height:1.7; margin-bottom:25px; }}
+        .category-title {{ font-size:15pt; color:#0EA5E9; font-weight:bold; border-left:4px solid #0EA5E9;
+            padding-left:10px; margin:10px 0 16px 0; }}
+        .kpi-card {{ background:#F8FAFC; border:1px solid #E2E8F0; border-left:5px solid #1E3A8A; border-radius:8px;
+            padding:18px; margin-bottom:18px; }}
+        .kpi-title {{ font-size:13pt; font-weight:700; color:#0F172A; margin:0 0 6px 0; }}
+        .kpi-desc {{ font-size:9.5pt; color:#475569; margin:0 0 12px 0; line-height:1.5; }}
+        .kpi-value {{ font-size:26pt; font-weight:800; color:#1E3A8A; margin:0 0 10px 0; }}
+        table {{ width:100%; border-collapse:collapse; margin-bottom:20px; }}
+        th, td {{ border:1px solid #CBD5E1; padding:8px 10px; text-align:left; font-size:9pt; }}
+        th {{ background:#1E3A8A; color:white; text-transform:uppercase; font-size:8.5pt; font-weight:bold; }}
+    </style></head><body>
+
+    <div class="page">
+        <div class="logo-box"><img src="{logo_url}"/></div>
+        <div class="header-title">Rapport KPI — Contrôle Réglementaire</div>
+        <div class="header-sub">Tunisie Profilés d'Aluminium — Direction Maintenance &amp; TN</div>
+        <div class="meta-info">
+            <b>Date d'édition :</b> {date_str}<br>
+            <b>Objet :</b> Synthèse des indicateurs clés de performance (KPI) du suivi de conformité réglementaire —
+            taux de réalisation, planification, respect des délais, non-conformités et points de réserve.
+        </div>
+
+        <div class="category-title">📊 Indicateurs clés de performance</div>
+
+        <div class="kpi-card">
+            <p class="kpi-title">1. Taux de réalisation 2026</p>
+            <p class="kpi-desc">Proportion des contrôles réglementaires dont l'échéance théorique est comprise
+            entre le 01/01/2026 et le 31/12/2026, effectivement réalisés (date réelle de visite enregistrée)
+            par rapport au nombre total de contrôles dus sur cette période.</p>
+            <p class="kpi-value">{k1['taux']}%</p>
+            {barre(k1['taux'], '#10B981')}
+            <p style="font-size:9pt;color:#64748B;margin-top:8px;">{k1['realises']} réalisés / {k1['restants']} restants
+            — sur {k1['total']} contrôle(s) dû(s) en 2026</p>
+        </div>
+
+        <div class="kpi-card" style="border-left-color:#1E3A8A;">
+            <p class="kpi-title">2. Taux planifié</p>
+            <p class="kpi-desc">Part des contrôles pour lesquels une date réelle de visite a été effectivement
+            saisie, par rapport à ceux pour lesquels le système utilise encore la date de la dernière visite
+            connue comme estimation de planification.</p>
+            <p class="kpi-value">{k2['taux']}%</p>
+            {barre(k2['taux'], '#1E3A8A')}
+            <p style="font-size:9pt;color:#64748B;margin-top:8px;">{k2['avec_reelle']} avec date réelle / {k2['estimes']} estimé(s)
+            — sur {k2['total']} contrôle(s) au total</p>
+        </div>
+
+        <div class="kpi-card" style="border-left-color:#0EA5E9;">
+            <p class="kpi-title">3. Taux de respect de délai de visite</p>
+            <p class="kpi-desc">Proportion des visites réalisées dont l'écart entre la date réelle de contrôle
+            et l'échéance théorique initiale du cycle n'excède pas 3 jours, par rapport au nombre total
+            de visites réalisées.</p>
+            <p class="kpi-value">{k3['taux']}%</p>
+            {barre(k3['taux'], '#0EA5E9')}
+            <p style="font-size:9pt;color:#64748B;margin-top:8px;">{k3['respectes']} respecté(s) / {k3['non_respectes']} non respecté(s)
+            — sur {k3['total']} visite(s) réalisée(s)</p>
+        </div>
+    </div>
+
+    {carto_html}
+
+    <div class="page">
+        <div class="category-title">📌 Points de réserve</div>
+        <p style="font-size:10pt;color:#475569;margin-bottom:15px;">
+        Liste consolidée des points de réserve relevés par site, catégorie et sous-équipement.</p>
+        <table>
+            <thead><tr><th>Site</th><th>Catégorie</th><th>Sous équipement</th><th>Nbre points</th></tr></thead>
+            <tbody>{html_reserve_rows}</tbody>
+        </table>
+
+        <div style="display:flex;gap:30px;">
+            <div style="flex:1;">
+                <p style="font-weight:700;font-size:11pt;color:#0F172A;margin-bottom:10px;">Répartition par site</p>
+                {site_rows if site_rows else "<p style='color:#94A3B8;font-size:9pt;'>Aucune donnée</p>"}
+            </div>
+            <div style="flex:1;">
+                <p style="font-weight:700;font-size:11pt;color:#0F172A;margin-bottom:10px;">Répartition par catégorie</p>
+                {cat_rows if cat_rows else "<p style='color:#94A3B8;font-size:9pt;'>Aucune donnée</p>"}
+            </div>
+        </div>
+    </div>
+
+    </body></html>
+    """
+
+    return HTML(string=html_content).write_pdf()
+
+
 st.set_page_config(
     page_title="Contrôle Réglementaire",
     page_icon="🛡️",
@@ -244,7 +399,7 @@ LUCID_CARTOGRAPHIE_URL = "https://lucid.app/lucidspark/088f02a4-bdb7-4c79-8e28-6
 def _charger_cartographie_b64():
     """Charge l'image de cartographie du taux de non-conformité en base64 (fichier local)."""
     try:
-        with open("Cartographie (1).png", "rb") as f:
+        with open("Cartographie.png", "rb") as f:
             return base64.b64encode(f.read()).decode("ascii")
     except Exception:
         return None
@@ -1343,6 +1498,7 @@ if acces_autorise:
 
             if df_rapports.empty or not col_cat_k or not col_date_k:
                 st.info("Données insuffisantes dans l'onglet « Rapports » pour calculer les KPI.")
+                kpi_data = None
             else:
                 df_k = df_rapports.copy()
                 df_k["_date_brute"]  = pd.to_datetime(df_k[col_date_k[0]], dayfirst=True, errors='coerce')
@@ -1361,11 +1517,13 @@ if acces_autorise:
                 nb_total_2026    = len(df_2026)
                 nb_realises_2026 = int(df_2026["_date_reelle"].notna().sum())
                 nb_restants_2026 = nb_total_2026 - nb_realises_2026
+                taux1 = round(nb_realises_2026/nb_total_2026*100,1) if nb_total_2026>0 else 0
 
                 # ---- KPI 2 : Taux planifié — dates réelles saisies vs estimées via la dernière visite ----
                 nb_total_all   = len(df_k)
                 nb_avec_reelle = int(df_k["_date_reelle"].notna().sum())
                 nb_estimes     = nb_total_all - nb_avec_reelle
+                taux2 = round(nb_avec_reelle/nb_total_all*100,1) if nb_total_all>0 else 0
 
                 # ---- KPI 3 : Taux de respect de délai de visite (écart ≤ 3j vs échéance théorique initiale) ----
                 df_realises_k = df_k[df_k["_date_reelle"].notna()].copy()
@@ -1376,6 +1534,13 @@ if acces_autorise:
                 else:
                     nb_respectes = 0
                 nb_non_respectes = nb_visites_realisees - nb_respectes
+                taux3 = round(nb_respectes/nb_visites_realisees*100,1) if nb_visites_realisees>0 else 0
+
+                kpi_data = {
+                    "kpi1": {"taux":taux1, "realises":nb_realises_2026, "restants":nb_restants_2026, "total":nb_total_2026},
+                    "kpi2": {"taux":taux2, "avec_reelle":nb_avec_reelle, "estimes":nb_estimes, "total":nb_total_all},
+                    "kpi3": {"taux":taux3, "respectes":nb_respectes, "non_respectes":nb_non_respectes, "total":nb_visites_realisees},
+                }
 
                 k1c,k2c,k3c = st.columns(3)
 
@@ -1389,7 +1554,6 @@ if acces_autorise:
                         fig1.update_layout(margin=dict(t=10,b=10,l=10,r=10),height=260,showlegend=False,
                                             paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig1,use_container_width=True,config={'displayModeBar':False})
-                        taux1=round(nb_realises_2026/nb_total_2026*100,1)
                         st.markdown(f"<p style='text-align:center;font-size:13px;color:#64748B;'>{taux1}% réalisés ({nb_realises_2026}/{nb_total_2026})</p>",unsafe_allow_html=True)
                     else:
                         st.info("Aucun contrôle avec échéance théorique en 2026.")
@@ -1404,7 +1568,6 @@ if acces_autorise:
                         fig2.update_layout(margin=dict(t=10,b=10,l=10,r=10),height=260,showlegend=False,
                                             paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig2,use_container_width=True,config={'displayModeBar':False})
-                        taux2=round(nb_avec_reelle/nb_total_all*100,1)
                         st.markdown(f"<p style='text-align:center;font-size:13px;color:#64748B;'>{taux2}% avec date réelle ({nb_avec_reelle}/{nb_total_all})</p>",unsafe_allow_html=True)
                     else:
                         st.info("Aucune donnée disponible.")
@@ -1419,7 +1582,6 @@ if acces_autorise:
                         fig3.update_layout(margin=dict(t=10,b=10,l=10,r=10),height=260,showlegend=False,
                                             paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig3,use_container_width=True,config={'displayModeBar':False})
-                        taux3=round(nb_respectes/nb_visites_realisees*100,1)
                         st.markdown(f"<p style='text-align:center;font-size:13px;color:#64748B;'>{taux3}% respecté ({nb_respectes}/{nb_visites_realisees})</p>",unsafe_allow_html=True)
                     else:
                         st.info("Aucune visite réalisée à ce jour.")
@@ -1438,7 +1600,7 @@ if acces_autorise:
                 <div id="carto-viewer" style="position:relative;width:100%;height:620px;overflow:hidden;
                      background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;">
                   <img id="carto-img" src="data:image/png;base64,{carto_b64}"
-                       style="position:absolute;top:0;left:0;transform-origin:0 0;cursor:grab;user-select:none;max-width:none;"
+                       style="position:absolute;top:0;left:0;transform-origin:0 0;cursor:grab;user-select:none;max-width:none;visibility:hidden;"
                        draggable="false"/>
                   <div style="position:absolute;bottom:14px;right:14px;display:flex;gap:8px;z-index:10;">
                     <button id="carto-zoom-in" style="width:36px;height:36px;border-radius:8px;border:1px solid #CBD5E1;background:white;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.08);">➕</button>
@@ -1450,13 +1612,36 @@ if acces_autorise:
                 </div>
                 <script>
                 (function(){{
-                    let scale=1, posX=0, posY=0, isDragging=false, startX=0, startY=0;
+                    let baseScale=1, scale=1, posX=0, posY=0, isDragging=false, startX=0, startY=0;
+                    const viewer=document.getElementById('carto-viewer');
                     const img=document.getElementById('carto-img');
+
                     function apply(){{ img.style.transform = 'translate('+posX+'px,'+posY+'px) scale('+scale+')'; }}
-                    function zoom(factor){{ scale*=factor; scale=Math.max(0.3,Math.min(scale,6)); apply(); }}
+
+                    function fitToView(){{
+                        const cw = viewer.clientWidth, ch = viewer.clientHeight;
+                        const nw = img.naturalWidth, nh = img.naturalHeight;
+                        if(!nw || !nh) return;
+                        baseScale = Math.min(cw/nw, ch/nh);
+                        scale = baseScale;
+                        posX = (cw - nw*scale)/2;
+                        posY = (ch - nh*scale)/2;
+                        img.style.visibility = 'visible';
+                        apply();
+                    }}
+
+                    function zoom(factor){{
+                        scale*=factor;
+                        scale=Math.max(baseScale*0.9, Math.min(scale, baseScale*8));
+                        apply();
+                    }}
+
+                    if(img.complete && img.naturalWidth){{ fitToView(); }}
+                    img.addEventListener('load', fitToView);
+
                     document.getElementById('carto-zoom-in').addEventListener('click', function(){{ zoom(1.25); }});
                     document.getElementById('carto-zoom-out').addEventListener('click', function(){{ zoom(0.8); }});
-                    document.getElementById('carto-reset').addEventListener('click', function(){{ scale=1; posX=0; posY=0; apply(); }});
+                    document.getElementById('carto-reset').addEventListener('click', fitToView);
                     img.addEventListener('wheel', function(e){{
                         e.preventDefault();
                         zoom(e.deltaY<0 ? 1.1 : 0.9);
@@ -1567,3 +1752,29 @@ if acces_autorise:
                                     st.rerun()
                                 else:
                                     st.error("Erreur lors de la suppression.")
+
+            # ================= RAPPORT PDF PREMIUM =================
+            st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
+            st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📄 Rapport PDF Premium</p>",unsafe_allow_html=True)
+            st.markdown("<p style='font-size:13px;color:#64748B;margin-bottom:14px;'>Génère un rapport PDF complet reprenant l'ensemble des indicateurs de cet onglet (taux de réalisation, taux planifié, respect des délais, cartographie de non-conformité et points de réserve), avec le logo TPR en en-tête.</p>",unsafe_allow_html=True)
+
+            if kpi_data is None:
+                st.info("Le rapport PDF nécessite des données KPI disponibles (onglet « Rapports » non vide).")
+            else:
+                with st.spinner("Préparation du rapport PDF Premium..."):
+                    try:
+                        pdf_kpi = generer_rapport_kpi_pdf(
+                            kpi_data,
+                            df_reserve,
+                            carto_b64,
+                            "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6q1BtDSDgVnJZFo0hOBfQJoDS6OYiub-qfQ&s"
+                        )
+                        st.download_button(
+                            label="📄 Télécharger le rapport PDF Premium",
+                            data=pdf_kpi,
+                            file_name=f"Rapport_KPI_{datetime.date.today().strftime('%d_%m_%Y')}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error(f"Erreur lors de la génération du PDF : {e}")
