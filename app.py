@@ -1058,41 +1058,7 @@ if acces_autorise:
                             st.error("Erreur lors de la suppression.")
 
         st.markdown("<br><hr style='border-color:#E2E8F0;'>", unsafe_allow_html=True)     
-        if not df_exig.empty:
-            st.markdown("### 📥 Téléchargement des check-lists")
         
-            col_sgb, col_meg = st.columns(2)
-            date_str = datetime.date.today().strftime('%d_%m_%Y')
-        
-            with col_sgb:
-                with st.spinner("Préparation du rapport SGB..."):
-                    try:
-                        pdf_sgb = generer_rapport_equipements_pdf(df_exig, "SGB")
-                        st.download_button(
-                            label="📄 Rapport PDF — SGB",
-                            data=pdf_sgb,
-                            file_name=f"Rapport_Inspection_SGB_{date_str}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                    except Exception as e:
-                        st.error(f"Erreur PDF SGB : {e}")
-                    
-            with col_meg:
-                with st.spinner("Préparation du rapport MEG..."):
-                    try:
-                        pdf_meg = generer_rapport_equipements_pdf(df_exig, "MEG")
-                        st.download_button(
-                            label="📄 Rapport PDF — MEG",
-                            data=pdf_meg,
-                            file_name=f"Rapport_Inspection_MEG_{date_str}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                    except Exception as e:
-                        st.error(f"Erreur PDF MEG : {e}")
-                    
-            st.divider()
 
     # ===== SECTION 3 : LISTE DES ÉQUIPEMENTS (ARBORESCENCE) =====
         st.markdown("### 🏭 Liste des équipements soumis au contrôle")
@@ -1218,6 +1184,44 @@ if acces_autorise:
                                             st.error("Erreur lors de la suppression.")
         else:
             st.info("👆 Sélectionnez un site (SGB ou MEG) pour voir les catégories d'équipements.")
+
+        if not df_exig.empty:
+            st.markdown("### 📥 Téléchargement des check-lists")
+        
+            col_sgb, col_meg = st.columns(2)
+            date_str = datetime.date.today().strftime('%d_%m_%Y')
+        
+            with col_sgb:
+                with st.spinner("Préparation du rapport SGB..."):
+                    try:
+                        pdf_sgb = generer_rapport_equipements_pdf(df_exig, "SGB")
+                        st.download_button(
+                            label="📄 Rapport PDF — SGB",
+                            data=pdf_sgb,
+                            file_name=f"Rapport_Inspection_SGB_{date_str}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error(f"Erreur PDF SGB : {e}")
+                    
+            with col_meg:
+                with st.spinner("Préparation du rapport MEG..."):
+                    try:
+                        pdf_meg = generer_rapport_equipements_pdf(df_exig, "MEG")
+                        st.download_button(
+                            label="📄 Rapport PDF — MEG",
+                            data=pdf_meg,
+                            file_name=f"Rapport_Inspection_MEG_{date_str}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error(f"Erreur PDF MEG : {e}")
+                    
+            st.divider()
+
+    
 
     
     # ---- ONGLET 3 : PRÉSENCE & VISITES ----
