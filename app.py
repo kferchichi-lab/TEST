@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import plotly.express as px
 import pandas as pd
 import datetime
@@ -237,6 +238,16 @@ SOUS_EQUIPEMENTS = {
     "Installations de gaz": ["Industrielle","Chaudière"],
     "Appareil pression de gaz": []
 }
+
+LUCID_CARTOGRAPHIE_URL = "https://lucid.app/lucidspark/088f02a4-bdb7-4c79-8e28-64e05fc773c3/edit?beaconFlowId=69403DCAA7251095&invitationId=inv_16e69b3a-177f-4fb1-922e-fd6c28f294d5&page=0_0"
+
+def _charger_cartographie_b64():
+    """Charge l'image de cartographie du taux de non-conformité en base64 (fichier local)."""
+    try:
+        with open("Cartographie.png", "rb") as f:
+            return base64.b64encode(f.read()).decode("ascii")
+    except Exception:
+        return None
 
 # ==========================================
 # STYLE
@@ -1415,6 +1426,53 @@ if acces_autorise:
 
             st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
 
+            # ================= TAUX DE NON-CONFORMITÉ DE SITE (CARTOGRAPHIE) =================
+            st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>🗺️ Taux de non-conformité de site</p>",unsafe_allow_html=True)
+
+            carto_b64 = _charger_cartographie_b64()
+            if carto_b64:
+                vc1,vc2 = st.columns([5,1])
+                with vc2:
+                    st.markdown(f"<a href='{LUCID_CARTOGRAPHIE_URL}' target='_blank' style='display:inline-block;background:#1E3A8A;color:white;padding:8px 14px;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;text-align:center;'>🔗 Ouvrir dans Lucid</a>",unsafe_allow_html=True)
+                components.html(f"""
+                <div id="carto-viewer" style="position:relative;width:100%;height:620px;overflow:hidden;
+                     background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;">
+                  <img id="carto-img" src="data:image/png;base64,{carto_b64}"
+                       style="position:absolute;top:0;left:0;transform-origin:0 0;cursor:grab;user-select:none;max-width:none;"
+                       draggable="false"/>
+                  <div style="position:absolute;bottom:14px;right:14px;display:flex;gap:8px;z-index:10;">
+                    <button id="carto-zoom-in" style="width:36px;height:36px;border-radius:8px;border:1px solid #CBD5E1;background:white;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.08);">➕</button>
+                    <button id="carto-zoom-out" style="width:36px;height:36px;border-radius:8px;border:1px solid #CBD5E1;background:white;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.08);">➖</button>
+                    <button id="carto-reset" style="width:36px;height:36px;border-radius:8px;border:1px solid #CBD5E1;background:white;font-size:15px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.08);">⟳</button>
+                  </div>
+                  <div style="position:absolute;top:10px;left:14px;font-size:11px;color:#64748B;background:rgba(255,255,255,0.85);
+                       padding:4px 10px;border-radius:6px;">🖱️ Molette pour zoomer • Glisser pour déplacer</div>
+                </div>
+                <script>
+                (function(){{
+                    let scale=1, posX=0, posY=0, isDragging=false, startX=0, startY=0;
+                    const img=document.getElementById('carto-img');
+                    function apply(){{ img.style.transform = 'translate('+posX+'px,'+posY+'px) scale('+scale+')'; }}
+                    function zoom(factor){{ scale*=factor; scale=Math.max(0.3,Math.min(scale,6)); apply(); }}
+                    document.getElementById('carto-zoom-in').addEventListener('click', function(){{ zoom(1.25); }});
+                    document.getElementById('carto-zoom-out').addEventListener('click', function(){{ zoom(0.8); }});
+                    document.getElementById('carto-reset').addEventListener('click', function(){{ scale=1; posX=0; posY=0; apply(); }});
+                    img.addEventListener('wheel', function(e){{
+                        e.preventDefault();
+                        zoom(e.deltaY<0 ? 1.1 : 0.9);
+                    }}, {{passive:false}});
+                    img.addEventListener('mousedown', function(e){{ isDragging=true; startX=e.clientX-posX; startY=e.clientY-posY; img.style.cursor='grabbing'; }});
+                    window.addEventListener('mouseup', function(){{ isDragging=false; img.style.cursor='grab'; }});
+                    window.addEventListener('mousemove', function(e){{ if(!isDragging) return; posX=e.clientX-startX; posY=e.clientY-startY; apply(); }});
+                }})();
+                </script>
+                """, height=630, scrolling=False)
+            else:
+                st.warning("⚠️ Fichier « Cartographie.png » introuvable. Placez-le dans le même dossier que l'application (à côté de app.py) pour l'afficher ici.")
+                st.markdown(f"[🔗 Consulter la cartographie sur Lucid]({LUCID_CARTOGRAPHIE_URL})")
+
+            st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
+
             # ================= POINTS DE RÉSERVE =================
             st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📌 Points de réserve</p>",unsafe_allow_html=True)
 
@@ -1486,15 +1544,12 @@ if acces_autorise:
                 with gr2:
                     if "Categorie" in df_reserve_f.columns and not df_reserve_f.empty:
                         df_by_cat = df_reserve_f.groupby("Categorie")["Nombre"].sum().reset_index()
-                        figC = px.pie(df_by_cat, values="Nombre", names="Categorie", hole=0.6,
-                          color_discrete_sequence=px.colors.qualitative.Set2)
-        
-        # MODIFICATION ICI : On garde uniquement 'percent'
-                        figC.update_traces(textposition='inside', textinfo='percent')
-        
-                        figC.update_layout(title="Répartition par catégorie", margin=dict(t=40, b=10, l=10, r=10), height=280,
-                           paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                        st.plotly_chart(figC, use_container_width=True, config={'displayModeBar': False})
+                        figC = px.pie(df_by_cat,values="Nombre",names="Categorie",hole=0.6,
+                                      color_discrete_sequence=px.colors.qualitative.Set2)
+                        figC.update_traces(textposition='inside',textinfo='percent+label')
+                        figC.update_layout(title="Répartition par catégorie",margin=dict(t=40,b=10,l=10,r=10),height=280,
+                                            paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(figC,use_container_width=True,config={'displayModeBar':False})
                     else:
                         st.info("Aucune donnée à afficher pour le graphe par catégorie.")
 
