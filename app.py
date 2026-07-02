@@ -11,6 +11,15 @@ import calendar
 import base64
 from weasyprint import HTML
 
+def afficher_apercu_pdf(pdf_bytes, hauteur=800):
+    """Affiche un aperçu du PDF directement dans la page (sans le télécharger)."""
+    b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+    st.markdown(
+        f'<iframe src="data:application/pdf;base64,{b64}" width="100%" height="{hauteur}" '
+        f'style="border:1px solid #E2E8F0;border-radius:8px;" type="application/pdf"></iframe>',
+        unsafe_allow_html=True,
+    )
+    
 def generer_rapport_equipements_pdf(df_exigences, site_filtre):
     """
     Génère un rapport PDF de 5 pages pour un site spécifique (SGB ou MEG).
@@ -28,7 +37,8 @@ def generer_rapport_equipements_pdf(df_exigences, site_filtre):
     
     # 2. Filtrer selon le Site (Colonne index 1)
     df_eq = df_eq[df_eq.iloc[:, 1].astype(str).str.strip().str.upper() == site_filtre.upper()]
-
+    logo_url = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6q1BtDSDgVnJZFo0hOBfQJoDS6OYiub-qfQ&s"
+    
     html_content = f"""
     <html>
     <head>
@@ -65,6 +75,24 @@ def generer_rapport_equipements_pdf(df_exigences, site_filtre):
             text-transform: uppercase;
             border-bottom: 2px solid #1E3A8A;
             padding-bottom: 10px;
+        }}
+        .page-header {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #E2E8F0;
+        }}
+        .page-header img {{
+            height: 36px;
+        }}
+        .page-header-text {{
+            font-size: 9.5pt;
+            color: #64748B;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
         }}
         .meta-info {{
             margin-bottom: 25px;
@@ -136,6 +164,10 @@ def generer_rapport_equipements_pdf(df_exigences, site_filtre):
         
         html_content += f"""
         <div class="page">
+            <div class="page-header">
+                <img src="{logo_url}"/>
+                <div class="page-header-text">Tunisie Profilés d'Aluminium — Direction Maintenance &amp; TN</div>
+            </div>
             <div class="header-title">Rapport d'Inspection Réglementaire — Site {site_filtre.upper()}</div>
             
             <div class="meta-info">
@@ -813,7 +845,7 @@ if acces_autorise:
                 return f"https://drive.google.com/file/d/{file_id}/preview"
         except Exception: pass
         return url
-
+    
     # ---- ONGLET 1 : RAPPORTS ----
     with tab1:
         st.markdown("""<style>
@@ -846,8 +878,10 @@ if acces_autorise:
             if col_lien: df_f[col_lien[0]]=df_f[col_lien[0]].apply(convertir_lien)
             if col_date: df_f[col_date[0]]=pd.to_datetime(df_f[col_date[0]],dayfirst=True,errors='coerce')
         if not df_f.empty:
+            col_reelle_doc=[c for c in df_f.columns if "reelle" in c.lower() or "réelle" in c.lower()]
+            if col_reelle_doc: df_f=df_f.drop(columns=col_reelle_doc)
             st.dataframe(df_f,column_config={
-                (col_lien[0] if col_lien else "Lien PDF"):st.column_config.LinkColumn("Action",display_text="👁️ Voir le rapport"),
+                (col_lien[0] if col_lien else "Lien PDF"):st.column_config.LinkColumn("Action",display_text="Voir le rapport"),
                 (col_ex[0]   if col_ex   else "Exercice"):st.column_config.NumberColumn("Exercice",format="%d"),
                 (col_date[0] if col_date else "Date"):    st.column_config.DateColumn("Date de dernier contrôle",format="DD/MM/YYYY"),
             },hide_index=True,use_container_width=True)
@@ -1384,38 +1418,47 @@ if acces_autorise:
         st.divider()
 
         if not df_exig.empty:
-            st.markdown("### 📥 Téléchargement des check-lists")
-        
+            st.markdown("### 📄 Rapports check-lists")
             col_sgb, col_meg = st.columns(2)
             date_str = datetime.date.today().strftime('%d_%m_%Y')
-        
+
             with col_sgb:
-                with st.spinner("Préparation du rapport SGB..."):
-                    try:
-                        pdf_sgb = generer_rapport_equipements_pdf(df_exig, "SGB")
-                        st.download_button(
-                            label="📄 Rapport PDF — SGB",
-                            data=pdf_sgb,
-                            file_name=f"Rapport_Inspection_SGB_{date_str}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                    except Exception as e:
-                        st.error(f"Erreur PDF SGB : {e}")
-                    
+                if st.button("Consulter le rapport — SGB", use_container_width=True, key="consult_sgb"):
+                    with st.spinner("Préparation du rapport SGB..."):
+                        try:
+                            st.session_state["pdf_sgb"] = generer_rapport_equipements_pdf(df_exig, "SGB")
+                        except Exception as e:
+                            st.session_state["pdf_sgb"] = None
+                            st.error(f"Erreur PDF SGB : {e}")
+                if st.session_state.get("pdf_sgb"):
+                    afficher_apercu_pdf(st.session_state["pdf_sgb"])
+                    st.download_button(
+                        label="📥 Télécharger le rapport SGB",
+                        data=st.session_state["pdf_sgb"],
+                        file_name=f"Rapport_Inspection_SGB_{date_str}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key="dl_sgb"
+                    )
+
             with col_meg:
-                with st.spinner("Préparation du rapport MEG..."):
-                    try:
-                        pdf_meg = generer_rapport_equipements_pdf(df_exig, "MEG")
-                        st.download_button(
-                            label="📄 Rapport PDF — MEG",
-                            data=pdf_meg,
-                            file_name=f"Rapport_Inspection_MEG_{date_str}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                    except Exception as e:
-                        st.error(f"Erreur PDF MEG : {e}")
+                if st.button("Consulter le rapport — MEG", use_container_width=True, key="consult_meg"):
+                    with st.spinner("Préparation du rapport MEG..."):
+                        try:
+                            st.session_state["pdf_meg"] = generer_rapport_equipements_pdf(df_exig, "MEG")
+                        except Exception as e:
+                            st.session_state["pdf_meg"] = None
+                            st.error(f"Erreur PDF MEG : {e}")
+                if st.session_state.get("pdf_meg"):
+                    afficher_apercu_pdf(st.session_state["pdf_meg"])
+                    st.download_button(
+                        label="📥 Télécharger le rapport MEG",
+                        data=st.session_state["pdf_meg"],
+                        file_name=f"Rapport_Inspection_MEG_{date_str}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key="dl_meg"
+                    )
                     
 
 
@@ -1761,20 +1804,25 @@ if acces_autorise:
             if kpi_data is None:
                 st.info("Le rapport PDF nécessite des données KPI disponibles (onglet « Rapports » non vide).")
             else:
-                with st.spinner("Préparation du rapport PDF..."):
-                    try:
-                        pdf_kpi = generer_rapport_kpi_pdf(
-                            kpi_data,
-                            df_reserve,
-                            carto_b64,
-                            "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6q1BtDSDgVnJZFo0hOBfQJoDS6OYiub-qfQ&s"
-                        )
-                        st.download_button(
-                            label="📄 Télécharger le rapport PDF",
-                            data=pdf_kpi,
-                            file_name=f"Rapport_KPI_{datetime.date.today().strftime('%d_%m_%Y')}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                    except Exception as e:
-                        st.error(f"Erreur lors de la génération du PDF : {e}")
+                if st.button("Consulter le rapport PDF", use_container_width=True, key="consult_kpi"):
+                    with st.spinner("Préparation du rapport PDF..."):
+                        try:
+                            st.session_state["pdf_kpi"] = generer_rapport_kpi_pdf(
+                                kpi_data,
+                                df_reserve,
+                                carto_b64,
+                                "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6q1BtDSDgVnJZFo0hOBfQJoDS6OYiub-qfQ&s"
+                            )
+                        except Exception as e:
+                            st.session_state["pdf_kpi"] = None
+                            st.error(f"Erreur lors de la génération du PDF : {e}")
+                if st.session_state.get("pdf_kpi"):
+                    afficher_apercu_pdf(st.session_state["pdf_kpi"])
+                    st.download_button(
+                        label="📥 Télécharger le rapport PDF",
+                        data=st.session_state["pdf_kpi"],
+                        file_name=f"Rapport_KPI_{datetime.date.today().strftime('%d_%m_%Y')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key="dl_kpi"
+                    )
