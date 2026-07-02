@@ -13,15 +13,6 @@ from weasyprint import HTML
 import fitz  # PyMuPDF
 
 def afficher_apercu_pdf(pdf_bytes, hauteur=800):
-    """
-    Affiche un aperçu du PDF sous forme d'images (une par page).
-
-    On évite volontairement l'ancienne méthode <iframe src="data:application/pdf;base64,...">
-    car elle est peu fiable : bloquée par de nombreux navigateurs mobiles (Safari iOS, Chrome
-    mobile), sujette aux restrictions CSP quand elle est imbriquée dans l'iframe de Streamlit,
-    et limitée en taille selon les navigateurs. Ici, le rendu est fait côté serveur avec
-    PyMuPDF, donc il fonctionne de façon identique sur tous les appareils.
-    """
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         nb_pages = len(doc)
@@ -40,7 +31,7 @@ def generer_rapport_equipements_pdf(df_exigences, site_filtre):
     """
     Génère un rapport PDF de 5 pages pour un site spécifique (SGB ou MEG).
     """
-    categories = [
+    installations = [
         "Installations électriques",
         "Equipements de levage",
         "Sécurité incendie",
@@ -174,9 +165,9 @@ def generer_rapport_equipements_pdf(df_exigences, site_filtre):
     <body>
     """
 
-    for cat in categories:
-        # Filtrer par catégorie parmi les équipements du site
-        df_cat = df_eq[df_eq.iloc[:, 2].astype(str).str.strip() == cat]
+    for ins in installations:
+        # Filtrer par installation parmi les équipements du site
+        df_ins = df_eq[df_eq.iloc[:, 2].astype(str).str.strip() == ins]
         
         html_content += f"""
         <div class="page">
@@ -184,7 +175,8 @@ def generer_rapport_equipements_pdf(df_exigences, site_filtre):
                 <img src="{logo_url}"/>
                 <div class="page-header-text">Tunisie Profilés d'Aluminium — Direction Maintenance &amp; TN</div>
             </div>
-            <div class="header-title">Rapport d'Inspection Réglementaire — Site {site_filtre.upper()}</div>
+            <div class="header-title" style="border-bottom: none; padding-bottom: 0;">Rapport d'Inspection Réglementaire</div>
+            <div class="header-title">Site {site_filtre.upper()}</div>
             
             <div class="meta-info">
                 <strong>Inspecteur technique :</strong> ............................................................<br>
@@ -192,7 +184,7 @@ def generer_rapport_equipements_pdf(df_exigences, site_filtre):
                 <strong>Date :</strong> .......................................................................................
             </div>
             
-            <div class="category-title">{cat}</div>
+            <div class="category-title">{ins}</div>
             
             <table>
                 <thead>
@@ -205,8 +197,8 @@ def generer_rapport_equipements_pdf(df_exigences, site_filtre):
                 <tbody>
         """
         
-        if not df_cat.empty:
-            for _, row in df_cat.iterrows():
+        if not df_ins.empty:
+            for _, row in df_ins.iterrows():
                 sous_eq = row.iloc[3] if pd.notna(row.iloc[3]) else "-"
                 nombre = row.iloc[4] if pd.notna(row.iloc[4]) else "0"
                 html_content += f"""
@@ -219,7 +211,7 @@ def generer_rapport_equipements_pdf(df_exigences, site_filtre):
         else:
             html_content += """
                 <tr>
-                    <td colspan="3" style="text-align:center; color:#94A3B8; font-style: italic;">Aucun équipement enregistré pour cette catégorie sur ce site</td>
+                    <td colspan="3" style="text-align:center; color:#94A3B8; font-style: italic;">Aucun équipement enregistré pour cette instalaltion sur ce site</td>
                 </tr>
             """
             
@@ -244,7 +236,7 @@ def generer_rapport_equipements_pdf(df_exigences, site_filtre):
 def generer_rapport_kpi_pdf(kpi_data, df_reserve, carto_b64, logo_url):
     """
     Génère un rapport PDF premium regroupant tous les KPI de l'onglet KPI :
-    Taux de réalisation 2026, Taux planifié, Taux de respect de délai,
+    Taux de réalisation 2026, Taux de respect de délai,
     cartographie du taux de non-conformité, et points de réserve.
     """
     date_str = datetime.date.today().strftime('%d/%m/%Y')
@@ -254,18 +246,18 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, carto_b64, logo_url):
         return f"""<div style="background:#E2E8F0;border-radius:6px;height:14px;width:100%;overflow:hidden;">
             <div style="background:{couleur};height:100%;width:{pct}%;"></div></div>"""
 
-    k1 = kpi_data["kpi1"]; k2 = kpi_data["kpi2"]; k3 = kpi_data["kpi3"]
+    k1 = kpi_data["kpi1"]; k2 = kpi_data["kpi2"]
 
     html_reserve_rows = ""
     if df_reserve is not None and not df_reserve.empty:
         for _, r in df_reserve.iterrows():
-            html_reserve_rows += (f"<tr><td>{r.get('Site','')}</td><td>{r.get('Categorie','')}</td>"
+            html_reserve_rows += (f"<tr><td>{r.get('Site','')}</td><td>{r.get('Installation','')}</td>"
                                    f"<td>{r.get('Sous_equipement','')}</td>"
                                    f"<td style='text-align:center;'>{r.get('Nombre',0)}</td></tr>")
     else:
         html_reserve_rows = "<tr><td colspan='4' style='text-align:center;color:#94A3B8;'>Aucun point de réserve enregistré</td></tr>"
 
-    site_rows, cat_rows = "", ""
+    site_rows, ins_rows = "", ""
     if df_reserve is not None and not df_reserve.empty and "Site" in df_reserve.columns:
         tot = df_reserve["Nombre"].sum()
         for site, grp in df_reserve.groupby("Site")["Nombre"].sum().items():
@@ -273,21 +265,21 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, carto_b64, logo_url):
             site_rows += (f"""<div style="margin-bottom:10px;">
                 <div style="display:flex;justify-content:space-between;font-size:10pt;margin-bottom:3px;">
                 <span>{site}</span><span>{pct}% ({grp})</span></div>{barre(pct,'#1E3A8A')}</div>""")
-    if df_reserve is not None and not df_reserve.empty and "Categorie" in df_reserve.columns:
+    if df_reserve is not None and not df_reserve.empty and "Installation" in df_reserve.columns:
         tot = df_reserve["Nombre"].sum()
-        for cat, grp in df_reserve.groupby("Categorie")["Nombre"].sum().items():
+        for ins, grp in df_reserve.groupby("Installation")["Nombre"].sum().items():
             pct = round(grp/tot*100,1) if tot else 0
-            cat_rows += (f"""<div style="margin-bottom:10px;">
+            ins_rows += (f"""<div style="margin-bottom:10px;">
                 <div style="display:flex;justify-content:space-between;font-size:10pt;margin-bottom:3px;">
-                <span>{cat}</span><span>{pct}% ({grp})</span></div>{barre(pct,'#0EA5E9')}</div>""")
+                <span>{ins}</span><span>{pct}% ({grp})</span></div>{barre(pct,'#0EA5E9')}</div>""")
 
     carto_html = ""
     if carto_b64:
         carto_html = f"""
         <div class="page">
-            <div class="category-title">🗺️ Taux de non-conformité de site</div>
+            <div class="category-title">Taux de non-conformité des sites</div>
             <p style="font-size:10pt;color:#475569;margin-bottom:15px;">
-            Cartographie de synthèse du taux de non-conformité par site et par catégorie d'équipement,
+            Cartographie de synthèse du taux de non-conformité par site et par installation,
             établie lors de la campagne de contrôle réglementaire 2026.</p>
             <img src="data:image/png;base64,{carto_b64}" style="width:100%;border-radius:8px;border:1px solid #E2E8F0;"/>
         </div>"""
@@ -321,58 +313,51 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, carto_b64, logo_url):
 
     <div class="page">
         <div class="logo-box"><img src="{logo_url}"/></div>
-        <div class="header-title">Rapport KPI — Contrôle Réglementaire</div>
+        <div class="header-title">Rapport KPI</div>
+        <div class="header-title">Contrôle Réglementaire</div>
         <div class="header-sub">Tunisie Profilés d'Aluminium — Direction Maintenance &amp; TN</div>
         <div class="meta-info">
             <b>Date d'édition :</b> {date_str}<br>
-            <b>Objet :</b> Synthèse des indicateurs clés de performance (KPI) du suivi de conformité réglementaire —
-            taux de réalisation, planification, respect des délais, non-conformités et points de réserve.
+            <b>Objet :</b> Synthèse des indicateurs de performance du suivi de conformité réglementaire —
+            taux de réalisation, respect des délais, non-conformités et actions de contrôle.
         </div>
 
-        <div class="category-title">📊 Indicateurs clés de performance</div>
+        <div class="category-title">Indicateurs de performance</div>
 
         <div class="kpi-card">
             <p class="kpi-title">1. Taux de réalisation 2026</p>
             <p class="kpi-desc">Proportion des contrôles réglementaires dont l'échéance théorique est comprise
             entre le 01/01/2026 et le 31/12/2026, effectivement réalisés (date réelle de visite enregistrée)
             par rapport au nombre total de contrôles dus sur cette période.</p>
-            <p class="kpi-value">{k1['taux']}%</p>
-            {barre(k1['taux'], '#10B981')}
-            <p style="font-size:9pt;color:#64748B;margin-top:8px;">{k1['realises']} réalisés / {k1['restants']} restants
-            — sur {k1['total']} contrôle(s) dû(s) en 2026</p>
+            <p class="kpi-value">{k2['taux']}%</p>
+            {barre(k2['taux'], '#0EA5E9')}
+            <p style="font-size:9pt;color:#64748B;margin-top:8px;">{k2['respectes']} réalisés / {k2['non_respectes']} non réalisés
+            — sur {k2['total']} visites planifiées</p>
         </div>
 
-        <div class="kpi-card" style="border-left-color:#1E3A8A;">
-            <p class="kpi-title">2. Taux planifié</p>
-            <p class="kpi-desc">Part des contrôles pour lesquels une date réelle de visite a été effectivement
-            saisie, par rapport à ceux pour lesquels le système utilise encore la date de la dernière visite
-            connue comme estimation de planification.</p>
-            <p class="kpi-value">{k2['taux']}%</p>
-            {barre(k2['taux'], '#1E3A8A')}
-            <p style="font-size:9pt;color:#64748B;margin-top:8px;">{k2['avec_reelle']} avec date réelle / {k2['estimes']} estimé(s)
-            — sur {k2['total']} contrôle(s) au total</p>
-        </div>
+
+
+
 
         <div class="kpi-card" style="border-left-color:#0EA5E9;">
-            <p class="kpi-title">3. Taux de respect de délai de visite</p>
+            <p class="kpi-title">2. Taux de respect de délai de visite</p>
             <p class="kpi-desc">Proportion des visites réalisées dont l'écart entre la date réelle de contrôle
-            et l'échéance théorique initiale du cycle n'excède pas 3 jours, par rapport au nombre total
+            et l'échéance théorique initiale du cycle n'excède pas 1 mois, par rapport au nombre total
             de visites réalisées.</p>
-            <p class="kpi-value">{k3['taux']}%</p>
-            {barre(k3['taux'], '#0EA5E9')}
-            <p style="font-size:9pt;color:#64748B;margin-top:8px;">{k3['respectes']} respecté(s) / {k3['non_respectes']} non respecté(s)
-            — sur {k3['total']} visite(s) réalisée(s)</p>
+            <p class="kpi-value">{k1['taux']}%</p>
+            {barre(k1['taux'], '#10B981')}
+            <p style="font-size:9pt;color:#64748B;margin-top:8px;">{k2['respectes']} respectés / {k2['respectes']} réalisés</p>
         </div>
     </div>
 
     {carto_html}
 
     <div class="page">
-        <div class="category-title">📌 Points de réserve</div>
+        <div class="category-title">Actions de contrôle</div>
         <p style="font-size:10pt;color:#475569;margin-bottom:15px;">
-        Liste consolidée des points de réserve relevés par site, catégorie et sous-équipement.</p>
+        Liste consolidée des actions de contrôle relevées par site, installation et sous-équipement.</p>
         <table>
-            <thead><tr><th>Site</th><th>Catégorie</th><th>Sous équipement</th><th>Nbre points</th></tr></thead>
+            <thead><tr><th>Site</th><th>Installation</th><th>Sous équipement</th><th>Nbre points</th></tr></thead>
             <tbody>{html_reserve_rows}</tbody>
         </table>
 
@@ -382,8 +367,8 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, carto_b64, logo_url):
                 {site_rows if site_rows else "<p style='color:#94A3B8;font-size:9pt;'>Aucune donnée</p>"}
             </div>
             <div style="flex:1;">
-                <p style="font-weight:700;font-size:11pt;color:#0F172A;margin-bottom:10px;">Répartition par catégorie</p>
-                {cat_rows if cat_rows else "<p style='color:#94A3B8;font-size:9pt;'>Aucune donnée</p>"}
+                <p style="font-weight:700;font-size:11pt;color:#0F172A;margin-bottom:10px;">Répartition par installation</p>
+                {ins_rows if ins_rows else "<p style='color:#94A3B8;font-size:9pt;'>Aucune donnée</p>"}
             </div>
         </div>
     </div>
@@ -424,7 +409,7 @@ PERIODICITE = {
     "Installations de gaz":      12,
     "Appareil pression de gaz":  12,
 }
-COULEURS_CAT = {
+COULEURS_INS = {
     "Installations électriques": "#2a78d6",
     "Equipements de levage":     "#1baf7a",
     "Sécurité incendie":         "#e34948",
@@ -682,9 +667,9 @@ def supprimer_contrat():
     return resp.status_code == 200
 
 
-def ajouter_equipement(site, categorie, sous_eq, nombre):
+def ajouter_equipement(site, installation, sous_eq, nombre):
     """Ajoute une ligne équipement dans Exigences."""
-    return sheets_append("Exigences", ["Equipement", site, categorie, sous_eq, str(nombre), ""])
+    return sheets_append("Exigences", ["Equipement", site, installation, sous_eq, str(nombre), ""])
 
 
 def supprimer_equipement_ligne(num_ligne_sheet):
@@ -703,13 +688,13 @@ def supprimer_equipement_ligne(num_ligne_sheet):
 # POINTS DE RÉSERVE (onglet dédié "PointsReserve")
 # ==========================================
 def lire_points_reserve():
-    """Lit l'onglet PointsReserve : Site | Categorie | Sous_equipement | Nombre."""
+    """Lit l'onglet PointsReserve : Site | Installation | Sous_equipement | Nombre."""
     return sheets_lire("PointsReserve", "A:D")
 
 
-def ajouter_point_reserve(site, categorie, sous_eq, nombre):
+def ajouter_point_reserve(site, installation, sous_eq, nombre):
     """Ajoute une ligne dans l'onglet PointsReserve."""
-    return sheets_append("PointsReserve", [site, categorie, sous_eq, str(nombre)])
+    return sheets_append("PointsReserve", [site, installation, sous_eq, str(nombre)])
 
 
 def supprimer_ligne_generique(onglet, num_ligne_sheet, nb_colonnes):
@@ -816,7 +801,7 @@ if acces_autorise and email_actif:
 st.markdown("""<style>.stMarkdown div p,.stMarkdown div h1{text-align:center!important;}</style>""",unsafe_allow_html=True)
 st.markdown("""<div style="width:100%;text-align:center;margin:10px auto 35px auto;">
     <h1 style="text-align:center;font-size:2.6rem;font-weight:800;color:#0F172A;margin:0 0 6px 0;letter-spacing:-1px;line-height:1.2;">Tableau de Bord Réglementaire</h1>
-    <p style="text-align:center;font-size:1.05rem;color:#64748B;margin:0 auto;font-weight:400;line-height:1.5;max-width:800px;">Suivi de conformité en temps réel — Synchronisé avec Direction Maintenance</p>
+    <p style="text-align:center;font-size:1.05rem;color:#64748B;margin:0 auto;font-weight:400;line-height:1.5;max-width:800px;">L'amélioration continue.. Notre trajectoire..</p>
 </div>""",unsafe_allow_html=True)
 
 # ==========================================
@@ -844,7 +829,7 @@ if acces_autorise:
 
     st.markdown("<br>",unsafe_allow_html=True)
 
-    liste_onglets = ["📋 Rapports de contrôle archivés","📅 Suivi de performance & Planification","📌 Exigences"]
+    liste_onglets = ["📋 Rapports CR","📅 Planification","📌 Exigences"]
     if role == "Responsable" and password_correct:
         liste_onglets.append("👥 Statistiques")
         liste_onglets.append("📊 KPI")
@@ -873,23 +858,23 @@ if acces_autorise:
             c1,c2,c3,c4=st.columns(4)
             with c1: f_site =st.selectbox("Site",["Tous","SGB","MEG"])
             with c2: f_annee=st.selectbox("Année",["Tous","2025","2026"])
-            with c3: f_cat  =st.selectbox("Domaine technique",["Tous"]+list(SOUS_EQUIPEMENTS.keys()))
+            with c3: f_ins  =st.selectbox("Installation",["Tous"]+list(SOUS_EQUIPEMENTS.keys()))
             with c4:
-                opts=["Tous"]+SOUS_EQUIPEMENTS[f_cat] if f_cat!="Tous" else ["Tous"]+[i for sub in SOUS_EQUIPEMENTS.values() for i in sub]
+                opts=["Tous"]+SOUS_EQUIPEMENTS[f_ins] if f_ins!="Tous" else ["Tous"]+[i for sub in SOUS_EQUIPEMENTS.values() for i in sub]
                 f_sous_eq=st.selectbox("Sous-équipement",opts)
 
         st.markdown("<br><p style='font-size:1.2rem;font-weight:700;color:#0F172A;margin-bottom:10px;'>📂 Documents rattachés</p>",unsafe_allow_html=True)
         df_f=df_rapports.copy()
         col_site=[c for c in df_f.columns if "site" in c.lower()]
         col_ex  =[c for c in df_f.columns if "exerc" in c.lower() or "ann" in c.lower()]
-        col_cat =[c for c in df_f.columns if "cat" in c.lower()]
+        col_ins =[c for c in df_f.columns if "ins" in c.lower()]
         col_seq =[c for c in df_f.columns if "sous" in c.lower()]
         col_lien=[c for c in df_f.columns if "lien" in c.lower() or "pdf" in c.lower()]
         col_date=[c for c in df_f.columns if "date" in c.lower() or "contr" in c.lower()]
         if not df_f.empty:
             if f_site !="Tous" and col_site: df_f=df_f[df_f[col_site[0]].astype(str).str.strip()==f_site]
             if f_annee!="Tous" and col_ex:   df_f=df_f[pd.to_numeric(df_f[col_ex[0]],errors='coerce')==int(f_annee)]
-            if f_cat  !="Tous" and col_cat:  df_f=df_f[df_f[col_cat[0]].astype(str).str.strip()==f_cat]
+            if f_ins  !="Tous" and col_ins:  df_f=df_f[df_f[col_ins[0]].astype(str).str.strip()==f_ins]
             if f_sous_eq!="Tous" and col_seq:df_f=df_f[df_f[col_seq[0]].astype(str).str.strip()==f_sous_eq]
             if col_lien: df_f[col_lien[0]]=df_f[col_lien[0]].apply(convertir_lien)
             if col_date: df_f[col_date[0]]=pd.to_datetime(df_f[col_date[0]],dayfirst=True,errors='coerce')
@@ -898,16 +883,16 @@ if acces_autorise:
             if col_reelle_doc: df_f=df_f.drop(columns=col_reelle_doc)
             st.dataframe(df_f,column_config={
                 (col_lien[0] if col_lien else "Lien PDF"):st.column_config.LinkColumn("Action",display_text="Voir le rapport"),
-                (col_ex[0]   if col_ex   else "Exercice"):st.column_config.NumberColumn("Exercice",format="%d"),
+                (col_ex[0]   if col_ex   else "Année"):st.column_config.NumberColumn("Année",format="%d"),
                 (col_date[0] if col_date else "Date"):    st.column_config.DateColumn("Date de dernier contrôle",format="DD/MM/YYYY"),
             },hide_index=True,use_container_width=True)
         else:
             st.warning("Aucun rapport ne correspond aux critères sélectionnés.")
 
-        st.markdown("<br><hr style='border-color:#E2E8F0;'><p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📊 Analyses globales</p>",unsafe_allow_html=True)
+        st.markdown("<br><hr style='border-color:#E2E8F0;'><p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📊 Analyse globale</p>",unsafe_allow_html=True)
         if not df_rapports.empty:
             col_sc=[c for c in df_rapports.columns if "site" in c.lower()]
-            col_cc=[c for c in df_rapports.columns if "cat" in c.lower()]
+            col_cc=[c for c in df_rapports.columns if "ins" in c.lower()]
             if col_sc and col_cc:
                 df_s=df_rapports[col_sc[0]].value_counts().reset_index(); df_s.columns=['Site','Nombre']
                 df_c=df_rapports[col_cc[0]].value_counts().reset_index(); df_c.columns=['Domaine','Nombre']
@@ -929,38 +914,26 @@ if acces_autorise:
 
     # ---- ONGLET 2 : PLANNING ----
     with tab2:
-        st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📅 Planification des contrôles obligatoires</p>",unsafe_allow_html=True)
-        if not df_planning.empty:
-            col_p=[c for c in df_planning.columns if "prochain" in c.lower() or "échéan" in c.lower()]
-            st.dataframe(df_planning,
-                column_config={(col_p[0] if col_p else "Prochain contrôle"):st.column_config.DateColumn("Échéance",format="DD/MM/YYYY")},
-                hide_index=True,use_container_width=True)
-        else:
-            st.info("Aucun contrôle planifié.")
-        if role=="Responsable" and password_correct:
-            with st.expander("🛠️ Panneau d'administration"):
-                st.markdown(f"[Modifier le calendrier]({URL_GOOGLE_SHEET})")
-
-        st.markdown("<br><p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📅 Prochaines échéances calculées</p>",unsafe_allow_html=True)
+        st.markdown("<br><p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📅 Prochaines échéances</p>",unsafe_allow_html=True)
 
         # ---- FILTRES ÉCHÉANCES ----
         with st.container(border=True):
             st.markdown("<p style='font-weight:600;color:#1E293B;margin:0 0 10px 0;font-size:13px;'>🔍 Filtrer les échéances</p>",unsafe_allow_html=True)
             fc1,fc2,fc3=st.columns(3)
             with fc1: f_ech_site=st.selectbox("Site",["Tous","SGB","MEG"],key="f_ech_site")
-            with fc2: f_ech_cat =st.selectbox("Catégorie",["Tous"]+list(PERIODICITE.keys()),key="f_ech_cat")
+            with fc2: f_ech_ins =st.selectbox("Installation",["Tous"]+list(PERIODICITE.keys()),key="f_ech_ins")
             with fc3:
-                opts_seq=["Tous"]+SOUS_EQUIPEMENTS.get(f_ech_cat,[]) if f_ech_cat!="Tous" else ["Tous"]+[i for sub in SOUS_EQUIPEMENTS.values() for i in sub]
+                opts_seq=["Tous"]+SOUS_EQUIPEMENTS.get(f_ech_ins,[]) if f_ech_ins!="Tous" else ["Tous"]+[i for sub in SOUS_EQUIPEMENTS.values() for i in sub]
                 f_ech_seq=st.selectbox("Sous-équipement",opts_seq,key="f_ech_seq")
 
         if not df_rapports.empty:
-            col_cat_r  =[c for c in df_rapports.columns if "cat" in c.lower()]
+            col_ins_r  =[c for c in df_rapports.columns if "ins" in c.lower()]
             col_date_r =[c for c in df_rapports.columns if "date" in c.lower()]
             col_site_r =[c for c in df_rapports.columns if "site" in c.lower()]
             col_label_r=[c for c in df_rapports.columns if "equip" in c.lower() or "label" in c.lower() or "nom" in c.lower()]
             col_reelle =[c for c in df_rapports.columns if "reelle" in c.lower() or "réelle" in c.lower()]
 
-            if col_cat_r and col_date_r:
+            if col_ins_r and col_date_r:
                 df_ech=df_rapports.copy()
                 # Identifiant stable = numéro de ligne réel dans le Sheet (header=ligne1, donc +2)
                 df_ech["_ligne_sheet"]=df_ech.index+2
@@ -978,7 +951,7 @@ if acces_autorise:
                 # Déduplication
                 cles=[]
                 if col_site_r:  cles.append(col_site_r[0])
-                cles.append(col_cat_r[0])
+                cles.append(col_ins_r[0])
                 if col_label_r: cles.append(col_label_r[0])
                 df_ech=df_ech.sort_values("_date_brute",ascending=True)
                 df_ech=df_ech.drop_duplicates(subset=cles,keep="last")
@@ -986,7 +959,7 @@ if acces_autorise:
                 today_dt=pd.Timestamp.today().normalize()
 
                 def calc_prochaine(row):
-                    mois=PERIODICITE.get(str(row[col_cat_r[0]]).strip(),12)
+                    mois=PERIODICITE.get(str(row[col_ins_r[0]]).strip(),12)
                     return row["_date"]+pd.DateOffset(months=mois)
 
                 df_ech["Prochaine échéance"]=df_ech.apply(calc_prochaine,axis=1)
@@ -1000,15 +973,15 @@ if acces_autorise:
                 cols_affich=[]
                 if col_site_r:  cols_affich.append(col_site_r[0])
                 if col_label_r: cols_affich.append(col_label_r[0])
-                cols_affich+=[col_cat_r[0],"_date_brute","_date_reelle","Date du contrôle","Prochaine échéance","Jours restants","Statut","_ligne_sheet"]
+                cols_affich+=[col_ins_r[0],"_date_brute","_date_reelle","Date du contrôle","Prochaine échéance","Jours restants","Statut","_ligne_sheet"]
                 df_show=df_ech[cols_affich].sort_values("Prochaine échéance")
 
                 # ---- APPLICATION DES FILTRES ----
                 df_show_filtre=df_show.copy()
                 if f_ech_site!="Tous" and col_site_r:
                     df_show_filtre=df_show_filtre[df_show_filtre[col_site_r[0]].astype(str).str.strip()==f_ech_site]
-                if f_ech_cat!="Tous" and col_cat_r:
-                    df_show_filtre=df_show_filtre[df_show_filtre[col_cat_r[0]].astype(str).str.strip()==f_ech_cat]
+                if f_ech_ins!="Tous" and col_ins_r:
+                    df_show_filtre=df_show_filtre[df_show_filtre[col_ins_r[0]].astype(str).str.strip()==f_ech_ins]
                 if f_ech_seq!="Tous" and col_label_r:
                     df_show_filtre=df_show_filtre[df_show_filtre[col_label_r[0]].astype(str).str.strip().str.contains(f_ech_seq,case=False,na=False)]
 
@@ -1045,7 +1018,7 @@ if acces_autorise:
                         cols_visiteur=[]
                         if col_site_r:  cols_visiteur.append(col_site_r[0])
                         if col_label_r: cols_visiteur.append(col_label_r[0])
-                        cols_visiteur+=[col_cat_r[0],"Date du contrôle","Prochaine échéance","Jours restants","Statut"]
+                        cols_visiteur+=[col_ins_r[0],"Date du contrôle","Prochaine échéance","Jours restants","Statut"]
                         st.dataframe(df_show_filtre[cols_visiteur],column_config={
                             "Date du contrôle":   st.column_config.DateColumn("📅 Date du contrôle",format="DD/MM/YYYY"),
                             "Prochaine échéance": st.column_config.DateColumn("⏭️ Prochaine échéance",format="DD/MM/YYYY"),
@@ -1059,7 +1032,7 @@ if acces_autorise:
                         cols_resp=[]
                         if col_site_r:  cols_resp.append(col_site_r[0])
                         if col_label_r: cols_resp.append(col_label_r[0])
-                        cols_resp+=[col_cat_r[0],"_date_brute","_date_reelle","Prochaine échéance","Jours restants","Statut","_ligne_sheet"]
+                        cols_resp+=[col_ins_r[0],"_date_brute","_date_reelle","Prochaine échéance","Jours restants","Statut","_ligne_sheet"]
                         df_editable=df_show_filtre[cols_resp].copy()
                         df_editable["_date_reelle"]=pd.to_datetime(df_editable["_date_reelle"],errors='coerce')
                         edited_df=st.data_editor(df_editable,column_config={
@@ -1131,8 +1104,8 @@ if acces_autorise:
                     for _,row in df_ech.iterrows():
                         d=row["Prochaine échéance"]
                         if pd.notna(d) and d.month==m_view and d.year==a_view:
-                            j=d.day; cat=str(row[col_cat_r[0]]).strip()
-                            col_c=COULEURS_CAT.get(cat,"#94a3b8")
+                            j=d.day; ins=str(row[col_ins_r[0]]).strip()
+                            col_c=COULEURS_INS.get(ins,"#94a3b8")
                             evenements.setdefault(j,[]).append(col_c)
                             details_evt.setdefault(j,[]).append(row)
 
@@ -1174,12 +1147,12 @@ if acces_autorise:
 
                     # Légende
                     st.markdown("<div style='margin-top:12px;border-top:1px dashed #E2E8F0;padding-top:8px;'></div>",unsafe_allow_html=True)
-                    cats_du_mois={str(r[col_cat_r[0]]).strip() for evts_list in details_evt.values() for r in evts_list}
-                    for cat,couleur in COULEURS_CAT.items():
-                        opacity="1" if cat in cats_du_mois else "0.3"
+                    inss_du_mois={str(r[col_ins_r[0]]).strip() for evts_list in details_evt.values() for r in evts_list}
+                    for ins,couleur in COULEURS_INS.items():
+                        opacity="1" if ins in inss_du_mois else "0.3"
                         st.markdown(f"""<div style='display:flex;align-items:center;gap:8px;margin-bottom:5px;opacity:{opacity};'>
                             <span style='width:10px;height:10px;border-radius:2px;background:{couleur};display:inline-block;flex-shrink:0;'></span>
-                            <span style='font-size:11px;color:#475569;'>{cat}</span>
+                            <span style='font-size:11px;color:#475569;'>{ins}</span>
                         </div>""",unsafe_allow_html=True)
 
                 # ---- DÉTAIL JOUR SÉLECTIONNÉ ----
@@ -1193,7 +1166,7 @@ if acces_autorise:
                     card_cols=st.columns(nb_cols)
                     for idx,row_ctrl in enumerate(details_evt[jour_sel]):
                         with card_cols[idx%nb_cols]:
-                            c_cat  =str(row_ctrl[col_cat_r[0]]).strip()
+                            c_ins  =str(row_ctrl[col_ins_r[0]]).strip()
                             c_site =str(row_ctrl[col_site_r[0]]).strip()  if col_site_r  else ""
                             c_label=str(row_ctrl[col_label_r[0]]).strip() if col_label_r else ""
                             c_date =row_ctrl["_date_brute"]
@@ -1201,7 +1174,7 @@ if acces_autorise:
                             c_next =row_ctrl["Prochaine échéance"]
                             c_jours=int(row_ctrl["Jours restants"])
                             c_stat =row_ctrl["Statut"]
-                            c_col  =COULEURS_CAT.get(c_cat,"#94a3b8")
+                            c_col  =COULEURS_INS.get(c_ins,"#94a3b8")
                             date_fmt=c_date.strftime("%d/%m/%Y") if pd.notna(c_date) else "—"
                             reel_fmt=c_reel.strftime("%d/%m/%Y") if pd.notna(c_reel) else None
                             next_fmt=c_next.strftime("%d/%m/%Y") if pd.notna(c_next) else "—"
@@ -1221,7 +1194,7 @@ if acces_autorise:
                             label_html = ("<p style='margin:0 0 4px 0;font-size:11px;color:#64748B;'>⚙️ "+c_label+"</p>") if c_label else ""
                             carte_html=(
                                 f"<div style='background:white;border-top:4px solid {c_col};padding:14px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:8px;'>"
-                                f"<p style='margin:0 0 8px 0;font-size:12px;font-weight:700;color:#1E293B;'>{c_cat}</p>"
+                                f"<p style='margin:0 0 8px 0;font-size:12px;font-weight:700;color:#1E293B;'>{c_ins}</p>"
                                 f"<p style='margin:0 0 4px 0;font-size:11px;color:#475569;'>🏢 <b>{c_site}</b></p>"
                                 f"{label_html}"
                                 "<hr style='border:none;border-top:1px solid #F1F5F9;margin:8px 0;'>"
@@ -1318,8 +1291,8 @@ if acces_autorise:
     # Initialisation propre du Session State
         if "site_exig_sel" not in st.session_state: 
             st.session_state.site_exig_sel = None
-        if "cat_exig_sel" not in st.session_state: 
-            st.session_state.cat_exig_sel = None
+        if "ins_exig_sel" not in st.session_state: 
+            st.session_state.ins_exig_sel = None
 
     # Niveau 1 : choix du site
         st.markdown("<p style='font-size:13px;color:#64748B;font-weight:600;margin-bottom:8px;'>Sélectionnez un site :</p>", unsafe_allow_html=True)
@@ -1329,25 +1302,25 @@ if acces_autorise:
             actif_sgb = (st.session_state.site_exig_sel == "SGB")
             if st.button("🏢 SGB", use_container_width=True, type="primary" if actif_sgb else "secondary"):
                 st.session_state.site_exig_sel = "SGB"
-                st.session_state.cat_exig_sel = None  # Reset la catégorie si on change de site
+                st.session_state.ins_exig_sel = None  # Reset l'installation si on change de site
                 st.rerun()
             
         with s2:
             actif_meg = (st.session_state.site_exig_sel == "MEG")
             if st.button("🏢 MEG", use_container_width=True, type="primary" if actif_meg else "secondary"):
                 st.session_state.site_exig_sel = "MEG"
-                st.session_state.cat_exig_sel = None  # Reset la catégorie si on change de site
+                st.session_state.ins_exig_sel = None  # Reset l'installation si on change de site
                 st.rerun()
 
     # --- CORRECTION DE LA LOGIQUE D'AFFICHAGE ---
     # On se base TOUJOURS sur le session_state actuel, pas sur le clic du bouton direct
         if st.session_state.site_exig_sel:
             site_sel = st.session_state.site_exig_sel
-            st.markdown(f"<p style='font-size:13px;color:#64748B;font-weight:600;margin:16px 0 8px 0;'>Catégories — Site {site_sel} :</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='font-size:13px;color:#64748B;font-weight:600;margin:16px 0 8px 0;'>Installations — Site {site_sel} :</p>", unsafe_allow_html=True)
 
             df_site = df_equip[df_equip["Site"] == site_sel] if not df_equip.empty else pd.DataFrame()
 
-            NOMS_COURTS_CAT = {
+            NOMS_COURTS_INS = {
                 "Installations électriques": "⚡ Électriques",
                 "Equipements de levage":     "🏗️ Levage",
                 "Sécurité incendie":         "🔥 Incendie",
@@ -1355,39 +1328,39 @@ if acces_autorise:
                 "Appareil pression de gaz":  "⚙️ Pression gaz",
             }
 
-        # Création dynamique des boutons de catégories
-            cat_cols = st.columns(5)
-            for i, (cat, couleur) in enumerate(COULEURS_CAT.items()):
-                with cat_cols[i % 5]:
-                    nb_total_cat = int(df_site[df_site["Categorie"] == cat]["Nombre"].sum()) if not df_site.empty else 0
-                    actif_cat = (st.session_state.cat_exig_sel == cat)
-                    label_court = NOMS_COURTS_CAT.get(cat, cat)
+        # Création dynamique des boutons des installations
+            ins_cols = st.columns(5)
+            for i, (ins, couleur) in enumerate(COULEURS_INS.items()):
+                with ins_cols[i % 5]:
+                    nb_total_ins = int(df_site[df_site["Installation"] == ins]["Nombre"].sum()) if not df_site.empty else 0
+                    actif_ins = (st.session_state.ins_exig_sel == ins)
+                    label_court = NOMS_COURTS_INS.get(ins, ins)
                 
-                    if st.button(f"{label_court} ({nb_total_cat})", key=f"cat_btn_{cat}", use_container_width=True,
-                                 type="primary" if actif_cat else "secondary",
-                                 help=f"{nb_total_cat} équipement(s) au total"):
-                        st.session_state.cat_exig_sel = cat
+                    if st.button(f"{label_court} ({nb_total_ins})", key=f"ins_btn_{ins}", use_container_width=True,
+                                 type="primary" if actif_ins else "secondary",
+                                 help=f"{nb_total_ins} équipement(s) au total"):
+                        st.session_state.ins_exig_sel = ins
                         st.rerun()
 
-        # Niveau 3 : sous-équipements de la catégorie choisie
-            if st.session_state.cat_exig_sel:
-                cat_sel = st.session_state.cat_exig_sel
-                st.markdown(f"<p style='font-size:13px;color:#64748B;font-weight:600;margin:16px 0 8px 0;'>Sous-équipements — {cat_sel} ({site_sel}) :</p>", unsafe_allow_html=True)
+        # Niveau 3 : sous-équipements de l'istallation choisie
+            if st.session_state.ins_exig_sel:
+                ins_sel = st.session_state.ins_exig_sel
+                st.markdown(f"<p style='font-size:13px;color:#64748B;font-weight:600;margin:16px 0 8px 0;'>Sous-équipements — {ins_sel} ({site_sel}) :</p>", unsafe_allow_html=True)
 
-                df_cat = df_site[df_site["Categorie"] == cat_sel] if not df_site.empty else pd.DataFrame()
-                couleur_cat = COULEURS_CAT.get(cat_sel, "#94a3b8")
+                df_ins = df_site[df_site["Installation"] == ins_sel] if not df_site.empty else pd.DataFrame()
+                couleur_ins = COULEURS_INS.get(ins_sel, "#94a3b8")
 
-                if df_cat.empty:
-                    st.info(f"Aucun sous-équipement enregistré pour {cat_sel} sur le site {site_sel}.")
+                if df_ins.empty:
+                    st.info(f"Aucun sous-équipement enregistré pour {ins_sel} sur le site {site_sel}.")
                 else:
                     eq_cols = st.columns(3)
-                    for idx, (_, row_eq) in enumerate(df_cat.iterrows()):
+                    for idx, (_, row_eq) in enumerate(df_ins.iterrows()):
                         with eq_cols[idx % 3]:
                             st.markdown(
-                                f"<div style='background:white;border-left:4px solid {couleur_cat};"
+                                f"<div style='background:white;border-left:4px solid {couleur_ins};"
                                 "padding:14px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.05);margin-bottom:10px;'>"
                                 f"<p style='margin:0;font-size:13px;font-weight:600;color:#1E293B;'>{row_eq.get('Sous_equipement','')}</p>"
-                                f"<p style='margin:6px 0 0 0;font-size:24px;font-weight:800;color:{couleur_cat};'>{int(row_eq.get('Nombre',0))}</p>"
+                                f"<p style='margin:6px 0 0 0;font-size:24px;font-weight:800;color:{couleur_ins};'>{int(row_eq.get('Nombre',0))}</p>"
                                 "</div>", unsafe_allow_html=True)
 
             # Gestion (ajout/suppression) — responsable uniquement
@@ -1404,7 +1377,7 @@ if acces_autorise:
                             st.write("")
                             if st.button("➕ Ajouter", use_container_width=True):
                                 if nouv_seq.strip():
-                                    ok, err = ajouter_equipement(site_sel, cat_sel, nouv_seq.strip(), nouv_nb)
+                                    ok, err = ajouter_equipement(site_sel, ins_sel, nouv_seq.strip(), nouv_nb)
                                     if ok:
                                         st.success("✅ Ajouté !")
                                         st.rerun()
@@ -1413,9 +1386,9 @@ if acces_autorise:
                                 else:
                                     st.warning("Veuillez saisir un nom.")
 
-                        if not df_cat.empty:
+                        if not df_ins.empty:
                             st.markdown("<br>**Supprimer un sous-équipement :**", unsafe_allow_html=True)
-                            for orig_idx, row_eq in df_cat.iterrows():
+                            for orig_idx, row_eq in df_ins.iterrows():
                                 dc1, dc2 = st.columns([5, 1])
                                 with dc1:
                                     st.write(f"{row_eq.get('Sous_equipement','')} — {int(row_eq.get('Nombre',0))} unité(s)")
@@ -1429,12 +1402,12 @@ if acces_autorise:
                                         else:
                                             st.error("Erreur lors de la suppression.")
         else:
-            st.info("👆 Sélectionnez un site (SGB ou MEG) pour voir les catégories d'équipements.")
+            st.info("👆 Sélectionnez un site (SGB ou MEG) pour voir les installations")
 
         st.divider()
 
         if not df_exig.empty:
-            st.markdown("### 📄 Rapports check-lists")
+            st.markdown("### 📄 Check-lists des équipements contractés")
             col_sgb, col_meg = st.columns(2)
             date_str = datetime.date.today().strftime('%d_%m_%Y')
 
@@ -1544,19 +1517,19 @@ if acces_autorise:
     # ---- ONGLET 4 : KPI (Responsable uniquement) ----
     if tab_kpi and role=="Responsable" and password_correct:
         with tab_kpi:
-            st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#1E3A8A;'>📊 Indicateurs clés de performance (KPI)</p>",unsafe_allow_html=True)
+            st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#1E3A8A;'>📊 Indicateurs de performance</p>",unsafe_allow_html=True)
             col_r_kpi,_=st.columns([1,5])
             with col_r_kpi:
                 if st.button("🔄",key="refresh_kpi"): st.cache_data.clear(); st.rerun()
 
             # ---- Préparation des données de contrôle (même logique que l'onglet Planification) ----
-            col_cat_k   = [c for c in df_rapports.columns if "cat" in c.lower()]
+            col_ins_k   = [c for c in df_rapports.columns if "ins" in c.lower()]
             col_date_k  = [c for c in df_rapports.columns if "date" in c.lower()]
             col_site_k  = [c for c in df_rapports.columns if "site" in c.lower()]
             col_label_k = [c for c in df_rapports.columns if "equip" in c.lower() or "label" in c.lower() or "nom" in c.lower()]
             col_reelle_k= [c for c in df_rapports.columns if "reelle" in c.lower() or "réelle" in c.lower()]
 
-            if df_rapports.empty or not col_cat_k or not col_date_k:
+            if df_rapports.empty or not col_ins_k or not col_date_k:
                 st.info("Données insuffisantes dans l'onglet « Rapports » pour calculer les KPI.")
                 kpi_data = None
             else:
@@ -1567,7 +1540,7 @@ if acces_autorise:
 
                 cles_k=[]
                 if col_site_k:  cles_k.append(col_site_k[0])
-                cles_k.append(col_cat_k[0])
+                cles_k.append(col_ins_k[0])
                 if col_label_k: cles_k.append(col_label_k[0])
                 df_k = df_k.sort_values("_date_brute", ascending=True)
                 df_k = df_k.drop_duplicates(subset=cles_k, keep="last")
@@ -1578,14 +1551,10 @@ if acces_autorise:
                 nb_realises_2026 = int(df_2026["_date_reelle"].notna().sum())
                 nb_restants_2026 = nb_total_2026 - nb_realises_2026
                 taux1 = round(nb_realises_2026/nb_total_2026*100,1) if nb_total_2026>0 else 0
+                
 
-                # ---- KPI 2 : Taux planifié — dates réelles saisies vs estimées via la dernière visite ----
-                nb_total_all   = len(df_k)
-                nb_avec_reelle = int(df_k["_date_reelle"].notna().sum())
-                nb_estimes     = nb_total_all - nb_avec_reelle
-                taux2 = round(nb_avec_reelle/nb_total_all*100,1) if nb_total_all>0 else 0
 
-                # ---- KPI 3 : Taux de respect de délai de visite (écart ≤ 3j vs échéance théorique initiale) ----
+                # ---- KPI 2 : Taux de respect de délai de visite (écart ≤ 3j vs échéance théorique initiale) ----
                 df_realises_k = df_k[df_k["_date_reelle"].notna()].copy()
                 nb_visites_realisees = len(df_realises_k)
                 if nb_visites_realisees > 0:
@@ -1594,57 +1563,47 @@ if acces_autorise:
                 else:
                     nb_respectes = 0
                 nb_non_respectes = nb_visites_realisees - nb_respectes
-                taux3 = round(nb_respectes/nb_visites_realisees*100,1) if nb_visites_realisees>0 else 0
+                taux2 = round(nb_respectes/nb_visites_realisees*100,1) if nb_visites_realisees>0 else 0
+
+
 
                 kpi_data = {
                     "kpi1": {"taux":taux1, "realises":nb_realises_2026, "restants":nb_restants_2026, "total":nb_total_2026},
-                    "kpi2": {"taux":taux2, "avec_reelle":nb_avec_reelle, "estimes":nb_estimes, "total":nb_total_all},
-                    "kpi3": {"taux":taux3, "respectes":nb_respectes, "non_respectes":nb_non_respectes, "total":nb_visites_realisees},
+                    "kpi2": {"taux":taux2, "respectes":nb_respectes, "non_respectes":nb_non_respectes, "total":nb_visites_realisees}
                 }
 
-                k1c,k2c,k3c = st.columns(3)
+
+
+
+                k1c,k2c = st.columns(2)
 
                 with k1c:
-                    st.markdown("<p style='text-align:center;font-weight:600;color:#1E293B;font-size:14px;'>Taux de réalisation 2026</p>",unsafe_allow_html=True)
-                    if nb_total_2026>0:
-                        dfp1=pd.DataFrame({"Statut":["Réalisés","Restants"],"Nombre":[nb_realises_2026,nb_restants_2026]})
-                        fig1=px.pie(dfp1,values="Nombre",names="Statut",hole=0.6,color="Statut",
-                                    color_discrete_map={"Réalisés":"#10B981","Restants":"#EF4444"})
-                        fig1.update_traces(textposition='inside',textinfo='percent+label')
-                        fig1.update_layout(margin=dict(t=10,b=10,l=10,r=10),height=260,showlegend=False,
-                                            paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
-                        st.plotly_chart(fig1,use_container_width=True,config={'displayModeBar':False})
-                        st.markdown(f"<p style='text-align:center;font-size:13px;color:#64748B;'>{taux1}% réalisés ({nb_realises_2026}/{nb_total_2026})</p>",unsafe_allow_html=True)
-                    else:
-                        st.info("Aucun contrôle avec échéance théorique en 2026.")
-
-                with k2c:
-                    st.markdown("<p style='text-align:center;font-weight:600;color:#1E293B;font-size:14px;'>Taux planifié</p>",unsafe_allow_html=True)
-                    if nb_total_all>0:
-                        dfp2=pd.DataFrame({"Statut":["Date réelle saisie","Estimée (dernière visite)"],"Nombre":[nb_avec_reelle,nb_estimes]})
+                    st.markdown("<p style='text-align:center;font-weight:600;color:#1E293B;font-size:14px;'>Taux de réalisation 2026</p></p>",unsafe_allow_html=True)
+                    if nb_visites_realisees>0:
+                        dfp2=pd.DataFrame({"Statut":["Réalisés","Restants"],"Nombre":[nb_respectes,nb_non_respectes]})
                         fig2=px.pie(dfp2,values="Nombre",names="Statut",hole=0.6,color="Statut",
-                                    color_discrete_map={"Date réelle saisie":"#1E3A8A","Estimée (dernière visite)":"#F59E0B"})
-                        fig2.update_traces(textposition='inside',textinfo='percent+label')
+                                    color_discrete_map={"Réalisés":"#10B981","Restants":"#EF4444"})
+                        fig2.update_traces(textposition='inside',textinfo='percent')
                         fig2.update_layout(margin=dict(t=10,b=10,l=10,r=10),height=260,showlegend=False,
                                             paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig2,use_container_width=True,config={'displayModeBar':False})
-                        st.markdown(f"<p style='text-align:center;font-size:13px;color:#64748B;'>{taux2}% avec date réelle ({nb_avec_reelle}/{nb_total_all})</p>",unsafe_allow_html=True)
-                    else:
-                        st.info("Aucune donnée disponible.")
-
-                with k3c:
-                    st.markdown("<p style='text-align:center;font-weight:600;color:#1E293B;font-size:14px;'>Respect délai de visite (≤3j)</p>",unsafe_allow_html=True)
-                    if nb_visites_realisees>0:
-                        dfp3=pd.DataFrame({"Statut":["Respecté","Non respecté"],"Nombre":[nb_respectes,nb_non_respectes]})
-                        fig3=px.pie(dfp3,values="Nombre",names="Statut",hole=0.6,color="Statut",
-                                    color_discrete_map={"Respecté":"#0EA5E9","Non respecté":"#EF4444"})
-                        fig3.update_traces(textposition='inside',textinfo='percent+label')
-                        fig3.update_layout(margin=dict(t=10,b=10,l=10,r=10),height=260,showlegend=False,
-                                            paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
-                        st.plotly_chart(fig3,use_container_width=True,config={'displayModeBar':False})
-                        st.markdown(f"<p style='text-align:center;font-size:13px;color:#64748B;'>{taux3}% respecté ({nb_respectes}/{nb_visites_realisees})</p>",unsafe_allow_html=True)
+                        st.markdown(f"<p style='text-align:center;font-size:13px;color:#64748B;'>{taux2}% réalisés ({nb_respectes}/{nb_visites_realisees})</p>",unsafe_allow_html=True)
                     else:
                         st.info("Aucune visite réalisée à ce jour.")
+
+                with k2c:
+                    st.markdown("<p style='text-align:center;font-weight:600;color:#1E293B;font-size:14px;'>Respect délai de visite (≤ 1 mois)</p>",unsafe_allow_html=True)
+                    if nb_total_2026>0:
+                        dfp1=pd.DataFrame({"Statut":["Respecté","Non respecté"],"Nombre":[nb_realises_2026,nb_restants_2026]})
+                        fig1=px.pie(dfp1,values="Nombre",names="Statut",hole=0.6,color="Statut",
+                                    color_discrete_map={"Respecté":"#0EA5E9","Non respecté":"#EF4444"})
+                        fig1.update_traces(textposition='inside',textinfo='percent')
+                        fig1.update_layout(margin=dict(t=10,b=10,l=10,r=10),height=260,showlegend=False,
+                                            paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(fig1,use_container_width=True,config={'displayModeBar':False})
+                        st.markdown(f"<p style='text-align:center;font-size:13px;color:#64748B;'>{taux1}% respectés ({nb_respectes}/{nb_respectes})</p>",unsafe_allow_html=True)
+                    else:
+                        st.info("Aucun contrôle avec échéance théorique en 2026.")
 
             st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
 
@@ -1719,24 +1678,24 @@ if acces_autorise:
             st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
 
             # ================= POINTS DE RÉSERVE =================
-            st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📌 Points de réserve</p>",unsafe_allow_html=True)
+            st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📌 Actions de contrôle</p>",unsafe_allow_html=True)
 
             with st.spinner("Chargement des points de réserve..."):
                 df_reserve = lire_points_reserve()
 
-            with st.expander("➕ Ajouter un point de réserve"):
+            with st.expander("➕ Ajouter une action"):
                 r1,r2,r3,r4 = st.columns([1,1.5,1.5,1])
                 with r1:
                     res_site = st.selectbox("Site",["SGB","MEG"],key="res_site_new")
                 with r2:
-                    res_cat = st.selectbox("Catégorie",list(PERIODICITE.keys()),key="res_cat_new")
+                    res_ins = st.selectbox("Installation",list(PERIODICITE.keys()),key="res_ins_new")
                 with r3:
                     res_seq = st.text_input("Sous-équipement",key="res_seq_new")
                 with r4:
                     res_nb = st.number_input("Nb points",min_value=1,value=1,key="res_nb_new")
                 if st.button("💾 Enregistrer",key="btn_add_reserve"):
                     if res_seq.strip():
-                        ok,err = ajouter_point_reserve(res_site,res_cat,res_seq.strip(),res_nb)
+                        ok,err = ajouter_point_reserve(res_site,res_ins,res_seq.strip(),res_nb)
                         if ok:
                             st.success("✅ Point de réserve ajouté !")
                             st.cache_data.clear()
@@ -1756,53 +1715,94 @@ if acces_autorise:
                     st.markdown("<p style='font-weight:600;color:#1E293B;margin:0 0 10px 0;font-size:13px;'>🔍 Filtrer les points de réserve</p>",unsafe_allow_html=True)
                     fr1,fr2,fr3 = st.columns(3)
                     sites_dispo = ["Tous"]+sorted(df_reserve["Site"].dropna().unique().tolist()) if "Site" in df_reserve.columns else ["Tous"]
-                    cats_dispo  = ["Tous"]+sorted(df_reserve["Categorie"].dropna().unique().tolist()) if "Categorie" in df_reserve.columns else ["Tous"]
+                    inss_dispo  = ["Tous"]+sorted(df_reserve["Installation"].dropna().unique().tolist()) if "Installation" in df_reserve.columns else ["Tous"]
                     with fr1: f_res_site = st.selectbox("Site",sites_dispo,key="f_res_site")
-                    with fr2: f_res_cat  = st.selectbox("Catégorie",cats_dispo,key="f_res_cat")
+                    with fr2: f_res_ins  = st.selectbox("Installation",inss_dispo,key="f_res_ins")
                     with fr3: f_res_seq  = st.text_input("Recherche sous-équipement",key="f_res_seq")
 
                 df_reserve_f = df_reserve.copy()
                 if f_res_site!="Tous" and "Site" in df_reserve_f.columns:
                     df_reserve_f = df_reserve_f[df_reserve_f["Site"]==f_res_site]
-                if f_res_cat!="Tous" and "Categorie" in df_reserve_f.columns:
-                    df_reserve_f = df_reserve_f[df_reserve_f["Categorie"]==f_res_cat]
+                if f_res_ins!="Tous" and "Installation" in df_reserve_f.columns:
+                    df_reserve_f = df_reserve_f[df_reserve_f["Installation"]==f_res_ins]
                 if f_res_seq.strip() and "Sous_equipement" in df_reserve_f.columns:
                     df_reserve_f = df_reserve_f[df_reserve_f["Sous_equipement"].astype(str).str.contains(f_res_seq.strip(),case=False,na=False)]
 
                 st.dataframe(df_reserve_f.rename(columns={
-                    "Site":"Site","Categorie":"Catégorie","Sous_equipement":"Sous équipement","Nombre":"Nbre points de réserve"
+                    "Site":"Site","Installation":"Installation","Sous_equipement":"Sous équipement","Nombre":"Nbre points de réserve"
                 }),hide_index=True,use_container_width=True)
 
                 st.markdown("<br>",unsafe_allow_html=True)
-                gr1,gr2 = st.columns(2)
-                with gr1:
+
+                # --- Répartition par site : graphique centré ---
+                csite1,csite2,csite3 = st.columns([1,2,1])
+                with csite2:
                     if "Site" in df_reserve_f.columns and not df_reserve_f.empty:
                         df_by_site = df_reserve_f.groupby("Site")["Nombre"].sum().reset_index()
                         figS = px.pie(df_by_site,values="Nombre",names="Site",hole=0.6,
                                       color_discrete_sequence=['#1E3A8A','#0EA5E9','#94A3B8'])
                         figS.update_traces(textposition='inside',textinfo='percent+label')
-                        figS.update_layout(title="Répartition par site",margin=dict(t=40,b=10,l=10,r=10),height=280,
+                        figS.update_layout(title="Répartition par site",title_x=0.5,margin=dict(t=40,b=10,l=10,r=10),height=280,
                                             paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(figS,use_container_width=True,config={'displayModeBar':False})
                     else:
                         st.info("Aucune donnée à afficher pour le graphe par site.")
-                with gr2:
-                    if "Categorie" in df_reserve_f.columns and not df_reserve_f.empty:
-                        df_by_cat = df_reserve_f.groupby("Categorie")["Nombre"].sum().reset_index()
-                        figC = px.pie(df_by_cat,values="Nombre",names="Categorie",hole=0.6,
-                                      color_discrete_sequence=px.colors.qualitative.Set2)
-                        figC.update_traces(textposition='inside',textinfo='percent')
-                        figC.update_layout(title="Répartition par catégorie",margin=dict(t=40,b=10,l=10,r=10),height=280,
-                                            paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
-                        st.plotly_chart(figC,use_container_width=True,config={'displayModeBar':False})
-                    else:
-                        st.info("Aucune donnée à afficher pour le graphe par catégorie.")
 
-                with st.expander("🗑️ Supprimer un point de réserve"):
+                st.markdown("<br>",unsafe_allow_html=True)
+                st.markdown("<p style='font-weight:700;font-size:14px;color:#0F172A;text-align:center;margin-bottom:10px;'>Répartition par installation</p>",unsafe_allow_html=True)
+
+                # --- Répartition par installation : MEG (gauche) | légende (milieu) | SGB (droite) ---
+                if "Installation" in df_reserve_f.columns and "Site" in df_reserve_f.columns and not df_reserve_f.empty:
+                    all_inss = sorted(df_reserve_f["Installation"].dropna().unique().tolist())
+                    palette = px.colors.qualitative.Set1
+                    color_map = {ins: palette[i % len(palette)] for i,ins in enumerate(all_inss)}
+
+                    gins1,gins2,gins3 = st.columns([2,1,2])
+
+                    with gins1:
+                        df_meg_ins = df_reserve_f[df_reserve_f["Site"]=="MEG"].groupby("Installation")["Nombre"].sum().reset_index()
+                        if not df_meg_ins.empty:
+                            figMEG = px.pie(df_meg_ins,values="Nombre",names="Installation",hole=0.6,
+                                             color="Installation",color_discrete_map=color_map)
+                            figMEG.update_traces(textposition='inside',textinfo='percent',showlegend=False)
+                            figMEG.update_layout(title="MEG",title_x=0.5,showlegend=False,
+                                                  margin=dict(t=40,b=10,l=10,r=10),height=260,
+                                                  paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
+                            st.plotly_chart(figMEG,use_container_width=True,config={'displayModeBar':False})
+                        else:
+                            st.info("Aucune donnée MEG.")
+
+                    with gins2:
+                        legende_items = "".join(
+                            f"<div style='display:flex;align-items:center;gap:8px;margin-bottom:12px;'>"
+                            f"<span style='width:12px;height:12px;min-width:12px;border-radius:3px;background:{color_map[ins]};display:inline-block;'></span>"
+                            f"<span style='font-size:11.5px;color:#334155;'>{ins}</span>"
+                            f"</div>"
+                            for ins in all_inss
+                        )
+                        legende_html = f"<div style='padding-top:35px;'>{legende_items}</div>"
+                        st.markdown(legende_html,unsafe_allow_html=True)
+
+                    with gins3:
+                        df_sgb_ins = df_reserve_f[df_reserve_f["Site"]=="SGB"].groupby("Installation")["Nombre"].sum().reset_index()
+                        if not df_sgb_ins.empty:
+                            figSGB = px.pie(df_sgb_ins,values="Nombre",names="Installation",hole=0.6,
+                                             color="Installation",color_discrete_map=color_map)
+                            figSGB.update_traces(textposition='inside',textinfo='percent',showlegend=False)
+                            figSGB.update_layout(title="SGB",title_x=0.5,showlegend=False,
+                                                  margin=dict(t=40,b=10,l=10,r=10),height=260,
+                                                  paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
+                            st.plotly_chart(figSGB,use_container_width=True,config={'displayModeBar':False})
+                        else:
+                            st.info("Aucune donnée SGB.")
+                else:
+                    st.info("Aucune donnée à afficher pour le graphe par installation.")
+
+                with st.expander("🗑️ Supprimer une action"):
                     for orig_idx,row_r in df_reserve.iterrows():
                         dcx1,dcx2 = st.columns([5,1])
                         with dcx1:
-                            st.write(f"{row_r.get('Site','')} — {row_r.get('Categorie','')} — {row_r.get('Sous_equipement','')} — {row_r.get('Nombre',0)} pt(s)")
+                            st.write(f"{row_r.get('Site','')} — {row_r.get('Installation','')} — {row_r.get('Sous_equipement','')} — {row_r.get('Nombre',0)} pt(s)")
                         with dcx2:
                             if st.button("🗑️",key=f"del_res_{orig_idx}"):
                                 num_ligne_sheet = orig_idx+2
