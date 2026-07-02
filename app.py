@@ -10,15 +10,31 @@ import requests
 import calendar
 import base64
 from weasyprint import HTML
+import fitz  # PyMuPDF
 
 def afficher_apercu_pdf(pdf_bytes, hauteur=800):
-    """Affiche un aperçu du PDF directement dans la page (sans le télécharger)."""
-    b64 = base64.b64encode(pdf_bytes).decode("utf-8")
-    st.markdown(
-        f'<iframe src="data:application/pdf;base64,{b64}" width="100%" height="{hauteur}" '
-        f'style="border:1px solid #E2E8F0;border-radius:8px;" type="application/pdf"></iframe>',
-        unsafe_allow_html=True,
-    )
+    """
+    Affiche un aperçu du PDF sous forme d'images (une par page).
+
+    On évite volontairement l'ancienne méthode <iframe src="data:application/pdf;base64,...">
+    car elle est peu fiable : bloquée par de nombreux navigateurs mobiles (Safari iOS, Chrome
+    mobile), sujette aux restrictions CSP quand elle est imbriquée dans l'iframe de Streamlit,
+    et limitée en taille selon les navigateurs. Ici, le rendu est fait côté serveur avec
+    PyMuPDF, donc il fonctionne de façon identique sur tous les appareils.
+    """
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        nb_pages = len(doc)
+        for i, page in enumerate(doc):
+            pix = page.get_pixmap(dpi=130)
+            img_bytes = pix.tobytes("png")
+            st.image(img_bytes, use_container_width=True)
+            if nb_pages > 1:
+                st.caption(f"Page {i + 1} / {nb_pages}")
+        doc.close()
+    except Exception as e:
+        st.error(f"Impossible d'afficher l'aperçu du PDF : {e}")
+        st.info("Vous pouvez tout de même télécharger le rapport ci-dessous.")
     
 def generer_rapport_equipements_pdf(df_exigences, site_filtre):
     """
