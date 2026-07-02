@@ -27,6 +27,29 @@ def afficher_apercu_pdf(pdf_bytes, hauteur=800):
         st.error(f"Impossible d'afficher l'aperçu du PDF : {e}")
         st.info("Vous pouvez tout de même télécharger le rapport ci-dessous.")
     
+def afficher_apercu_pdf_grille(pdf_bytes, colonnes=2, largeur_colonne=380):
+    """
+    Affiche l'aperçu d'un PDF sous forme de grille (par défaut 2 colonnes),
+    chaque colonne présentant une page du rapport, réduisant ainsi la taille
+    d'affichage par rapport à un aperçu pleine largeur page par page.
+    """
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        nb_pages = len(doc)
+        cols = st.columns(colonnes)
+        for i, page in enumerate(doc):
+            pix = page.get_pixmap(dpi=110)
+            img_bytes = pix.tobytes("png")
+            col = cols[i % colonnes]
+            with col:
+                st.image(img_bytes, width=largeur_colonne)
+                st.caption(f"Page {i + 1} / {nb_pages}")
+        doc.close()
+    except Exception as e:
+        st.error(f"Impossible d'afficher l'aperçu du PDF : {e}")
+        st.info("Vous pouvez tout de même télécharger le rapport ci-dessous.")
+
+
 def generer_rapport_equipements_pdf(df_exigences, site_filtre):
     """
     Génère un rapport PDF de 5 pages pour un site spécifique (SGB ou MEG).
@@ -1833,7 +1856,7 @@ if acces_autorise:
                             st.session_state["pdf_kpi"] = None
                             st.error(f"Erreur lors de la génération du PDF : {e}")
                 if st.session_state.get("pdf_kpi"):
-                    afficher_apercu_pdf(st.session_state["pdf_kpi"])
+                    afficher_apercu_pdf_grille(st.session_state["pdf_kpi"], colonnes=2)
                     st.download_button(
                         label="📥 Télécharger le rapport PDF",
                         data=st.session_state["pdf_kpi"],
