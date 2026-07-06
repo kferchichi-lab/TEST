@@ -827,17 +827,22 @@ def codif_charger_classeur(sheet_id):
 def _detecter_entete_et_nettoyer_codif(valeurs):
     """Prend les lignes brutes (liste de listes) d'un onglet du classeur de codification et
     retourne un DataFrame propre avec les colonnes Designation | Observation | Code.
-    Cherche automatiquement la ligne d'en-tête (Désignation / Observation / Code),
-    tolère les libellés variables, et complète (forward-fill) les cellules de
-    désignation fusionnées verticalement dans la feuille source."""
+    Cherche automatiquement la ligne d'en-tête, en tolérant les différents intitulés utilisés
+    selon les onglets (ex: 'Désignation'/'Rapport' pour l'équipement,
+    'Observation'/'Organes examinés NC'/'Problème' pour l'action), et complète (forward-fill)
+    les cellules d'équipement fusionnées verticalement dans la feuille source."""
     if not valeurs:
         return pd.DataFrame()
+
+    MOTS_CLES_EQUIP = ["désignation", "designation", "équipement", "equipement", "rapport"]
+    MOTS_CLES_OBS   = ["observation", "organe", "examin", "problème", "probleme", "action"]
+
     idx_entete = None
     for i, ligne in enumerate(valeurs):
         cellules = [str(c).strip().lower() for c in ligne]
-        a_designation = any(("désignation" in c) or ("designation" in c) for c in cellules)
-        a_observation = any("observ" in c for c in cellules)
-        if a_designation and a_observation:
+        a_equip = any(any(mc in c for mc in MOTS_CLES_EQUIP) for c in cellules)
+        a_obs   = any(any(mc in c for mc in MOTS_CLES_OBS) for c in cellules)
+        if a_equip and a_obs:
             idx_entete = i
             break
     if idx_entete is None:
@@ -849,8 +854,8 @@ def _detecter_entete_et_nettoyer_codif(valeurs):
     lignes = [(list(r) + [""] * (nb_col - len(r)))[:nb_col] for r in lignes]
     df = pd.DataFrame(lignes, columns=entetes)
 
-    col_desig = next((c for c in df.columns if "désign" in c.lower() or "design" in c.lower()), None)
-    col_obs   = next((c for c in df.columns if "observ" in c.lower()), None)
+    col_desig = next((c for c in df.columns if any(mc in c.lower() for mc in MOTS_CLES_EQUIP)), None)
+    col_obs   = next((c for c in df.columns if any(mc in c.lower() for mc in MOTS_CLES_OBS)), None)
     col_code  = next((c for c in df.columns if c.strip().lower() in ("c", "code")), None)
     if not (col_desig and col_obs and col_code):
         return pd.DataFrame()
