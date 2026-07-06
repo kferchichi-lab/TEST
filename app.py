@@ -405,22 +405,24 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, carto_b64, logo_url):
 
 def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
     """
-    Génère un rapport PDF listant, pour un pilote donné, toutes les actions de la
-    codification (classeur externe) qui le concernent — une page par installation
-    (= un onglet du classeur source), avec Désignation / Observation / Code / Nature.
+    Génère un rapport PDF (format paysage) listant, pour un pilote donné, toutes les actions de
+    la codification (classeur externe) qui le concernent — une page par installation
+    (= un onglet du classeur source), sous forme de fiche de suivi terrain :
+    Equipement | Actions | Responsable | Etat (Immédiat/Sous-traitant*/Planifié*) | Réalisation (O/N) | Observation.
     df_filtre doit contenir les colonnes : Installation, Designation, Observation, Code, Nature.
     """
     date_str = datetime.date.today().strftime('%d/%m/%Y')
     installations = list(dict.fromkeys(df_filtre["Installation"].tolist()))  # ordre stable, sans doublons
     total_general = len(df_filtre)
+    nom_responsable = SOUS_PILOTE_NOMS.get(pilote_choisi, pilote_choisi)
 
     html_content = f"""
     <html>
     <head>
     <style>
         @page {{
-            size: A4 portrait;
-            margin: 20mm 15mm;
+            size: A4 landscape;
+            margin: 15mm 12mm;
             @bottom-right {{
                 content: "Page " counter(page) " / " counter(pages);
                 font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -439,23 +441,23 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
         .page:last-child {{ page-break-after: avoid; }}
         .header-title {{
             text-align: center;
-            font-size: 18pt;
+            font-size: 16pt;
             font-weight: bold;
             color: #1E3A8A;
-            margin-bottom: 20px;
+            margin-bottom: 14px;
             text-transform: uppercase;
             border-bottom: 2px solid #1E3A8A;
-            padding-bottom: 10px;
+            padding-bottom: 8px;
         }}
         .page-header {{
             display: flex;
             align-items: center;
             gap: 12px;
-            margin-bottom: 16px;
-            padding-bottom: 10px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
             border-bottom: 1px solid #E2E8F0;
         }}
-        .page-header img {{ height: 36px; }}
+        .page-header img {{ height: 32px; }}
         .page-header-text {{
             font-size: 9.5pt;
             color: #64748B;
@@ -464,42 +466,51 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
             letter-spacing: 0.4px;
         }}
         .meta-info {{
-            margin-bottom: 20px;
+            margin-bottom: 14px;
             background-color: #F8FAFC;
             border: 1px solid #E2E8F0;
-            padding: 15px;
+            padding: 10px 15px;
             border-radius: 6px;
-            line-height: 1.8;
-            font-size: 11pt;
+            line-height: 1.7;
+            font-size: 10.5pt;
         }}
         .category-title {{
-            font-size: 14pt;
+            font-size: 13pt;
             color: #0EA5E9;
             font-weight: bold;
-            margin-top: 10px;
-            margin-bottom: 15px;
+            margin-top: 6px;
+            margin-bottom: 10px;
             border-left: 4px solid #0EA5E9;
             padding-left: 8px;
         }}
-        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
-        th, td {{ border: 1px solid #CBD5E1; padding: 8px; text-align: left; font-size: 9pt; vertical-align: middle; }}
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 14px; }}
+        th, td {{ border: 1px solid #CBD5E1; padding: 6px; text-align: left; font-size: 8.5pt; vertical-align: middle; }}
         th {{
-            background-color: #1E3A8A; color: white; font-weight: bold;
-            text-transform: uppercase; font-size: 8.5pt;
+            background-color: #FBD9B5; color: #1E293B; font-weight: bold;
+            text-align: center; font-size: 8.5pt;
         }}
-        .col-desig {{ width: 28%; }}
-        .col-obs   {{ width: 57%; }}
-        .col-chk   {{ width: 15%; text-align: center; }}
+        .col-equip  {{ width: 14%; }}
+        .col-action {{ width: 30%; }}
+        .col-resp   {{ width: 12%; text-align: center; }}
+        .col-etat   {{ width: 8%; text-align: center; }}
+        .col-real   {{ width: 10%; text-align: center; }}
+        .col-obs    {{ width: 16%; }}
+        .td-chk {{ text-align: center; }}
         .checkbox-box {{
             display: inline-block;
-            width: 14px;
-            height: 14px;
-            border: 1px solid #475569;
-            border-radius: 2px;
+            width: 13px;
+            height: 13px;
+            border: 1.5px solid #1E293B;
+            border-radius: 3px;
+        }}
+        .footnote {{
+            font-size: 8pt;
+            color: #475569;
+            margin-top: 4px;
         }}
         .total-badge {{
             display: inline-block; background:#0EA5E9; color:white; font-weight:700;
-            padding:4px 12px; border-radius:12px; font-size:9pt; margin-left:8px;
+            padding:3px 12px; border-radius:12px; font-size:9pt; margin-left:8px;
         }}
     </style>
     </head>
@@ -514,9 +525,9 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
                 <img src="{logo_url}"/>
                 <div class="page-header-text">Tunisie Profilés d'Aluminium — Direction Maintenance &amp; TN</div>
             </div>
-            <div class="header-title" style="border-bottom: none; padding-bottom: 0;">Rapport d'Actions — Pilote {pilote_choisi}</div>
+            <div class="header-title" style="border-bottom: none; padding-bottom: 0;">Fiche de Suivi des Actions — Sous-pilote {nom_responsable}</div>
             <div class="meta-info">
-                <strong>Pilote :</strong> {pilote_choisi}<br>
+                <strong>Sous-pilote :</strong> {nom_responsable}<br>
                 <strong>Installation :</strong> {ins}<br>
                 <strong>Date d'édition :</strong> {date_str}
             </div>
@@ -524,9 +535,17 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
             <table>
                 <thead>
                     <tr>
-                        <th class="col-desig">Equipement</th>
-                        <th class="col-obs">Observation</th>
-                        <th class="col-chk">Réalisée</th>
+                        <th class="col-equip" rowspan="2">Equipement</th>
+                        <th class="col-action" rowspan="2">Actions</th>
+                        <th class="col-resp" rowspan="2">Responsable</th>
+                        <th colspan="3">Etat</th>
+                        <th class="col-real" rowspan="2">Réalisation<br>(O/N)</th>
+                        <th class="col-obs" rowspan="2">Observation</th>
+                    </tr>
+                    <tr>
+                        <th class="col-etat">Immédiat</th>
+                        <th class="col-etat">Sous-traitant*</th>
+                        <th class="col-etat">Planifié*</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -538,16 +557,22 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
                     html_content += f'<td rowspan="{span}">{equip}</td>'
                 html_content += f"""
                         <td>{observation}</td>
-                        <td class="col-chk"><span class="checkbox-box"></span></td>
+                        <td class="col-resp">{nom_responsable}</td>
+                        <td class="td-chk"><span class="checkbox-box"></span></td>
+                        <td class="td-chk"><span class="checkbox-box"></span></td>
+                        <td class="td-chk"><span class="checkbox-box"></span></td>
+                        <td></td>
+                        <td></td>
                     </tr>
                 """
         else:
             html_content += """
-                <tr><td colspan="3" style="text-align:center;color:#94A3B8;font-style:italic;">Aucune action</td></tr>
+                <tr><td colspan="8" style="text-align:center;color:#94A3B8;font-style:italic;">Aucune action</td></tr>
             """
         html_content += """
                 </tbody>
             </table>
+            <div class="footnote">(*) Veuillez préciser la raison ou une observation associée</div>
         </div>
         """
 
@@ -557,8 +582,9 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
             <img src="{logo_url}"/>
             <div class="page-header-text">Tunisie Profilés d'Aluminium — Direction Maintenance &amp; TN</div>
         </div>
-        <div class="header-title">Synthèse — Pilote {pilote_choisi}</div>
+        <div class="header-title">Synthèse — Sous-pilote {nom_responsable}</div>
         <div class="meta-info">
+            <strong>Sous-pilote :</strong> {nom_responsable}<br>
             <strong>Total toutes installations confondues :</strong> {total_general} action(s)<br>
             <strong>Date d'édition :</strong> {date_str}
         </div>
@@ -854,8 +880,27 @@ def _detecter_entete_et_nettoyer_codif(valeurs):
     lignes = [(list(r) + [""] * (nb_col - len(r)))[:nb_col] for r in lignes]
     df = pd.DataFrame(lignes, columns=entetes)
 
-    col_desig = next((c for c in df.columns if any(mc in c.lower() for mc in MOTS_CLES_EQUIP)), None)
-    col_obs   = next((c for c in df.columns if any(mc in c.lower() for mc in MOTS_CLES_OBS)), None)
+    def _trouver_colonne(colonnes, groupes_mots_cles):
+        """Cherche la colonne correspondant au groupe de mots-clés le plus spécifique possible
+        (on essaie groupe par groupe, du plus spécifique au plus générique, et on ne retombe sur
+        un groupe générique — ex: 'rapport', 'action' — que si aucune colonne plus spécifique
+        n'a matché, pour éviter de capturer par erreur une autre colonne du même onglet)."""
+        for groupe in groupes_mots_cles:
+            for c in colonnes:
+                if any(mc in c.lower() for mc in groupe):
+                    return c
+        return None
+
+    col_desig = _trouver_colonne(df.columns, [
+        ["désignation", "designation", "équipement", "equipement"],
+        ["rapport"],
+    ])
+    col_obs = _trouver_colonne(df.columns, [
+        ["observation"],
+        ["organe", "examin"],
+        ["problème", "probleme"],
+        ["action"],
+    ])
     col_code  = next((c for c in df.columns if c.strip().lower() in ("c", "code")), None)
     if not (col_desig and col_obs and col_code):
         return pd.DataFrame()
@@ -1058,6 +1103,17 @@ NATURE_PILOTE = {
     "D": ("Documentation",  "BT + HSE"),
     "O": ("Organisation",   "DMTN + Chef service BT"),
     "R": ("Règlementation", "BT + HSE + RH + DG"),
+}
+
+# Nom du sous-pilote (personne responsable) associé à chaque entité de pilotage.
+# Les entités non listées ici (ex: DMTN) affichent l'entité elle-même à défaut de nom connu.
+SOUS_PILOTE_NOMS = {
+    "Maintenance":     "Saber BEN CHAABEN",
+    "HSE":             "Montassar MEHRABI",
+    "BT":              "Aïcha BELLAKHAL",
+    "Chef service BT": "Aïcha BELLAKHAL",
+    "RH":              "Aïcha BELLAKHAL",
+    "DG":              "Aïcha BELLAKHAL",
 }
 
 def lire_points_reserve_nature():
