@@ -482,15 +482,21 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
             padding-left: 8px;
         }}
         table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
-        th, td {{ border: 1px solid #CBD5E1; padding: 8px; text-align: left; font-size: 9pt; }}
+        th, td {{ border: 1px solid #CBD5E1; padding: 8px; text-align: left; font-size: 9pt; vertical-align: middle; }}
         th {{
             background-color: #1E3A8A; color: white; font-weight: bold;
             text-transform: uppercase; font-size: 8.5pt;
         }}
-        .col-desig {{ width: 30%; }}
-        .col-obs   {{ width: 50%; }}
-        .col-code  {{ width: 10%; text-align: center; }}
-        .col-nat   {{ width: 20%; }}
+        .col-desig {{ width: 28%; }}
+        .col-obs   {{ width: 57%; }}
+        .col-chk   {{ width: 15%; text-align: center; }}
+        .checkbox-box {{
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 1px solid #475569;
+            border-radius: 2px;
+        }}
         .total-badge {{
             display: inline-block; background:#0EA5E9; color:white; font-weight:700;
             padding:4px 12px; border-radius:12px; font-size:9pt; margin-left:8px;
@@ -518,27 +524,26 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
             <table>
                 <thead>
                     <tr>
-                        <th class="col-desig">Désignation</th>
+                        <th class="col-desig">Equipement</th>
                         <th class="col-obs">Observation</th>
-                        <th class="col-code">Code</th>
-                        <th class="col-nat">Nature</th>
+                        <th class="col-chk">Réalisée</th>
                     </tr>
                 </thead>
                 <tbody>
         """
         if not d_ins.empty:
-            for _, row in d_ins.iterrows():
+            for equip, span, observation in _lignes_avec_rowspan(d_ins):
+                html_content += "<tr>"
+                if span is not None:
+                    html_content += f'<td rowspan="{span}">{equip}</td>'
                 html_content += f"""
-                    <tr>
-                        <td>{row.get('Designation','')}</td>
-                        <td>{row.get('Observation','')}</td>
-                        <td style="text-align:center;">{row.get('Code','')}</td>
-                        <td>{row.get('Nature','')}</td>
+                        <td>{observation}</td>
+                        <td class="col-chk"><span class="checkbox-box"></span></td>
                     </tr>
                 """
         else:
             html_content += """
-                <tr><td colspan="4" style="text-align:center;color:#94A3B8;font-style:italic;">Aucune action</td></tr>
+                <tr><td colspan="3" style="text-align:center;color:#94A3B8;font-style:italic;">Aucune action</td></tr>
             """
         html_content += """
                 </tbody>
@@ -871,6 +876,26 @@ def _codes_pour_pilote(pilote_choisi):
         if pilote_choisi in entites:
             codes.append(code)
     return codes
+
+
+def _lignes_avec_rowspan(d_ins):
+    """Regroupe les lignes consécutives ayant le même Equipement (Designation) pour permettre
+    une fusion de cellules (rowspan) dans le tableau PDF.
+    Retourne une liste de tuples (equipement_ou_None, rowspan_ou_None, observation)."""
+    valeurs = d_ins["Designation"].tolist()
+    obs = d_ins["Observation"].tolist()
+    lignes = []
+    i, n = 0, len(valeurs)
+    while i < n:
+        j = i
+        while j < n and valeurs[j] == valeurs[i]:
+            j += 1
+        span = j - i
+        lignes.append((valeurs[i], span, obs[i]))
+        for k in range(i + 1, j):
+            lignes.append((None, None, obs[k]))
+        i = j
+    return lignes
 
 
 
