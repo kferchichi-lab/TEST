@@ -489,12 +489,12 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
             background-color: #FBD9B5; color: #1E293B; font-weight: bold;
             text-align: center; font-size: 8.5pt;
         }}
-        .col-equip  {{ width: 14%; }}
-        .col-action {{ width: 30%; }}
-        .col-resp   {{ width: 12%; text-align: center; }}
-        .col-etat   {{ width: 8%; text-align: center; }}
-        .col-real   {{ width: 10%; text-align: center; }}
-        .col-obs    {{ width: 16%; }}
+        .col-equip  {{ width: 13%; }}
+        .col-action {{ width: 22%; }}
+        .col-resp   {{ width: 10%; text-align: center; }}
+        .col-etat   {{ width: 7%; text-align: center; }}
+        .col-real   {{ width: 9%; text-align: center; }}
+        .col-obs    {{ width: 25%; }}
         .td-chk {{ text-align: center; }}
         .checkbox-box {{
             display: inline-block;
@@ -525,7 +525,7 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
                 <img src="{logo_url}"/>
                 <div class="page-header-text">Tunisie Profilés d'Aluminium — Direction Maintenance &amp; TN</div>
             </div>
-            <div class="header-title" style="border-bottom: none; padding-bottom: 0;">Fiche de Suivi des Actions — Sous-pilote {nom_responsable}</div>
+            <div class="header-title" style="border-bottom: none; padding-bottom: 0;">Plan d'actions - Contrôle réglementaire</div>
             <div class="meta-info">
                 <strong>Sous-pilote :</strong> {nom_responsable}<br>
                 <strong>Installation :</strong> {ins}<br>
@@ -557,7 +557,7 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
                     html_content += f'<td rowspan="{span}">{equip}</td>'
                 html_content += f"""
                         <td>{observation}</td>
-                        <td class="col-resp">{nom_responsable}</td>
+                        <td class="col-resp"></td>
                         <td class="td-chk"><span class="checkbox-box"></span></td>
                         <td class="td-chk"><span class="checkbox-box"></span></td>
                         <td class="td-chk"><span class="checkbox-box"></span></td>
@@ -572,9 +572,12 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
         html_content += """
                 </tbody>
             </table>
-            <div class="footnote">(*) Veuillez préciser la raison ou une observation associée</div>
+            <div class="footnote">(*) Veuillez préciser la raison ou toute observation associée dans la colonne Observation.</div>
         </div>
         """
+
+    footnote_synthese = ('<div class="footnote">(*) Veuillez préciser la raison ou toute observation '
+                          'associée dans la colonne Observation.</div>')
 
     html_content += f"""
     <div class="page">
@@ -582,12 +585,13 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
             <img src="{logo_url}"/>
             <div class="page-header-text">Tunisie Profilés d'Aluminium — Direction Maintenance &amp; TN</div>
         </div>
-        <div class="header-title">Synthèse — Sous-pilote {nom_responsable}</div>
+        <div class="header-title">Plan d'actions - Contrôle réglementaire</div>
         <div class="meta-info">
             <strong>Sous-pilote :</strong> {nom_responsable}<br>
             <strong>Total toutes installations confondues :</strong> {total_general} action(s)<br>
             <strong>Date d'édition :</strong> {date_str}
         </div>
+        {footnote_synthese}
     </div>
     </body>
     </html>
