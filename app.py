@@ -486,7 +486,7 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
         table {{ width: 100%; border-collapse: collapse; margin-bottom: 14px; }}
         th, td {{ border: 1px solid #CBD5E1; padding: 6px; text-align: left; font-size: 8.5pt; vertical-align: middle; }}
         th {{
-            background-color: #FBD9B5; color: #1E293B; font-weight: bold;
+            background-color: #1406BE; color: #FFFFFF; font-weight: bold;
             text-align: center; font-size: 8.5pt;
         }}
         .col-equip  {{ width: 13%; }}
@@ -540,7 +540,7 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
                         <th class="col-resp" rowspan="2">Responsable</th>
                         <th colspan="3">Etat</th>
                         <th class="col-real" rowspan="2">Réalisation<br>(O/N)</th>
-                        <th class="col-obs" rowspan="2">Observation</th>
+                        <th class="col-obs" rowspan="2">Suivi d'avancement *</th>
                     </tr>
                     <tr>
                         <th class="col-etat">Immédiat</th>
@@ -572,12 +572,12 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
         html_content += """
                 </tbody>
             </table>
-            <div class="footnote">(*) Veuillez préciser la raison ou toute observation associée dans la colonne Observation.</div>
+            <div class="footnote">(*) Suivi d'avancement : Date de réalisation, Besoin PDR, Lancement DA, Nom de sous-traitant...</div>
         </div>
         """
 
-    footnote_synthese = ('<div class="footnote">(*) Veuillez préciser la raison ou toute observation '
-                          'associée dans la colonne Observation.</div>')
+    footnote_synthese = ('<div class="footnote">(*) Suivi d\'avancement : Date de réalisation, Besoin PDR, '
+                          'Lancement DA, Nom de sous-traitant...</div>')
 
     html_content += f"""
     <div class="page">
