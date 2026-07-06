@@ -9,6 +9,7 @@ import time
 import requests
 import calendar
 import base64
+import io
 from weasyprint import HTML
 import fitz  # PyMuPDF
 
@@ -775,34 +776,52 @@ def sheets_lire(onglet, plage="A:Z"):
     except Exception:
         return pd.DataFrame()
 
-def codif_lister_onglets(sheet_id):
-    """Retourne (liste_des_noms_d_onglets, message_erreur) pour un classeur Google Sheets donné.
-    Utilise le même compte de service que le reste de l'app (accès en lecture minimum requis)."""
-    token = obtenir_access_token()
-    if not token:
-        return None, "Impossible d'obtenir un jeton d'accès Google (vérifiez vos secrets)."
+def _obtenir_token_scope(scope):
+    """Comme obtenir_access_token(), mais permet de demander un scope OAuth différent
+    (ex: Drive en lecture) avec le même compte de service."""
     try:
-        url = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}"
-        resp = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=15)
-        if resp.status_code == 403 or resp.status_code == 404:
+        import jwt as pyjwt
+        private_key  = st.secrets["connections"]["gsheets"]["private_key"]
+        client_email = st.secrets["connections"]["gsheets"]["client_email"]
+        now = int(time.time())
+        payload = {"iss":client_email,"scope":scope,
+                   "aud":"https://oauth2.googleapis.com/token","exp":now+3600,"iat":now}
+        token_jwt = pyjwt.encode(payload, private_key, algorithm="RS256")
+        resp = requests.post("https://oauth2.googleapis.com/token",
+            data={"grant_type":"urn:ietf:params:oauth:grant-type:jwt-bearer","assertion":token_jwt},timeout=15)
+        return resp.json()["access_token"] if resp.status_code==200 else None
+    except Exception:
+        return None
+
+
+def codif_charger_classeur(sheet_id):
+    """Télécharge le classeur de codification via l'API Google Drive (fonctionne même si le
+    fichier est un .xlsx uploadé et jamais converti en Google Sheets natif, contrairement à
+    l'API Sheets). Retourne (dict {nom_onglet: DataFrame_brut_sans_entete}, message_erreur)."""
+    token = _obtenir_token_scope("https://www.googleapis.com/auth/drive.readonly")
+    if not token:
+        return None, "Impossible d'obtenir un jeton d'accès Google (scope Drive)."
+    try:
+        url = f"https://www.googleapis.com/drive/v3/files/{sheet_id}?alt=media"
+        resp = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=30)
+        if resp.status_code in (403, 404):
             try:
                 email = st.secrets["connections"]["gsheets"]["client_email"]
             except Exception:
                 email = "(voir le champ client_email de vos secrets)"
-            return None, (f"Accès refusé au classeur de codification. Partagez-le (en lecture) "
+            return None, (f"Accès refusé au fichier de codification. Partagez-le (en lecture) "
                            f"avec le compte de service : {email}")
         if resp.status_code != 200:
-            return None, f"Erreur API Google Sheets ({resp.status_code})."
-        data = resp.json()
-        noms = [s["properties"]["title"] for s in data.get("sheets", [])]
-        return noms, None
+            return None, f"Erreur API Google Drive ({resp.status_code}) : {resp.text[:300]}"
+        classeur = pd.read_excel(io.BytesIO(resp.content), sheet_name=None, header=None, engine="openpyxl")
+        return classeur, None
     except Exception as e:
-        return None, f"Erreur inattendue : {e}"
+        return None, f"Erreur inattendue lors de la lecture du fichier Excel : {e}"
 
 
 def _detecter_entete_et_nettoyer_codif(valeurs):
-    """Prend les lignes brutes d'un onglet du classeur de codification et retourne un
-    DataFrame propre avec les colonnes Designation | Observation | Code.
+    """Prend les lignes brutes (liste de listes) d'un onglet du classeur de codification et
+    retourne un DataFrame propre avec les colonnes Designation | Observation | Code.
     Cherche automatiquement la ligne d'en-tête (Désignation / Observation / Code),
     tolère les libellés variables, et complète (forward-fill) les cellules de
     désignation fusionnées verticalement dans la feuille source."""
@@ -822,7 +841,7 @@ def _detecter_entete_et_nettoyer_codif(valeurs):
     entetes = [str(c).strip() for c in valeurs[idx_entete]]
     nb_col = len(entetes)
     lignes = valeurs[idx_entete + 1:]
-    lignes = [(r + [""] * (nb_col - len(r)))[:nb_col] for r in lignes]
+    lignes = [(list(r) + [""] * (nb_col - len(r)))[:nb_col] for r in lignes]
     df = pd.DataFrame(lignes, columns=entetes)
 
     col_desig = next((c for c in df.columns if "désign" in c.lower() or "design" in c.lower()), None)
@@ -835,29 +854,12 @@ def _detecter_entete_et_nettoyer_codif(valeurs):
     df.columns = ["Designation", "Observation", "Code"]
     for c in df.columns:
         df[c] = df[c].astype(str).str.strip()
+        df[c] = df[c].replace("nan", "")
     df["Designation"] = df["Designation"].replace("", pd.NA).ffill().fillna("")
     df["Code"] = df["Code"].str.upper()
     df = df[(df["Observation"] != "") & (df["Code"] != "")]
     df = df[df["Code"].isin(NATURE_PILOTE.keys())]
     return df.reset_index(drop=True)
-
-
-def codif_lire_onglet(sheet_id, onglet, plage="A:Z"):
-    """Lit un onglet du classeur de codification et retourne un DataFrame nettoyé
-    (Designation | Observation | Code), ou un DataFrame vide en cas de problème."""
-    token = obtenir_access_token()
-    if not token:
-        return pd.DataFrame()
-    try:
-        plage_encodee = requests.utils.quote(f"'{onglet}'!{plage}", safe="")
-        url = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{plage_encodee}"
-        resp = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=15)
-        if resp.status_code != 200:
-            return pd.DataFrame()
-        valeurs = resp.json().get("values", [])
-        return _detecter_entete_et_nettoyer_codif(valeurs)
-    except Exception:
-        return pd.DataFrame()
 
 
 def _codes_pour_pilote(pilote_choisi):
@@ -2474,17 +2476,18 @@ if acces_autorise:
 
             if lancer_rapport_pilote:
                 with st.spinner("Lecture du classeur de codification..."):
-                    noms_onglets, err = codif_lister_onglets(CODIF_SHEET_ID)
+                    classeur, err = codif_charger_classeur(CODIF_SHEET_ID)
                     if err:
                         st.session_state["pdf_pilote"] = None
                         st.error(err)
-                    elif not noms_onglets:
+                    elif not classeur:
                         st.session_state["pdf_pilote"] = None
                         st.warning("Aucun onglet trouvé dans le classeur de codification.")
                     else:
                         frames = []
-                        for onglet in noms_onglets:
-                            d = codif_lire_onglet(CODIF_SHEET_ID,onglet)
+                        for onglet, df_brut in classeur.items():
+                            valeurs = df_brut.fillna("").astype(str).values.tolist()
+                            d = _detecter_entete_et_nettoyer_codif(valeurs)
                             if not d.empty:
                                 d["Installation"] = onglet
                                 frames.append(d)
