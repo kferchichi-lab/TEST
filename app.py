@@ -562,7 +562,7 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
                         <th class="col-equip" rowspan="2">Equipement</th>
                         <th class="col-action" rowspan="2">Actions</th>
                         <th class="col-resp" rowspan="2">Responsable</th>
-                        <th colspan="3">Etat</th>
+                        <th colspan="3">Etat de suivi</th>
                         <th class="col-real" rowspan="2">Réalisation<br>(O/N)</th>
                         <th class="col-obs" rowspan="2">Suivi d'avancement *</th>
                     </tr>
