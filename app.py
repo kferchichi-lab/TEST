@@ -260,7 +260,7 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, carto_b64, logo_url):
     """
     Génère un rapport PDF premium regroupant tous les KPI de l'onglet KPI :
     Taux de réalisation 2026, Taux de respect de délai,
-    cartographie du taux de non-conformité, et points de réserve.
+    cartographie du taux de non-conformité, et actions de contrôle.
     """
     date_str = datetime.date.today().strftime('%d/%m/%Y')
 
@@ -380,7 +380,7 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, carto_b64, logo_url):
         <p style="font-size:10pt;color:#475569;margin-bottom:15px;">
         Liste consolidée des actions de contrôle relevées par site, installation et sous-équipement.</p>
         <table>
-            <thead><tr><th>Site</th><th>Installation</th><th>Sous équipement</th><th>Nbre points</th></tr></thead>
+            <thead><tr><th>Site</th><th>Installation</th><th>Sous équipement</th><th>Nombre des actions</th></tr></thead>
             <tbody>{html_reserve_rows}</tbody>
         </table>
 
@@ -397,6 +397,168 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, carto_b64, logo_url):
     </div>
 
     </body></html>
+    """
+
+    return HTML(string=html_content).write_pdf()
+
+
+def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
+    """
+    Génère un rapport PDF listant, pour un pilote donné, toutes les actions de la
+    codification (classeur externe) qui le concernent — une page par installation
+    (= un onglet du classeur source), avec Désignation / Observation / Code / Nature.
+    df_filtre doit contenir les colonnes : Installation, Designation, Observation, Code, Nature.
+    """
+    date_str = datetime.date.today().strftime('%d/%m/%Y')
+    installations = list(dict.fromkeys(df_filtre["Installation"].tolist()))  # ordre stable, sans doublons
+    total_general = len(df_filtre)
+
+    html_content = f"""
+    <html>
+    <head>
+    <style>
+        @page {{
+            size: A4 portrait;
+            margin: 20mm 15mm;
+            @bottom-right {{
+                content: "Page " counter(page) " / " counter(pages);
+                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                font-size: 9pt;
+                color: #64748B;
+            }}
+        }}
+        body {{
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #1E293B;
+            margin: 0;
+            padding: 0;
+            font-size: 10pt;
+        }}
+        .page {{ page-break-after: always; }}
+        .page:last-child {{ page-break-after: avoid; }}
+        .header-title {{
+            text-align: center;
+            font-size: 18pt;
+            font-weight: bold;
+            color: #1E3A8A;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            border-bottom: 2px solid #1E3A8A;
+            padding-bottom: 10px;
+        }}
+        .page-header {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #E2E8F0;
+        }}
+        .page-header img {{ height: 36px; }}
+        .page-header-text {{
+            font-size: 9.5pt;
+            color: #64748B;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }}
+        .meta-info {{
+            margin-bottom: 20px;
+            background-color: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            padding: 15px;
+            border-radius: 6px;
+            line-height: 1.8;
+            font-size: 11pt;
+        }}
+        .category-title {{
+            font-size: 14pt;
+            color: #0EA5E9;
+            font-weight: bold;
+            margin-top: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid #0EA5E9;
+            padding-left: 8px;
+        }}
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
+        th, td {{ border: 1px solid #CBD5E1; padding: 8px; text-align: left; font-size: 9pt; }}
+        th {{
+            background-color: #1E3A8A; color: white; font-weight: bold;
+            text-transform: uppercase; font-size: 8.5pt;
+        }}
+        .col-desig {{ width: 30%; }}
+        .col-obs   {{ width: 50%; }}
+        .col-code  {{ width: 10%; text-align: center; }}
+        .col-nat   {{ width: 20%; }}
+        .total-badge {{
+            display: inline-block; background:#0EA5E9; color:white; font-weight:700;
+            padding:4px 12px; border-radius:12px; font-size:9pt; margin-left:8px;
+        }}
+    </style>
+    </head>
+    <body>
+    """
+
+    for ins in installations:
+        d_ins = df_filtre[df_filtre["Installation"] == ins]
+        html_content += f"""
+        <div class="page">
+            <div class="page-header">
+                <img src="{logo_url}"/>
+                <div class="page-header-text">Tunisie Profilés d'Aluminium — Direction Maintenance &amp; TN</div>
+            </div>
+            <div class="header-title" style="border-bottom: none; padding-bottom: 0;">Rapport d'Actions — Pilote {pilote_choisi}</div>
+            <div class="meta-info">
+                <strong>Pilote :</strong> {pilote_choisi}<br>
+                <strong>Installation :</strong> {ins}<br>
+                <strong>Date d'édition :</strong> {date_str}
+            </div>
+            <div class="category-title">{ins} <span class="total-badge">{len(d_ins)} action(s)</span></div>
+            <table>
+                <thead>
+                    <tr>
+                        <th class="col-desig">Désignation</th>
+                        <th class="col-obs">Observation</th>
+                        <th class="col-code">Code</th>
+                        <th class="col-nat">Nature</th>
+                    </tr>
+                </thead>
+                <tbody>
+        """
+        if not d_ins.empty:
+            for _, row in d_ins.iterrows():
+                html_content += f"""
+                    <tr>
+                        <td>{row.get('Designation','')}</td>
+                        <td>{row.get('Observation','')}</td>
+                        <td style="text-align:center;">{row.get('Code','')}</td>
+                        <td>{row.get('Nature','')}</td>
+                    </tr>
+                """
+        else:
+            html_content += """
+                <tr><td colspan="4" style="text-align:center;color:#94A3B8;font-style:italic;">Aucune action</td></tr>
+            """
+        html_content += """
+                </tbody>
+            </table>
+        </div>
+        """
+
+    html_content += f"""
+    <div class="page">
+        <div class="page-header">
+            <img src="{logo_url}"/>
+            <div class="page-header-text">Tunisie Profilés d'Aluminium — Direction Maintenance &amp; TN</div>
+        </div>
+        <div class="header-title">Synthèse — Pilote {pilote_choisi}</div>
+        <div class="meta-info">
+            <strong>Total toutes installations confondues :</strong> {total_general} action(s)<br>
+            <strong>Date d'édition :</strong> {date_str}
+        </div>
+    </div>
+    </body>
+    </html>
     """
 
     return HTML(string=html_content).write_pdf()
@@ -422,6 +584,9 @@ tab3 = None
 TZ       = pytz.timezone('Africa/Tunis')
 SHEET_ID = "1ZK6VWg_gcCO70nt6DTyYogDeNeQUgovFmwWQufMVO-M"
 URL_GOOGLE_SHEET = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit?gid=0#gid=0"
+# Classeur externe "Classification des actions CR 2026" : un onglet par installation,
+# colonnes Désignation | Observation | Code (T/S/E/D/O/R). Utilisé pour le rapport PDF par pilote.
+CODIF_SHEET_ID = "119hyynlCiIUzf-17iiSkcPnaEr2oCiFC"
 SEUIL_EN_LIGNE_SECONDES = 90
 calendar.setfirstweekday(0)
 
@@ -482,6 +647,22 @@ st.markdown("""<style>
     [data-testid="stForm"],.stCornerRadius{background-color:#FFFFFF!important;border:1px solid #E2E8F0!important;border-radius:12px!important;}
     .stButton>button{background-color:#1E3A8A!important;color:white!important;border-radius:8px!important;border:none!important;font-weight:500!important;padding:10px 24px!important;}
 
+    /* Champ e-mail (page de connexion visiteur) : fond gris, coins arrondis, style aligné sur la maquette */
+    div[data-testid="stTextInput"] input{
+        background-color:#F1F5F9!important;
+        border:1px solid #E2E8F0!important;
+        border-radius:8px!important;
+        padding:12px 16px!important;
+        font-size:14px!important;
+        color:#334155!important;
+    }
+    div[data-testid="stTextInput"] input:focus{
+        border-color:#0EA5E9!important;
+        box-shadow:0 0 0 3px rgba(14,165,233,0.12)!important;
+        background-color:#FFFFFF!important;
+    }
+    div[data-testid="stTextInput"] input::placeholder{color:#94A3B8!important;}
+
     /* === FIX ROBUSTE : empêche les boutons de s'écraser/se casser verticalement ===
        Cause réelle : les colonnes Streamlit rétrécissent (flex-shrink) au lieu de
        passer à la ligne quand il n'y a pas assez de place horizontale.
@@ -526,13 +707,21 @@ st.markdown("""<style>
         white-space:nowrap!important;
     }
     .stDownloadButton>button{
+        background-color:#16A34A!important;
+        color:white!important;
+        border-radius:8px!important;
+        border:none!important;
+        font-weight:600!important;
+    }
+    .stDownloadButton>button:hover{background-color:#15803D!important;}
+    button[kind="primary"]{
         background-color:#1E3A8A!important;
         color:white!important;
         border-radius:8px!important;
         border:none!important;
         font-weight:600!important;
     }
-    .stDownloadButton>button:hover{background-color:#1D4ED8!important;}
+    button[kind="primary"]:hover{background-color:#1D4ED8!important;}
 </style>""", unsafe_allow_html=True)
 
 # ==========================================
@@ -573,11 +762,116 @@ def sheets_lire(onglet, plage="A:Z"):
         if resp.status_code!=200: return pd.DataFrame()
         valeurs = resp.json().get("values",[])
         if len(valeurs)<=1: return pd.DataFrame()
-        return pd.DataFrame(valeurs[1:],columns=valeurs[0])
+        entetes = [str(c).strip() for c in valeurs[0]]
+        nb_col = len(entetes)
+        # Complète les lignes trop courtes avec des cellules vides (Google Sheets omet les cellules vides en fin de ligne)
+        lignes = [ (r + [""]*(nb_col-len(r)))[:nb_col] for r in valeurs[1:] ]
+        df = pd.DataFrame(lignes,columns=entetes)
+        # Nettoie les espaces superflus dans toutes les valeurs texte pour éviter les non-correspondances silencieuses
+        for c in df.columns:
+            if df[c].dtype == object:
+                df[c] = df[c].astype(str).str.strip()
+        return df
     except Exception:
         return pd.DataFrame()
 
-def sheets_ecrire_cellule(onglet, cellule, valeur):
+def codif_lister_onglets(sheet_id):
+    """Retourne (liste_des_noms_d_onglets, message_erreur) pour un classeur Google Sheets donné.
+    Utilise le même compte de service que le reste de l'app (accès en lecture minimum requis)."""
+    token = obtenir_access_token()
+    if not token:
+        return None, "Impossible d'obtenir un jeton d'accès Google (vérifiez vos secrets)."
+    try:
+        url = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}"
+        resp = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=15)
+        if resp.status_code == 403 or resp.status_code == 404:
+            try:
+                email = st.secrets["connections"]["gsheets"]["client_email"]
+            except Exception:
+                email = "(voir le champ client_email de vos secrets)"
+            return None, (f"Accès refusé au classeur de codification. Partagez-le (en lecture) "
+                           f"avec le compte de service : {email}")
+        if resp.status_code != 200:
+            return None, f"Erreur API Google Sheets ({resp.status_code})."
+        data = resp.json()
+        noms = [s["properties"]["title"] for s in data.get("sheets", [])]
+        return noms, None
+    except Exception as e:
+        return None, f"Erreur inattendue : {e}"
+
+
+def _detecter_entete_et_nettoyer_codif(valeurs):
+    """Prend les lignes brutes d'un onglet du classeur de codification et retourne un
+    DataFrame propre avec les colonnes Designation | Observation | Code.
+    Cherche automatiquement la ligne d'en-tête (Désignation / Observation / Code),
+    tolère les libellés variables, et complète (forward-fill) les cellules de
+    désignation fusionnées verticalement dans la feuille source."""
+    if not valeurs:
+        return pd.DataFrame()
+    idx_entete = None
+    for i, ligne in enumerate(valeurs):
+        cellules = [str(c).strip().lower() for c in ligne]
+        a_designation = any(("désignation" in c) or ("designation" in c) for c in cellules)
+        a_observation = any("observ" in c for c in cellules)
+        if a_designation and a_observation:
+            idx_entete = i
+            break
+    if idx_entete is None:
+        return pd.DataFrame()
+
+    entetes = [str(c).strip() for c in valeurs[idx_entete]]
+    nb_col = len(entetes)
+    lignes = valeurs[idx_entete + 1:]
+    lignes = [(r + [""] * (nb_col - len(r)))[:nb_col] for r in lignes]
+    df = pd.DataFrame(lignes, columns=entetes)
+
+    col_desig = next((c for c in df.columns if "désign" in c.lower() or "design" in c.lower()), None)
+    col_obs   = next((c for c in df.columns if "observ" in c.lower()), None)
+    col_code  = next((c for c in df.columns if c.strip().lower() in ("c", "code")), None)
+    if not (col_desig and col_obs and col_code):
+        return pd.DataFrame()
+
+    df = df[[col_desig, col_obs, col_code]].copy()
+    df.columns = ["Designation", "Observation", "Code"]
+    for c in df.columns:
+        df[c] = df[c].astype(str).str.strip()
+    df["Designation"] = df["Designation"].replace("", pd.NA).ffill().fillna("")
+    df["Code"] = df["Code"].str.upper()
+    df = df[(df["Observation"] != "") & (df["Code"] != "")]
+    df = df[df["Code"].isin(NATURE_PILOTE.keys())]
+    return df.reset_index(drop=True)
+
+
+def codif_lire_onglet(sheet_id, onglet, plage="A:Z"):
+    """Lit un onglet du classeur de codification et retourne un DataFrame nettoyé
+    (Designation | Observation | Code), ou un DataFrame vide en cas de problème."""
+    token = obtenir_access_token()
+    if not token:
+        return pd.DataFrame()
+    try:
+        plage_encodee = requests.utils.quote(f"'{onglet}'!{plage}", safe="")
+        url = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}/values/{plage_encodee}"
+        resp = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=15)
+        if resp.status_code != 200:
+            return pd.DataFrame()
+        valeurs = resp.json().get("values", [])
+        return _detecter_entete_et_nettoyer_codif(valeurs)
+    except Exception:
+        return pd.DataFrame()
+
+
+def _codes_pour_pilote(pilote_choisi):
+    """Retourne la liste des codes (T,S,E,D,O,R) dont le champ Pilote (potentiellement
+    combiné avec '+') contient l'entité choisie."""
+    codes = []
+    for code, (_, pilote_str) in NATURE_PILOTE.items():
+        entites = [e.strip() for e in pilote_str.split("+") if e.strip()]
+        if pilote_choisi in entites:
+            codes.append(code)
+    return codes
+
+
+
     ok, _ = sheets_ecrire_cellule_v2(onglet, cellule, valeur)
     return ok
 
@@ -708,7 +1002,7 @@ def supprimer_equipement_ligne(num_ligne_sheet):
 
 
 # ==========================================
-# POINTS DE RÉSERVE (onglet dédié "PointsReserve")
+# Actions de contrôle (onglet dédié "PointsReserve")
 # ==========================================
 def lire_points_reserve():
     """Lit l'onglet PointsReserve : Site | Installation | Sous_equipement | Nombre."""
@@ -718,6 +1012,31 @@ def lire_points_reserve():
 def ajouter_point_reserve(site, installation, sous_eq, nombre):
     """Ajoute une ligne dans l'onglet PointsReserve."""
     return sheets_append("PointsReserve", [site, installation, sous_eq, str(nombre)])
+
+
+# ==========================================
+# Actions de contrôle PAR NATURE (onglet dédié "PointsReserveNature")
+# Table KPI : Site | Installation | Nombre de actions | Nature | Pilote
+# Le pilote est déduit automatiquement du code de la nature.
+# ==========================================
+NATURE_PILOTE = {
+    "T": ("Technique",      "Maintenance"),
+    "S": ("Sécurité",       "HSE"),
+    "E": ("Energétique",    "BT + Maintenance"),
+    "D": ("Documentation",  "BT + HSE"),
+    "O": ("Organisation",   "DMTN + Chef service BT"),
+    "R": ("Règlementation", "BT + HSE + RH + DG"),
+}
+
+def lire_points_reserve_nature():
+    """Lit l'onglet PointsReserveNature : Site | Installation | Nombre | Nature | Pilote."""
+    return sheets_lire("PointsReserveNature", "A:E")
+
+
+def ajouter_point_reserve_nature(site, installation, nombre, code_nature):
+    """Ajoute une ligne dans l'onglet PointsReserveNature. Le pilote est calculé depuis le code de la nature."""
+    nature_nom, pilote = NATURE_PILOTE[code_nature]
+    return sheets_append("PointsReserveNature", [site, installation, str(nombre), nature_nom, pilote])
 
 
 def supprimer_ligne_generique(onglet, num_ligne_sheet, nb_colonnes):
@@ -782,12 +1101,27 @@ def format_email_valide(email):
 
 acces_autorise=(role=="Responsable" and password_correct) or (role=="Visiteur" and st.session_state.email_visiteur)
 
+# ==========================================
+# EN-TÊTE (toujours affiché en premier, connecté ou non)
+# ==========================================
+# --> Renseignez ici le nom (ou le chemin) de votre fichier image PNG déjà importé
+MAINTENANCE_ICON_PATH = "unnamed.png"
+
+col_titre, col_icone = st.columns([5,1])
+with col_titre:
+    st.markdown("""<div class="app-header-block" style="width:100%;margin:10px auto 0 auto;">
+    <h1 style="text-align:center;font-size:2.6rem;font-weight:800;color:#0F172A;margin:0 0 6px 0;letter-spacing:-1px;line-height:1.2;">Tableau de Bord Réglementaire</h1>
+    <p style="text-align:center;font-size:1.05rem;color:#64748B;margin:0 auto;font-weight:400;line-height:1.5;max-width:800px;">L'amélioration continue.. Notre trajectoire..</p>
+</div>""",unsafe_allow_html=True)
+with col_icone:
+    st.image(MAINTENANCE_ICON_PATH, use_container_width=True)
+
 if not acces_autorise and role=="Visiteur":
-    st.markdown("""<div style="background:white;padding:20px;border-radius:12px;border-left:5px solid #0EA5E9;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);margin-bottom:20px;">
-        <h4 style="margin:0;color:#1E3A8A;">🔑 Accès sécurisé aux rapports de contrôle réglementaire</h4>
-        <p style="color:#64748B;font-size:13px;">Veuillez renseigner votre adresse e-mail professionnelle pour consulter les rapports et les plannings du site.</p>
+    st.markdown("""<div style="margin-bottom:14px;">
+        <p style="color:#0F172A;font-size:15px;font-weight:700;margin:0 0 6px 0;">Adresse e-mail :</p>
+        <p style="color:#64748B;font-size:13.5px;margin:0;line-height:1.5;">Veuillez renseigner votre adresse e-mail.</p>
     </div>""",unsafe_allow_html=True)
-    email_saisi=st.text_input("Adresse e-mail :",placeholder="exemple@domain.com")
+    email_saisi=st.text_input("Adresse e-mail :",placeholder="exemple@domain.com",label_visibility="collapsed")
     if st.button("Valider l'accès",type="primary"):
         if format_email_valide(email_saisi):
             st.session_state.email_visiteur=email_saisi
@@ -819,48 +1153,89 @@ if acces_autorise and email_actif:
     st.markdown("""<script>setTimeout(function(){window.parent.document.querySelector('[data-testid="stApp"]').click();},30000);</script>""",unsafe_allow_html=True)
 
 # ==========================================
-# EN-TÊTE
-# ==========================================
-st.markdown("""<style>.stMarkdown div p,.stMarkdown div h1{text-align:center!important;}</style>""",unsafe_allow_html=True)
-st.markdown("""<div style="width:100%;text-align:center;margin:10px auto 35px auto;">
-    <h1 style="text-align:center;font-size:2.6rem;font-weight:800;color:#0F172A;margin:0 0 6px 0;letter-spacing:-1px;line-height:1.2;">Tableau de Bord Réglementaire</h1>
-    <p style="text-align:center;font-size:1.05rem;color:#64748B;margin:0 auto;font-weight:400;line-height:1.5;max-width:800px;">L'amélioration continue.. Notre trajectoire..</p>
-</div>""",unsafe_allow_html=True)
-
-# ==========================================
 # CONTENU PRINCIPAL
 # ==========================================
 if acces_autorise:
     val_total=len(df_rapports) if not df_rapports.empty else 0
-    val_plan =len(df_planning) if not df_planning.empty else 0
-    val_alert=len(df_planning[df_planning["Statut"].astype(str).str.strip().str.lower()=="non conforme"]) if not df_planning.empty and "Statut" in df_planning.columns else 0
 
-    k1,k2,k3=st.columns(3)
+    # ---- Contrôles réalisés en 2026 / total des contrôles suivis (même dédup que les KPI) ----
+    col_reelle_hdr = [c for c in df_rapports.columns if "reelle" in c.lower() or "réelle" in c.lower()]
+    col_ins_hdr    = [c for c in df_rapports.columns if "ins" in c.lower()]
+    col_site_hdr   = [c for c in df_rapports.columns if "site" in c.lower()]
+    col_label_hdr  = [c for c in df_rapports.columns if "equip" in c.lower() or "label" in c.lower() or "nom" in c.lower()]
+    col_date_hdr   = [c for c in df_rapports.columns if "date" in c.lower() and "reelle" not in c.lower() and "réelle" not in c.lower() and "prochaine" not in c.lower() and "planifi" not in c.lower()]
+
+    # ---- Contrôles 2026 réalisés PAR SITE (SGB / MEG), PAR CATÉGORIE d'installation (et non par équipement) ----
+    # Périodicité : Installations électriques = 2 campagnes/an, les 4 autres catégories = 1 campagne/an
+    # => 2 + 1 + 1 + 1 + 1 = 6 campagnes attendues par site sur l'année 2026
+    def _nb_campagnes_attendues_hdr(installation):
+        return round(12 / PERIODICITE.get(installation, 12))
+
+    TOTAL_CATEGORIES_PAR_SITE = sum(_nb_campagnes_attendues_hdr(ins) for ins in PERIODICITE.keys())  # = 6
+
+    nb_ctrl_site = {"SGB": 0, "MEG": 0}
+    if not df_rapports.empty and col_ins_hdr and col_date_hdr:
+        df_hdr = df_rapports.copy()
+        df_hdr["_date_brute"]  = pd.to_datetime(df_hdr[col_date_hdr[0]], dayfirst=True, errors='coerce')
+        df_hdr["_date_reelle"] = pd.to_datetime(df_hdr[col_reelle_hdr[0]], dayfirst=True, errors='coerce') if col_reelle_hdr else pd.NaT
+        df_hdr = df_hdr.dropna(subset=["_date_brute"])
+        df_realises_hdr = df_hdr[df_hdr["_date_reelle"].notna() & (df_hdr["_date_reelle"].dt.year == 2026)]
+        if col_site_hdr and col_ins_hdr:
+            for site_h in ("SGB", "MEG"):
+                df_site_h = df_realises_hdr[df_realises_hdr[col_site_hdr[0]].astype(str).str.strip().str.upper() == site_h]
+                total_site = 0
+                for ins_h in PERIODICITE.keys():
+                    attendu_h = _nb_campagnes_attendues_hdr(ins_h)
+                    df_grp_h  = df_site_h[df_site_h[col_ins_hdr[0]].astype(str).str.strip() == ins_h]
+                    nb_camp_h = df_grp_h["_date_brute"].nunique() if not df_grp_h.empty else 0
+                    total_site += min(nb_camp_h, attendu_h)
+                nb_ctrl_site[site_h] = total_site
+
+    def _pct_et_couleur(nb, total):
+        pct = round(nb/total*100) if total>0 else 0
+        couleur = "#10B981" if pct>=80 else "#F97316" if pct>=50 else "#EF4444"
+        return pct, couleur
+
+    pct_sgb, couleur_sgb = _pct_et_couleur(nb_ctrl_site["SGB"], TOTAL_CATEGORIES_PAR_SITE)
+    pct_meg, couleur_meg = _pct_et_couleur(nb_ctrl_site["MEG"]-1, TOTAL_CATEGORIES_PAR_SITE)
+
+    k1,k2=st.columns(2)
     with k1:
-        st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #1E3A8A;">
+        st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #1E3A8A;height:118px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;">
             <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Total Rapports Archivés</p>
             <p style="margin:8px 0 0 0;font-size:34px;color:#0F172A;font-weight:700;line-height:1;">{val_total}</p></div>""",unsafe_allow_html=True)
     with k2:
-        st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #0EA5E9;">
-            <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Contrôles Planifiés</p>
-            <p style="margin:8px 0 0 0;font-size:34px;color:#0F172A;font-weight:700;line-height:1;">{val_plan}</p></div>""",unsafe_allow_html=True)
-    with k3:
-        ca="#EF4444" if val_alert>0 else "#10B981"
-        st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid {ca};">
-            <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Alertes Non-Conformité</p>
-            <p style="margin:8px 0 0 0;font-size:34px;color:{ca};font-weight:700;line-height:1;">{val_alert}</p></div>""",unsafe_allow_html=True)
+        st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #0EA5E9;height:118px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:8px;">
+            <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Contrôles Réalisés 2026</p>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:11px;color:#334155;font-weight:700;width:32px;flex-shrink:0;">SGB</span>
+                <div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden;">
+                    <div style="width:{pct_sgb}%;height:100%;background:{couleur_sgb};border-radius:4px;"></div>
+                </div>
+                <span style="font-size:11px;color:{couleur_sgb};font-weight:700;white-space:nowrap;width:70px;text-align:right;">{nb_ctrl_site["SGB"]}/{TOTAL_CATEGORIES_PAR_SITE} ({pct_sgb}%)</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:11px;color:#334155;font-weight:700;width:32px;flex-shrink:0;">MEG</span>
+                <div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden;">
+                    <div style="width:{pct_meg}%;height:100%;background:{couleur_meg};border-radius:4px;"></div>
+                </div>
+                <span style="font-size:11px;color:{couleur_meg};font-weight:700;white-space:nowrap;width:70px;text-align:right;">{nb_ctrl_site["MEG"]-1}/{TOTAL_CATEGORIES_PAR_SITE} ({pct_meg}%)</span>
+            </div></div>""",unsafe_allow_html=True)
 
     st.markdown("<br>",unsafe_allow_html=True)
 
     liste_onglets = ["📋 Rapports CR","📅 Planification","📌 Exigences"]
     if role == "Responsable" and password_correct:
         liste_onglets.append("👥 Statistiques")
-        liste_onglets.append("📊 KPI")
+    liste_onglets.append("📊 KPI")
     onglets = st.tabs(liste_onglets)
     tab1, tab2, tab_exigences = onglets[0], onglets[1], onglets[2]
+    tab3 = None
     tab_kpi = None
-    if len(onglets) > 3: tab3 = onglets[3]
-    if len(onglets) > 4: tab_kpi = onglets[4]
+    _idx = 3
+    if role == "Responsable" and password_correct:
+        tab3 = onglets[_idx]; _idx += 1
+    tab_kpi = onglets[_idx]
 
     def convertir_lien(url):
         try:
@@ -877,7 +1252,7 @@ if acces_autorise:
             div[data-testid="stSelectbox"] label p{text-align:center!important;width:100%;display:block;}
         </style>""",unsafe_allow_html=True)
         with st.container(border=True):
-            st.markdown("<p class='filter-title'>Filtres de recherche avancés</p>",unsafe_allow_html=True)
+            st.markdown("<p class='filter-title'>Filtres de recherche</p>",unsafe_allow_html=True)
             c1,c2,c3,c4=st.columns(4)
             with c1: f_site =st.selectbox("Site",["Tous","SGB","MEG"])
             with c2: f_annee=st.selectbox("Année",["Tous","2025","2026"])
@@ -904,6 +1279,10 @@ if acces_autorise:
         if not df_f.empty:
             col_reelle_doc=[c for c in df_f.columns if "reelle" in c.lower() or "réelle" in c.lower()]
             if col_reelle_doc: df_f=df_f.drop(columns=col_reelle_doc)
+            col_planifiee_doc=[c for c in df_f.columns if "planifi" in c.lower()]
+            if col_planifiee_doc: df_f=df_f.drop(columns=col_planifiee_doc)
+            col_prochaine_doc=[c for c in df_f.columns if "prochaine" in c.lower()]
+            if col_prochaine_doc: df_f=df_f.drop(columns=col_prochaine_doc)
             st.dataframe(df_f,column_config={
                 (col_lien[0] if col_lien else "Lien PDF"):st.column_config.LinkColumn("Action",display_text="Voir le rapport"),
                 (col_ex[0]   if col_ex   else "Année"):st.column_config.NumberColumn("Année",format="%d"),
@@ -951,10 +1330,11 @@ if acces_autorise:
 
         if not df_rapports.empty:
             col_ins_r  =[c for c in df_rapports.columns if "ins" in c.lower()]
-            col_date_r =[c for c in df_rapports.columns if "date" in c.lower()]
+            col_date_r =[c for c in df_rapports.columns if "date" in c.lower() and "reelle" not in c.lower() and "réelle" not in c.lower() and "prochaine" not in c.lower()]
             col_site_r =[c for c in df_rapports.columns if "site" in c.lower()]
             col_label_r=[c for c in df_rapports.columns if "equip" in c.lower() or "label" in c.lower() or "nom" in c.lower()]
             col_reelle =[c for c in df_rapports.columns if "reelle" in c.lower() or "réelle" in c.lower()]
+            col_prochaine_r=[c for c in df_rapports.columns if "prochaine" in c.lower()]
 
             if col_ins_r and col_date_r:
                 df_ech=df_rapports.copy()
@@ -967,7 +1347,12 @@ if acces_autorise:
                 else:
                     df_ech["_date_reelle"]=pd.NaT
 
-                # Date de référence = réelle si dispo, sinon planifiée
+                if col_prochaine_r:
+                    df_ech["_prochaine_manuelle"]=pd.to_datetime(df_ech[col_prochaine_r[0]],dayfirst=True,errors='coerce')
+                else:
+                    df_ech["_prochaine_manuelle"]=pd.NaT
+
+                # Date de dernière visite = date réelle si dispo, sinon date planifiée initiale
                 df_ech["_date"]=df_ech["_date_reelle"].combine_first(df_ech["_date_brute"])
                 df_ech=df_ech.dropna(subset=["_date"])
 
@@ -982,6 +1367,10 @@ if acces_autorise:
                 today_dt=pd.Timestamp.today().normalize()
 
                 def calc_prochaine(row):
+                    # Priorité à une échéance saisie manuellement par le responsable,
+                    # sinon calcul automatique selon la périodicité de l'installation
+                    if pd.notna(row["_prochaine_manuelle"]):
+                        return row["_prochaine_manuelle"]
                     mois=PERIODICITE.get(str(row[col_ins_r[0]]).strip(),12)
                     return row["_date"]+pd.DateOffset(months=mois)
 
@@ -990,13 +1379,10 @@ if acces_autorise:
                 df_ech["Statut"]=df_ech["Jours restants"].apply(
                     lambda j:"⚠️ Dépassé" if j<0 else "🔴 Urgent" if j<30 else "🟡 Proche" if j<90 else "🟢 OK")
 
-                # Colonne unifiée pour visiteurs
-                df_ech["Date du contrôle"]=df_ech["_date_reelle"].combine_first(df_ech["_date_brute"])
-
                 cols_affich=[]
                 if col_site_r:  cols_affich.append(col_site_r[0])
                 if col_label_r: cols_affich.append(col_label_r[0])
-                cols_affich+=[col_ins_r[0],"_date_brute","_date_reelle","Date du contrôle","Prochaine échéance","Jours restants","Statut","_ligne_sheet"]
+                cols_affich+=[col_ins_r[0],"_date_reelle","Prochaine échéance","Jours restants","Statut","_ligne_sheet"]
                 df_show=df_ech[cols_affich].sort_values("Prochaine échéance")
 
                 # ---- APPLICATION DES FILTRES ----
@@ -1037,40 +1423,46 @@ if acces_autorise:
                 # ---- COLONNE GAUCHE : TABLEAU ----
                 with left_col:
                     if role!="Responsable" or not password_correct:
-                        # Visiteur : une seule colonne de date
+                        # Visiteur : lecture seule
                         cols_visiteur=[]
                         if col_site_r:  cols_visiteur.append(col_site_r[0])
                         if col_label_r: cols_visiteur.append(col_label_r[0])
-                        cols_visiteur+=[col_ins_r[0],"Date du contrôle","Prochaine échéance","Jours restants","Statut"]
+                        cols_visiteur+=[col_ins_r[0],"_date_reelle","Prochaine échéance","Jours restants","Statut"]
                         st.dataframe(df_show_filtre[cols_visiteur],column_config={
-                            "Date du contrôle":   st.column_config.DateColumn("📅 Date du contrôle",format="DD/MM/YYYY"),
+                            "_date_reelle":       st.column_config.DateColumn("📅 Date de dernière visite",format="DD/MM/YYYY"),
                             "Prochaine échéance": st.column_config.DateColumn("⏭️ Prochaine échéance",format="DD/MM/YYYY"),
                             "Jours restants":     st.column_config.NumberColumn("Jours restants",format="%d j"),
                         },hide_index=True,use_container_width=True)
                     else:
-                        # Responsable : deux dates + édition
+                        # Responsable : édition de la date de dernière visite ET de la prochaine échéance
                         st.markdown("""<div style='background:#EFF6FF;border-left:4px solid #2a78d6;padding:10px 14px;border-radius:6px;margin-bottom:10px;'>
-                            <p style='margin:0;font-size:12px;color:#1e40af;font-weight:600;'>✏️ Mode responsable — Modifiez la colonne <b>Date réelle visite</b> puis sauvegardez.</p>
+                            <p style='margin:0;font-size:12px;color:#1e40af;font-weight:600;'>✏️ Mode responsable — Modifiez la <b>Date de dernière visite</b> et/ou la <b>Prochaine échéance</b> puis sauvegardez. Par défaut, la prochaine échéance est calculée automatiquement selon la périodicité ; toute date saisie ici la remplace.</p>
                         </div>""",unsafe_allow_html=True)
                         cols_resp=[]
                         if col_site_r:  cols_resp.append(col_site_r[0])
                         if col_label_r: cols_resp.append(col_label_r[0])
-                        cols_resp+=[col_ins_r[0],"_date_brute","_date_reelle","Prochaine échéance","Jours restants","Statut","_ligne_sheet"]
+                        cols_resp+=[col_ins_r[0],"_date_reelle","Prochaine échéance","Jours restants","Statut","_ligne_sheet"]
                         df_editable=df_show_filtre[cols_resp].copy()
                         df_editable["_date_reelle"]=pd.to_datetime(df_editable["_date_reelle"],errors='coerce')
+                        df_editable["Prochaine échéance"]=pd.to_datetime(df_editable["Prochaine échéance"],errors='coerce')
                         edited_df=st.data_editor(df_editable,column_config={
-                            "_date_brute":        st.column_config.DateColumn("📅 Date planifiée",format="DD/MM/YYYY"),
-                            "_date_reelle":       st.column_config.DateColumn("✅ Date réelle visite",format="DD/MM/YYYY",help="Saisissez ici la date réelle du contrôle effectué"),
-                            "Prochaine échéance": st.column_config.DateColumn("⏭️ Prochaine échéance",format="DD/MM/YYYY"),
+                            "_date_reelle":       st.column_config.DateColumn("✅ Date de dernière visite",format="DD/MM/YYYY",help="Saisissez ici la date réelle du dernier contrôle effectué"),
+                            "Prochaine échéance": st.column_config.DateColumn("⏭️ Prochaine échéance",format="DD/MM/YYYY",help="Calculée automatiquement, modifiable si besoin"),
                             "Jours restants":     st.column_config.NumberColumn("Jours restants",format="%d j"),
                             "_ligne_sheet":       None,
-                        },disabled=[c for c in df_editable.columns if c!="_date_reelle"],hide_index=True,use_container_width=True,key="editor_dates_reelles")
+                        },disabled=[c for c in df_editable.columns if c not in ("_date_reelle","Prochaine échéance")],hide_index=True,use_container_width=True,key="editor_dates_reelles")
 
-                        if st.button("💾 Sauvegarder les dates réelles",type="primary"):
+                        if not col_prochaine_r:
+                            st.caption("ℹ️ Pour que la « Prochaine échéance » modifiée soit conservée après actualisation, ajoutez une colonne « Prochaine_echeance » dans l'onglet « Rapports » du Google Sheet.")
+
+                        if st.button("💾 Sauvegarder les modifications",type="primary"):
                             with st.spinner("Mise à jour dans Google Sheets..."):
                                 nb_maj=0
                                 erreurs=[]
                                 for idx,row_edit in edited_df.iterrows():
+                                    num_ligne_sheet=int(row_edit["_ligne_sheet"])
+
+                                    # -- Date de dernière visite --
                                     nouvelle_date=row_edit["_date_reelle"]
                                     ancienne_date=df_editable.loc[idx,"_date_reelle"]
                                     dates_diff=False
@@ -1078,7 +1470,6 @@ if acces_autorise:
                                     elif pd.isna(nouvelle_date)!=pd.isna(ancienne_date): dates_diff=True
                                     elif not pd.isna(nouvelle_date) and nouvelle_date!=ancienne_date: dates_diff=True
                                     if dates_diff and not pd.isna(nouvelle_date):
-                                        num_ligne_sheet=int(row_edit["_ligne_sheet"])
                                         if col_reelle:
                                             num_col=df_rapports.columns.tolist().index(col_reelle[0])+1
                                         else:
@@ -1090,8 +1481,26 @@ if acces_autorise:
                                             nb_maj+=1
                                         else:
                                             erreurs.append(f"Ligne {num_ligne_sheet}: {msg}")
+
+                                    # -- Prochaine échéance (surcharge manuelle) --
+                                    if col_prochaine_r:
+                                        nouvelle_prochaine=row_edit["Prochaine échéance"]
+                                        ancienne_prochaine=df_editable.loc[idx,"Prochaine échéance"]
+                                        prochaine_diff=False
+                                        if pd.isna(nouvelle_prochaine) and pd.isna(ancienne_prochaine): prochaine_diff=False
+                                        elif pd.isna(nouvelle_prochaine)!=pd.isna(ancienne_prochaine): prochaine_diff=True
+                                        elif not pd.isna(nouvelle_prochaine) and nouvelle_prochaine!=ancienne_prochaine: prochaine_diff=True
+                                        if prochaine_diff and not pd.isna(nouvelle_prochaine):
+                                            num_col_p=df_rapports.columns.tolist().index(col_prochaine_r[0])+1
+                                            lettre_col_p=chr(64+num_col_p)
+                                            prochaine_str=nouvelle_prochaine.strftime("%d/%m/%Y")
+                                            ok_p, msg_p = sheets_ecrire_cellule_v2("Rapports",f"{lettre_col_p}{num_ligne_sheet}",prochaine_str)
+                                            if ok_p:
+                                                nb_maj+=1
+                                            else:
+                                                erreurs.append(f"Ligne {num_ligne_sheet} (prochaine échéance): {msg_p}")
                             if nb_maj>0:
-                                st.success(f"✅ {nb_maj} date(s) enregistrée(s) !")
+                                st.success(f"✅ {nb_maj} modification(s) enregistrée(s) !")
                             if erreurs:
                                 st.error("❌ Erreurs : " + " | ".join(erreurs))
                             if nb_maj>0 or erreurs:
@@ -1252,6 +1661,19 @@ if acces_autorise:
                 return f"https://drive.google.com/uc?export=download&id={file_id}"
             return lien
 
+        def lien_apercu_drive(lien: str) -> str:
+            """Convertit un lien Google Drive en lien d'aperçu (preview) qui s'ouvre
+            directement dans Drive sans télécharger le fichier."""
+            if not lien:
+                return lien
+            m = re.search(r"/file/d/([a-zA-Z0-9_-]+)", lien)
+            if not m:
+                m = re.search(r"[?&]id=([a-zA-Z0-9_-]+)", lien)
+            if m:
+                file_id = m.group(1)
+                return f"https://drive.google.com/file/d/{file_id}/preview"
+            return lien
+
         lien_contrat = ""
         if not df_exig.empty and "Type" in df_exig.columns:
             ligne_c = df_exig[df_exig["Type"] == "Contrat"]
@@ -1262,14 +1684,21 @@ if acces_autorise:
         with col_contrat:
             if lien_contrat and lien_contrat.lower() != "nan":
                 lien_dl = lien_telechargement_direct(lien_contrat)
+                lien_apercu = lien_apercu_drive(lien_contrat)
+
                 st.markdown(
                     "<div style='background:white;padding:16px 20px;border-radius:10px;"
                     "box-shadow:0 2px 8px rgba(0,0,0,0.05);border-left:4px solid #1E3A8A;"
                     "display:flex;align-items:center;justify-content:space-between;'>"
                     "<span style='font-size:14px;font-weight:600;color:#1E293B;'>📑 Contrat d'abonnement 2026</span>"
-                    f"<a href='{lien_dl}' download target='_blank' rel='noopener' style='text-decoration:none;background:#1E3A8A;"
-                    "color:white;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;'>"
-                    "📥 Ouvrir / Télécharger</a>"
+                    "<span>"
+                    f"<a href='{lien_apercu}' target='_blank' rel='noopener' style='text-decoration:none;background:#1E3A8A;"
+                    "color:white;padding:8px 14px;border-radius:6px;font-size:13px;font-weight:600;margin-right:8px;'>"
+                    "👁️ Consulter</a>"
+                    f"<a href='{lien_dl}' download target='_blank' rel='noopener' style='text-decoration:none;background:#16A34A;"
+                    "color:white;padding:8px 14px;border-radius:6px;font-size:13px;font-weight:600;'>"
+                    "📥 Télécharger</a>"
+                    "</span>"
                     "</div>", unsafe_allow_html=True)
             else:
                 st.info("Aucun contrat n'a encore été ajouté.")
@@ -1435,7 +1864,13 @@ if acces_autorise:
             date_str = datetime.date.today().strftime('%d_%m_%Y')
 
             with col_sgb:
-                if st.button("Consulter le rapport — SGB", use_container_width=True, key="consult_sgb"):
+                st.markdown(
+                    "<div style='background:white;padding:16px 20px;border-radius:10px;"
+                    "box-shadow:0 2px 8px rgba(0,0,0,0.05);border-left:4px solid #1E3A8A;"
+                    "margin-bottom:10px;'>"
+                    "<span style='font-size:14px;font-weight:600;color:#1E293B;'>📑 Rapport d'inspection — SGB</span>"
+                    "</div>", unsafe_allow_html=True)
+                if st.button("👁️ Consulter le rapport", use_container_width=True, key="consult_sgb", type="primary"):
                     with st.spinner("Préparation du rapport SGB..."):
                         try:
                             st.session_state["pdf_sgb"] = generer_rapport_equipements_pdf(df_exig, "SGB")
@@ -1454,7 +1889,13 @@ if acces_autorise:
                     )
 
             with col_meg:
-                if st.button("Consulter le rapport — MEG", use_container_width=True, key="consult_meg"):
+                st.markdown(
+                    "<div style='background:white;padding:16px 20px;border-radius:10px;"
+                    "box-shadow:0 2px 8px rgba(0,0,0,0.05);border-left:4px solid #1E3A8A;"
+                    "margin-bottom:10px;'>"
+                    "<span style='font-size:14px;font-weight:600;color:#1E293B;'>📑 Rapport d'inspection — MEG</span>"
+                    "</div>", unsafe_allow_html=True)
+                if st.button("👁️ Consulter le rapport", use_container_width=True, key="consult_meg", type="primary"):
                     with st.spinner("Préparation du rapport MEG..."):
                         try:
                             st.session_state["pdf_meg"] = generer_rapport_equipements_pdf(df_exig, "MEG")
@@ -1480,7 +1921,7 @@ if acces_autorise:
     # ---- ONGLET 3 : PRÉSENCE & VISITES ----
     if tab3 and role=="Responsable" and password_correct:
         with tab3:
-            st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#1E3A8A;'>👥 Suivi des visites & Présence en temps réel</p>",unsafe_allow_html=True)
+            st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#1E3A8A;'>👥 Suivi des visiteurs</p>",unsafe_allow_html=True)
             col_r,_=st.columns([1,5])
             with col_r:
                 if st.button("🔄"): st.rerun()
@@ -1547,10 +1988,11 @@ if acces_autorise:
 
             # ---- Préparation des données de contrôle (même logique que l'onglet Planification) ----
             col_ins_k   = [c for c in df_rapports.columns if "ins" in c.lower()]
-            col_date_k  = [c for c in df_rapports.columns if "date" in c.lower()]
+            col_date_k  = [c for c in df_rapports.columns if "date" in c.lower() and "reelle" not in c.lower() and "réelle" not in c.lower() and "prochaine" not in c.lower() and "planifi" not in c.lower()]
             col_site_k  = [c for c in df_rapports.columns if "site" in c.lower()]
             col_label_k = [c for c in df_rapports.columns if "equip" in c.lower() or "label" in c.lower() or "nom" in c.lower()]
             col_reelle_k= [c for c in df_rapports.columns if "reelle" in c.lower() or "réelle" in c.lower()]
+            col_planifiee_k = [c for c in df_rapports.columns if "planifi" in c.lower()]
 
             if df_rapports.empty or not col_ins_k or not col_date_k:
                 st.info("Données insuffisantes dans l'onglet « Rapports » pour calculer les KPI.")
@@ -1559,6 +2001,13 @@ if acces_autorise:
                 df_k = df_rapports.copy()
                 df_k["_date_brute"]  = pd.to_datetime(df_k[col_date_k[0]], dayfirst=True, errors='coerce')
                 df_k["_date_reelle"] = pd.to_datetime(df_k[col_reelle_k[0]], dayfirst=True, errors='coerce') if col_reelle_k else pd.NaT
+                # Date planifiée de référence pour le respect de délai : si la colonne dédiée existe
+                # dans le Sheet on l'utilise, sinon (tant qu'elle n'a pas été ajoutée) on considère
+                # provisoirement que la date planifiée = la date de dernière visite (donc toujours respecté).
+                if col_planifiee_k:
+                    df_k["_date_planifiee"] = pd.to_datetime(df_k[col_planifiee_k[0]], dayfirst=True, errors='coerce')
+                else:
+                    df_k["_date_planifiee"] = df_k["_date_reelle"]
                 df_k = df_k.dropna(subset=["_date_brute"])
 
                 cles_k=[]
@@ -1568,21 +2017,51 @@ if acces_autorise:
                 df_k = df_k.sort_values("_date_brute", ascending=True)
                 df_k = df_k.drop_duplicates(subset=cles_k, keep="last")
 
-                # ---- KPI 1 : Taux de réalisation 2026 (échéances théoriques comprises entre 01/01/2026 et 31/12/2026) ----
-                df_2026 = df_k[df_k["_date_brute"].dt.year == 2026]
-                nb_total_2026    = len(df_2026)
-                nb_realises_2026 = int(df_2026["_date_reelle"].notna().sum())
+                # ---- KPI 1 : Taux de réalisation 2026, calculé PAR INSTALLATION (et non par équipement) ----
+                # Contrôles attendus en 2026 selon la périodicité de chaque installation :
+                #   - Installations électriques : périodicité 6 mois -> 2 contrôles/an
+                #   - Les 4 autres types        : périodicité 12 mois -> 1 contrôle/an
+                # => 2 sites (SGB, MEG) x (1 élec x2 + 4 autres x1) = 12 contrôles attendus au total sur l'année
+
+                SITES_SUIVIS = ["SGB", "MEG"]
+                INSTALLATIONS_SUIVIES = list(PERIODICITE.keys())
+
+                def nb_campagnes_attendues(installation):
+                    return round(12 / PERIODICITE.get(installation, 12))
+
+                nb_total_2026 = sum(nb_campagnes_attendues(ins) for ins in INSTALLATIONS_SUIVIES) * len(SITES_SUIVIS)
+
+                # Un contrôle est compté comme réalisé en 2026 dès lors que sa DATE RÉELLE de visite
+                # tombe en 2026, quelle que soit l'année de l'échéance théorique associée.
+                df_realises_2026 = df_k[df_k["_date_reelle"].notna() & (df_k["_date_reelle"].dt.year == 2026)].copy()
+                if col_site_k:
+                    df_realises_2026 = df_realises_2026[df_realises_2026[col_site_k[0]].astype(str).str.strip().isin(SITES_SUIVIS)]
+
+                nb_realises_2026 = 0
+                for site in SITES_SUIVIS:
+                    for ins in INSTALLATIONS_SUIVIES:
+                        attendu = nb_campagnes_attendues(ins)
+                        df_grp = df_realises_2026[df_realises_2026[col_ins_k[0]].astype(str).str.strip() == ins]
+                        if col_site_k:
+                            df_grp = df_grp[df_grp[col_site_k[0]].astype(str).str.strip() == site]
+                        # Une "campagne" réalisée = une date réelle distincte (mois/échéance) pour cette
+                        # installation sur ce site, plafonnée au nombre de contrôles attendus par an.
+                        nb_campagnes_realisees = df_grp["_date_brute"].nunique() if not df_grp.empty else 0
+                        nb_realises_2026 += min(nb_campagnes_realisees, attendu)
+
                 nb_restants_2026 = nb_total_2026 - nb_realises_2026
                 taux1 = round(nb_realises_2026/nb_total_2026*100,1) if nb_total_2026>0 else 0
                 
 
 
-                # ---- KPI 2 : Taux de respect de délai de visite (écart ≤ 3j vs échéance théorique initiale) ----
-                df_realises_k = df_k[df_k["_date_reelle"].notna()].copy()
+                # ---- KPI 2 : Taux de respect de délai de visite (écart ≤ 1 mois entre date planifiée et date de dernière visite) ----
+                # On ne considère que les contrôles dont la visite a réellement eu lieu en 2026
+                # (certains contrôles réalisés figurent avec une date réelle en 2025 et ne doivent pas être comptés ici).
+                df_realises_k = df_k[df_k["_date_reelle"].notna() & (df_k["_date_reelle"].dt.year == 2026)].copy()
                 nb_visites_realisees = len(df_realises_k)
                 if nb_visites_realisees > 0:
-                    df_realises_k["_ecart"] = (df_realises_k["_date_reelle"] - df_realises_k["_date_brute"]).dt.days.abs()
-                    nb_respectes = int((df_realises_k["_ecart"] <= 3).sum())
+                    df_realises_k["_ecart"] = (df_realises_k["_date_reelle"] - df_realises_k["_date_planifiee"]).dt.days.abs()
+                    nb_respectes = int((df_realises_k["_ecart"] <= 31).sum())
                 else:
                     nb_respectes = 0
                 nb_non_respectes = nb_visites_realisees - nb_respectes
@@ -1602,31 +2081,31 @@ if acces_autorise:
 
                 with k1c:
                     st.markdown("<p style='text-align:center;font-weight:600;color:#1E293B;font-size:14px;'>Taux de réalisation 2026</p></p>",unsafe_allow_html=True)
-                    if nb_visites_realisees>0:
-                        dfp2=pd.DataFrame({"Statut":["Réalisés","Restants"],"Nombre":[nb_respectes,nb_non_respectes]})
-                        fig2=px.pie(dfp2,values="Nombre",names="Statut",hole=0.6,color="Statut",
-                                    color_discrete_map={"Réalisés":"#10B981","Restants":"#EF4444"})
-                        fig2.update_traces(textposition='inside',textinfo='percent')
-                        fig2.update_layout(margin=dict(t=10,b=10,l=10,r=10),height=260,showlegend=False,
-                                            paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
-                        st.plotly_chart(fig2,use_container_width=True,config={'displayModeBar':False})
-                        st.markdown(f"<p style='text-align:center;font-size:13px;color:#64748B;'>{taux2}% réalisés ({nb_respectes}/{nb_visites_realisees})</p>",unsafe_allow_html=True)
-                    else:
-                        st.info("Aucune visite réalisée à ce jour.")
-
-                with k2c:
-                    st.markdown("<p style='text-align:center;font-weight:600;color:#1E293B;font-size:14px;'>Respect délai de visite (≤ 1 mois)</p>",unsafe_allow_html=True)
                     if nb_total_2026>0:
-                        dfp1=pd.DataFrame({"Statut":["Respecté","Non respecté"],"Nombre":[nb_realises_2026,nb_restants_2026]})
+                        dfp1=pd.DataFrame({"Statut":["Réalisés","Restants"],"Nombre":[nb_realises_2026,nb_restants_2026]})
                         fig1=px.pie(dfp1,values="Nombre",names="Statut",hole=0.6,color="Statut",
-                                    color_discrete_map={"Respecté":"#0EA5E9","Non respecté":"#EF4444"})
+                                    color_discrete_map={"Réalisés":"#10B981","Restants":"#EF4444"})
                         fig1.update_traces(textposition='inside',textinfo='percent')
                         fig1.update_layout(margin=dict(t=10,b=10,l=10,r=10),height=260,showlegend=False,
                                             paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig1,use_container_width=True,config={'displayModeBar':False})
-                        st.markdown(f"<p style='text-align:center;font-size:13px;color:#64748B;'>{taux1}% respectés ({nb_respectes}/{nb_respectes})</p>",unsafe_allow_html=True)
+                        st.markdown(f"<p style='text-align:center;font-size:13px;color:#64748B;'>{taux1}% réalisés ({nb_realises_2026}/{nb_total_2026} contrôles d'installation)</p>",unsafe_allow_html=True)
                     else:
-                        st.info("Aucun contrôle avec échéance théorique en 2026.")
+                        st.info("Aucune échéance d'installation en 2026.")
+
+                with k2c:
+                    st.markdown("<p style='text-align:center;font-weight:600;color:#1E293B;font-size:14px;'>Respect délai de visite (≤ 1 mois)</p>",unsafe_allow_html=True)
+                    if nb_visites_realisees>0:
+                        dfp2=pd.DataFrame({"Statut":["Respecté","Non respecté"],"Nombre":[nb_respectes,nb_non_respectes]})
+                        fig2=px.pie(dfp2,values="Nombre",names="Statut",hole=0.6,color="Statut",
+                                    color_discrete_map={"Respecté":"#0EA5E9","Non respecté":"#EF4444"})
+                        fig2.update_traces(textposition='inside',textinfo='percent')
+                        fig2.update_layout(margin=dict(t=10,b=10,l=10,r=10),height=260,showlegend=False,
+                                            paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(fig2,use_container_width=True,config={'displayModeBar':False})
+                        st.markdown(f"<p style='text-align:center;font-size:13px;color:#64748B;'>{taux2}% respectés ({nb_respectes}/{nb_visites_realisees})</p>",unsafe_allow_html=True)
+                    else:
+                        st.info("Aucune visite réalisée à ce jour.")
 
             st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
 
@@ -1700,10 +2179,10 @@ if acces_autorise:
 
             st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
 
-            # ================= POINTS DE RÉSERVE =================
+            # ================= Actions de contrôle =================
             st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📌 Actions de contrôle</p>",unsafe_allow_html=True)
 
-            with st.spinner("Chargement des points de réserve..."):
+            with st.spinner("Chargement des actions..."):
                 df_reserve = lire_points_reserve()
 
             with st.expander("➕ Ajouter une action"):
@@ -1735,7 +2214,7 @@ if acces_autorise:
                     df_reserve["Nombre"] = pd.to_numeric(df_reserve["Nombre"],errors="coerce").fillna(0).astype(int)
 
                 with st.container(border=True):
-                    st.markdown("<p style='font-weight:600;color:#1E293B;margin:0 0 10px 0;font-size:13px;'>🔍 Filtrer les points de réserve</p>",unsafe_allow_html=True)
+                    st.markdown("<p style='font-weight:600;color:#1E293B;margin:0 0 10px 0;font-size:13px;'>🔍 Filtrer les Actions de contrôle</p>",unsafe_allow_html=True)
                     fr1,fr2,fr3 = st.columns(3)
                     sites_dispo = ["Tous"]+sorted(df_reserve["Site"].dropna().unique().tolist()) if "Site" in df_reserve.columns else ["Tous"]
                     inss_dispo  = ["Tous"]+sorted(df_reserve["Installation"].dropna().unique().tolist()) if "Installation" in df_reserve.columns else ["Tous"]
@@ -1752,7 +2231,7 @@ if acces_autorise:
                     df_reserve_f = df_reserve_f[df_reserve_f["Sous_equipement"].astype(str).str.contains(f_res_seq.strip(),case=False,na=False)]
 
                 st.dataframe(df_reserve_f.rename(columns={
-                    "Site":"Site","Installation":"Installation","Sous_equipement":"Sous équipement","Nombre":"Nbre points de réserve"
+                    "Site":"Site","Installation":"Installation","Sous_equipement":"Sous équipement","Nombre":"Nombre des actions de contrôle"
                 }),hide_index=True,use_container_width=True)
 
                 st.markdown("<br>",unsafe_allow_html=True)
@@ -1836,6 +2315,217 @@ if acces_autorise:
                                 else:
                                     st.error("Erreur lors de la suppression.")
 
+            # ================= Actions de contrôle PAR NATURE =================
+            st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
+            st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>🧭 Actions de contrôle par nature</p>",unsafe_allow_html=True)
+
+            with st.spinner("Chargement des actions par nature..."):
+                df_nature = lire_points_reserve_nature()
+
+            with st.expander("➕ Ajouter une ligne"):
+                nt1,nt2,nt3,nt4 = st.columns([1,1.5,1,1.5])
+                with nt1:
+                    nat_site = st.selectbox("Site",["SGB","MEG"],key="nat_site_new")
+                with nt2:
+                    nat_ins = st.selectbox("Installation",list(PERIODICITE.keys()),key="nat_ins_new")
+                with nt3:
+                    nat_nb = st.number_input("Nb points",min_value=1,value=1,key="nat_nb_new")
+                with nt4:
+                    nat_code = st.selectbox("Nature",list(NATURE_PILOTE.keys()),
+                                             format_func=lambda c: f"{c} — {NATURE_PILOTE[c][0]}",key="nat_code_new")
+                nat_pilote_auto = NATURE_PILOTE[nat_code][1]
+                st.markdown(
+                    f"<p style='font-size:12.5px;color:#64748B;margin-top:-4px;'>Pilote assigné automatiquement : "
+                    f"<b style='color:#1E3A8A;'>{nat_pilote_auto}</b></p>",unsafe_allow_html=True)
+                if st.button("💾 Enregistrer",key="btn_add_nature"):
+                    ok,err = ajouter_point_reserve_nature(nat_site,nat_ins,nat_nb,nat_code)
+                    if ok:
+                        st.success("✅ Ligne ajoutée !")
+                        st.cache_data.clear()
+                        st.rerun()
+                    else:
+                        st.error(f"Erreur : {err}")
+
+            if df_nature.empty:
+                st.info("Aucune donnée enregistrée. Utilisez le formulaire ci-dessus pour en ajouter.")
+            else:
+                if "Nombre" in df_nature.columns:
+                    df_nature["Nombre"] = pd.to_numeric(df_nature["Nombre"],errors="coerce").fillna(0).astype(int)
+
+                with st.container(border=True):
+                    st.markdown("<p style='font-weight:600;color:#1E293B;margin:0 0 10px 0;font-size:13px;'>🔍 Filtrer</p>",unsafe_allow_html=True)
+                    fn1,fn2 = st.columns(2)
+                    sites_dispo_n = ["Tous"]+sorted(df_nature["Site"].dropna().unique().tolist()) if "Site" in df_nature.columns else ["Tous"]
+                    inss_dispo_n  = ["Tous"]+sorted(df_nature["Installation"].dropna().unique().tolist()) if "Installation" in df_nature.columns else ["Tous"]
+                    with fn1: f_nat_site = st.selectbox("Site",sites_dispo_n,key="f_nat_site")
+                    with fn2: f_nat_ins  = st.selectbox("Installation",inss_dispo_n,key="f_nat_ins")
+
+                df_nature_f = df_nature.copy()
+                if f_nat_site!="Tous" and "Site" in df_nature_f.columns:
+                    df_nature_f = df_nature_f[df_nature_f["Site"]==f_nat_site]
+                if f_nat_ins!="Tous" and "Installation" in df_nature_f.columns:
+                    df_nature_f = df_nature_f[df_nature_f["Installation"]==f_nat_ins]
+
+                st.dataframe(df_nature_f.rename(columns={
+                    "Site":"Site","Installation":"Installation","Nombre":"Nombre des actions","Nature":"Nature","Pilote":"Pilote"
+                }),hide_index=True,use_container_width=True)
+
+                st.markdown("<br>",unsafe_allow_html=True)
+                st.markdown("<p style='font-weight:700;font-size:14px;color:#0F172A;text-align:center;margin-bottom:10px;'>Répartition par site : Nature et Pilote</p>",unsafe_allow_html=True)
+
+                # --- Grille 2x2 : ligne 1 = SGB (Nature | Pilote), ligne 2 = MEG (Nature | Pilote) ---
+                all_natures = [v[0] for v in NATURE_PILOTE.values()]
+                palette_nat = px.colors.qualitative.Set2
+                color_map_nat = {n: palette_nat[i % len(palette_nat)] for i,n in enumerate(all_natures)}
+
+                # Les pilotes sont parfois combinés (ex: "BT + Maintenance", "BT + HSE + RH + DG").
+                # On isole chaque entité (Maintenance, BT, HSE, RH, DG, DMTN, Chef service BT, ...)
+                # pour calculer un % propre à chacune, même quand elle est partagée entre plusieurs natures.
+                entites_atomiques = sorted(set(
+                    e.strip() for v in NATURE_PILOTE.values() for e in v[1].split("+") if e.strip()
+                ))
+                palette_pil = px.colors.qualitative.Set1
+                color_map_pil = {p: palette_pil[i % len(palette_pil)] for i,p in enumerate(entites_atomiques)}
+
+                def _pie_nature_site(df_src, site, color_map, titre):
+                    if "Nombre" not in df_src.columns or "Nature" not in df_src.columns or "Site" not in df_src.columns:
+                        st.info(f"Aucune donnée {site}.")
+                        return
+                    d = df_src[df_src["Site"]==site].groupby("Nature")["Nombre"].sum().reset_index()
+                    if d.empty:
+                        st.info(f"Aucune donnée {site}.")
+                        return
+                    fig = px.pie(d,values="Nombre",names="Nature",hole=0.6,color="Nature",color_discrete_map=color_map)
+                    fig.update_traces(textposition='inside',textinfo='percent')
+                    fig.update_layout(title=titre,title_x=0.5,margin=dict(t=40,b=10,l=10,r=10),height=280,
+                                       paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)',
+                                       legend=dict(font=dict(size=9)))
+                    st.plotly_chart(fig,use_container_width=True,config={'displayModeBar':False})
+
+                def _bar_pilote_site(df_src, site, color_map, titre):
+                    if "Nombre" not in df_src.columns or "Pilote" not in df_src.columns or "Site" not in df_src.columns:
+                        st.info(f"Aucune donnée {site}.")
+                        return
+                    d = df_src[df_src["Site"]==site]
+                    if d.empty:
+                        st.info(f"Aucune donnée {site}.")
+                        return
+                    total = d["Nombre"].sum()
+                    compte = {}
+                    for _,row in d.iterrows():
+                        for e in str(row["Pilote"]).split("+"):
+                            e = e.strip()
+                            if not e: continue
+                            compte[e] = compte.get(e,0) + row["Nombre"]
+                    if not compte or total==0:
+                        st.info(f"Aucune donnée {site}.")
+                        return
+                    dd = pd.DataFrame({"Pilote":list(compte.keys()),"Nombre":list(compte.values())})
+                    dd["Pourcentage"] = (dd["Nombre"]/total*100).round(1)
+                    dd = dd.sort_values("Pourcentage",ascending=True)
+                    fig = px.bar(dd,x="Pourcentage",y="Pilote",orientation="h",text="Pourcentage",
+                                 color="Pilote",color_discrete_map=color_map)
+                    fig.update_traces(texttemplate='%{text}%',textposition='outside',cliponaxis=False)
+                    fig.update_layout(title=titre,title_x=0.5,showlegend=False,
+                                       xaxis_title="% des actions",yaxis_title="",
+                                       margin=dict(t=40,b=10,l=10,r=30),height=280,
+                                       paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
+                    st.plotly_chart(fig,use_container_width=True,config={'displayModeBar':False})
+
+                if {"Nature","Pilote","Site","Nombre"}.issubset(df_nature_f.columns):
+                    with g2: _bar_pilote_site(df_nature_f,"SGB",color_map_pil,"SGB — % par pilote")
+                    g3,g4 = st.columns(2)
+                    with g3: _pie_nature_site(df_nature_f,"MEG",color_map_nat,"MEG — % par nature")
+                    with g4: _bar_pilote_site(df_nature_f,"MEG",color_map_pil,"MEG — % par pilote")
+                else:
+                    st.info("Aucune donnée à afficher pour les graphes.")
+
+                with st.expander("🗑️ Supprimer une ligne"):
+                    for orig_idx,row_n in df_nature.iterrows():
+                        dnx1,dnx2 = st.columns([5,1])
+                        with dnx1:
+                            st.write(f"{row_n.get('Site','')} — {row_n.get('Installation','')} — {row_n.get('Nombre',0)} pt(s) — {row_n.get('Nature','')} — {row_n.get('Pilote','')}")
+                        with dnx2:
+                            if st.button("🗑️",key=f"del_nat_{orig_idx}"):
+                                num_ligne_sheet = orig_idx+2
+                                if supprimer_ligne_generique("PointsReserveNature",num_ligne_sheet,5):
+                                    st.success("Supprimé !")
+                                    st.cache_data.clear()
+                                    st.rerun()
+                                else:
+                                    st.error("Erreur lors de la suppression.")
+
+            # ================= RAPPORT PDF PAR PILOTE (CODIFICATION EXTERNE) =================
+            st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
+            st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📄 Rapport PDF par Pilote (Codification)</p>",unsafe_allow_html=True)
+            st.caption("Génère un rapport listant, pour un pilote choisi, toutes les actions du classeur de codification "
+                       "(un onglet = une installation), filtrées selon les codes qui le concernent.")
+
+            entites_pilote_codif = sorted(set(
+                e.strip() for v in NATURE_PILOTE.values() for e in v[1].split("+") if e.strip()
+            ))
+            cpil1,cpil2 = st.columns([3,1])
+            with cpil1:
+                pilote_codif_choisi = st.selectbox("Pilote",entites_pilote_codif,key="pilote_codif_select")
+            with cpil2:
+                st.write("")
+                st.write("")
+                lancer_rapport_pilote = st.button("👁️ Générer",use_container_width=True,key="btn_gen_rapport_pilote",type="primary")
+
+            if lancer_rapport_pilote:
+                with st.spinner("Lecture du classeur de codification..."):
+                    noms_onglets, err = codif_lister_onglets(CODIF_SHEET_ID)
+                    if err:
+                        st.session_state["pdf_pilote"] = None
+                        st.error(err)
+                    elif not noms_onglets:
+                        st.session_state["pdf_pilote"] = None
+                        st.warning("Aucun onglet trouvé dans le classeur de codification.")
+                    else:
+                        frames = []
+                        for onglet in noms_onglets:
+                            d = codif_lire_onglet(CODIF_SHEET_ID,onglet)
+                            if not d.empty:
+                                d["Installation"] = onglet
+                                frames.append(d)
+                        if not frames:
+                            st.session_state["pdf_pilote"] = None
+                            st.warning("Aucune donnée exploitable trouvée dans les onglets du classeur "
+                                       "(colonnes Désignation/Observation/Code introuvables).")
+                        else:
+                            df_codif = pd.concat(frames,ignore_index=True)
+                            df_codif["Nature"] = df_codif["Code"].map(lambda c: NATURE_PILOTE.get(c,("",""))[0])
+                            codes_ok = _codes_pour_pilote(pilote_codif_choisi)
+                            df_filtre_codif = df_codif[df_codif["Code"].isin(codes_ok)]
+                            if df_filtre_codif.empty:
+                                st.session_state["pdf_pilote"] = None
+                                st.info(f"Aucune action trouvée pour le pilote « {pilote_codif_choisi} » "
+                                        f"(codes recherchés : {', '.join(codes_ok) if codes_ok else '—'}).")
+                            else:
+                                try:
+                                    st.session_state["pdf_pilote"] = generer_rapport_pilote_pdf(
+                                        pilote_codif_choisi, df_filtre_codif,
+                                        "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6q1BtDSDgVnJZFo0hOBfQJoDS6OYiub-qfQ&s"
+                                    )
+                                    st.session_state["nb_actions_pilote"] = len(df_filtre_codif)
+                                    st.session_state["pilote_pdf_nom"] = pilote_codif_choisi
+                                except Exception as e:
+                                    st.session_state["pdf_pilote"] = None
+                                    st.error(f"Erreur lors de la génération du PDF : {e}")
+
+            if st.session_state.get("pdf_pilote"):
+                st.success(f"{st.session_state.get('nb_actions_pilote',0)} action(s) trouvée(s) pour "
+                           f"« {st.session_state.get('pilote_pdf_nom','')} ».")
+                afficher_apercu_pdf_grille(st.session_state["pdf_pilote"], colonnes=2)
+                st.download_button(
+                    label="📥 Télécharger le rapport PDF",
+                    data=st.session_state["pdf_pilote"],
+                    file_name=f"Rapport_{st.session_state.get('pilote_pdf_nom','pilote')}_{datetime.date.today().strftime('%d_%m_%Y')}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="dl_pilote"
+                )
+
             # ================= RAPPORT PDF PREMIUM =================
             st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
             st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📄 Rapport PDF </p>",unsafe_allow_html=True)
@@ -1843,7 +2533,13 @@ if acces_autorise:
             if kpi_data is None:
                 st.info("Le rapport PDF nécessite des données KPI disponibles (onglet « Rapports » non vide).")
             else:
-                if st.button("Consulter le rapport PDF", use_container_width=True, key="consult_kpi"):
+                st.markdown(
+                    "<div style='background:white;padding:16px 20px;border-radius:10px;"
+                    "box-shadow:0 2px 8px rgba(0,0,0,0.05);border-left:4px solid #1E3A8A;"
+                    "margin-bottom:10px;'>"
+                    "<span style='font-size:14px;font-weight:600;color:#1E293B;'>📑 Rapport PDF — Synthèse KPI</span>"
+                    "</div>", unsafe_allow_html=True)
+                if st.button("👁️ Consulter le rapport", use_container_width=True, key="consult_kpi", type="primary"):
                     with st.spinner("Préparation du rapport PDF..."):
                         try:
                             st.session_state["pdf_kpi"] = generer_rapport_kpi_pdf(
@@ -1865,3 +2561,81 @@ if acces_autorise:
                         use_container_width=True,
                         key="dl_kpi"
                     )
+
+    # ---- ONGLET 4 : KPI (Visiteur — vue simplifiée en lecture seule) ----
+    if tab_kpi and role=="Visiteur":
+        with tab_kpi:
+            st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#1E3A8A;'>📊 Actions de contrôle par nature</p>",unsafe_allow_html=True)
+
+            with st.spinner("Chargement des actions par nature..."):
+                df_nature_v = lire_points_reserve_nature()
+
+            if df_nature_v.empty:
+                st.info("Aucune donnée disponible pour le moment.")
+            else:
+                if "Nombre" in df_nature_v.columns:
+                    df_nature_v["Nombre"] = pd.to_numeric(df_nature_v["Nombre"],errors="coerce").fillna(0).astype(int)
+
+                if "site_kpi_visiteur" not in st.session_state:
+                    st.session_state.site_kpi_visiteur = "SGB"
+
+                bcol1,bcol2,_ = st.columns([1,1,4])
+                with bcol1:
+                    if st.button("🏭 SGB", key="btn_kpi_sgb", type=("primary" if st.session_state.site_kpi_visiteur=="SGB" else "secondary"), use_container_width=True):
+                        st.session_state.site_kpi_visiteur = "SGB"
+                        st.rerun()
+                with bcol2:
+                    if st.button("🏭 MEG", key="btn_kpi_meg", type=("primary" if st.session_state.site_kpi_visiteur=="MEG" else "secondary"), use_container_width=True):
+                        st.session_state.site_kpi_visiteur = "MEG"
+                        st.rerun()
+
+                site_choisi = st.session_state.site_kpi_visiteur
+                st.markdown(f"<p style='font-weight:700;font-size:14px;color:#0F172A;text-align:center;margin:14px 0 10px 0;'>Répartition — Site {site_choisi}</p>",unsafe_allow_html=True)
+
+                all_natures_v = [v[0] for v in NATURE_PILOTE.values()]
+                palette_nat_v = px.colors.qualitative.Set2
+                color_map_nat_v = {n: palette_nat_v[i % len(palette_nat_v)] for i,n in enumerate(all_natures_v)}
+
+                entites_atomiques_v = sorted(set(
+                    e.strip() for v in NATURE_PILOTE.values() for e in v[1].split("+") if e.strip()
+                ))
+                palette_pil_v = px.colors.qualitative.Set1
+                color_map_pil_v = {p: palette_pil_v[i % len(palette_pil_v)] for i,p in enumerate(entites_atomiques_v)}
+
+                if {"Nature","Pilote","Site"}.issubset(df_nature_v.columns):
+                    vg1,vg2 = st.columns(2)
+                    with vg1:
+                        dv = df_nature_v[df_nature_v["Site"]==site_choisi].groupby("Nature")["Nombre"].sum().reset_index()
+                        if dv.empty:
+                            st.info(f"Aucune donnée {site_choisi}.")
+                        else:
+                            figv1 = px.pie(dv,values="Nombre",names="Nature",hole=0.6,color="Nature",color_discrete_map=color_map_nat_v)
+                            figv1.update_traces(textposition='inside',textinfo='percent')
+                            figv1.update_layout(title=f"{site_choisi} — % par nature",title_x=0.5,margin=dict(t=40,b=10,l=10,r=10),height=300,
+                                                 paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)',legend=dict(font=dict(size=9)))
+                            st.plotly_chart(figv1,use_container_width=True,config={'displayModeBar':False})
+                    with vg2:
+                        dsite = df_nature_v[df_nature_v["Site"]==site_choisi]
+                        total_v = dsite["Nombre"].sum()
+                        compte_v = {}
+                        for _,row in dsite.iterrows():
+                            for e in str(row["Pilote"]).split("+"):
+                                e = e.strip()
+                                if not e: continue
+                                compte_v[e] = compte_v.get(e,0) + row["Nombre"]
+                        if not compte_v or total_v==0:
+                            st.info(f"Aucune donnée {site_choisi}.")
+                        else:
+                            ddv = pd.DataFrame({"Pilote":list(compte_v.keys()),"Nombre":list(compte_v.values())})
+                            ddv["Pourcentage"] = (ddv["Nombre"]/total_v*100).round(1)
+                            ddv = ddv.sort_values("Pourcentage",ascending=True)
+                            figv2 = px.bar(ddv,x="Pourcentage",y="Pilote",orientation="h",text="Pourcentage",
+                                           color="Pilote",color_discrete_map=color_map_pil_v)
+                            figv2.update_traces(texttemplate='%{text}%',textposition='outside',cliponaxis=False)
+                            figv2.update_layout(title=f"{site_choisi} — % par pilote",title_x=0.5,showlegend=False,
+                                                 xaxis_title="% des actions",yaxis_title="",
+                                                 margin=dict(t=40,b=10,l=10,r=30),height=300,
+                                                 paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
+                            st.plotly_chart(figv2,use_container_width=True,config={'displayModeBar':False})
+                else:
+                    st.info("Aucune donnée à afficher pour les graphes.")
