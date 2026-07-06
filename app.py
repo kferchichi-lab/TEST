@@ -512,6 +512,30 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
             display: inline-block; background:#0EA5E9; color:white; font-weight:700;
             padding:3px 12px; border-radius:12px; font-size:9pt; margin-left:8px;
         }}
+        .table-synthese th {{
+            background-color: #1406BE; color: #FFFFFF; font-weight: bold;
+            text-align: center; font-size: 9pt;
+        }}
+        .table-synthese td {{
+            font-size: 9.5pt;
+        }}
+        .table-synthese .ligne-total td {{
+            font-weight: bold;
+            background-color: #F1F5F9;
+        }}
+        .synthese-cadre {{
+            border: 1.5px solid #1E3A8A;
+            border-radius: 6px;
+            padding: 12px 15px;
+            margin-top: 10px;
+            min-height: 260px;
+        }}
+        .synthese-titre {{
+            font-size: 11pt;
+            font-weight: bold;
+            color: #1E3A8A;
+            margin-bottom: 10px;
+        }}
     </style>
     </head>
     <body>
@@ -579,6 +603,17 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
     footnote_synthese = ('<div class="footnote">(*) Suivi d\'avancement : Date de réalisation, Besoin PDR, '
                           'Lancement DA, Nom de sous-traitant...</div>')
 
+    lignes_synthese_tableau = ""
+    for ins in installations:
+        nb_ins = len(df_filtre[df_filtre["Installation"] == ins])
+        lignes_synthese_tableau += f"""
+                    <tr>
+                        <td>{ins}</td>
+                        <td style="text-align:center;">{nb_ins}</td>
+                        <td style="text-align:center;"></td>
+                    </tr>
+        """
+
     html_content += f"""
     <div class="page">
         <div class="page-header">
@@ -591,7 +626,28 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
             <strong>Total toutes installations confondues :</strong> {total_general} action(s)<br>
             <strong>Date d'édition :</strong> {date_str}
         </div>
-        {footnote_synthese}
+
+        <table class="table-synthese">
+            <thead>
+                <tr>
+                    <th style="width:50%;">Installation</th>
+                    <th style="width:25%;">Nombre d'actions</th>
+                    <th style="width:25%;">Taux de réalisation</th>
+                </tr>
+            </thead>
+            <tbody>
+                {lignes_synthese_tableau}
+                <tr class="ligne-total">
+                    <td>Total</td>
+                    <td style="text-align:center;">{total_general}</td>
+                    <td style="text-align:center;"></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="synthese-cadre">
+            <div class="synthese-titre">Synthèse / Observations et remarques</div>
+        </div>
     </div>
     </body>
     </html>
