@@ -7,3 +7,4 @@ PyJWT
 cryptography
 weasyprint
 pymupdf
+openpyxl
