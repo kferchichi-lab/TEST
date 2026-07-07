@@ -2975,11 +2975,30 @@ if acces_autorise:
                                 <p style="margin:4px 0 0 0;font-size:28px;color:#0F172A;font-weight:700;">{total_r}</p></div>""",unsafe_allow_html=True)
 
                             dv_r = d_site_r.groupby("Nature")["Nombre"].sum().reset_index()
-                            fig_r = px.pie(dv_r,values="Nombre",names="Nature",hole=0.6,color="Nature",color_discrete_map=color_map_nat_r)
-                            fig_r.update_traces(textposition='inside',textinfo='percent+value')
-                            fig_r.update_layout(title=f"{site_choisi_r} — répartition par nature",title_x=0.5,margin=dict(t=40,b=10,l=10,r=10),height=320,
-                                                 paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)',legend=dict(font=dict(size=9)))
-                            st.plotly_chart(fig_r,use_container_width=True,config={'displayModeBar':False})
+
+                            gcol1,gcol2 = st.columns(2)
+                            with gcol1:
+                                fig_r = px.pie(dv_r,values="Nombre",names="Nature",hole=0.6,color="Nature",color_discrete_map=color_map_nat_r)
+                                fig_r.update_traces(textposition='inside',textinfo='percent+value')
+                                fig_r.update_layout(title=f"{site_choisi_r} — répartition par nature",title_x=0.5,margin=dict(t=40,b=10,l=10,r=10),height=320,
+                                                     paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)',legend=dict(font=dict(size=9)))
+                                st.plotly_chart(fig_r,use_container_width=True,config={'displayModeBar':False})
+
+                            with gcol2:
+                                if "Installation" in d_site_r.columns:
+                                    di_r = d_site_r.groupby("Installation")["Nombre"].sum().reset_index().sort_values("Nombre",ascending=True)
+                                    palette_ins_r = px.colors.qualitative.Set3
+                                    color_map_ins_r = {i: palette_ins_r[k % len(palette_ins_r)] for k,i in enumerate(di_r["Installation"])}
+                                    fig_ins_r = px.bar(di_r,x="Nombre",y="Installation",orientation="h",text="Nombre",
+                                                        color="Installation",color_discrete_map=color_map_ins_r)
+                                    fig_ins_r.update_traces(textposition='outside',cliponaxis=False)
+                                    fig_ins_r.update_layout(title=f"{site_choisi_r} — répartition par installation",title_x=0.5,showlegend=False,
+                                                             xaxis_title="Nombre d'actions",yaxis_title="",
+                                                             margin=dict(t=40,b=10,l=10,r=30),height=320,
+                                                             paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
+                                    st.plotly_chart(fig_ins_r,use_container_width=True,config={'displayModeBar':False})
+                                else:
+                                    st.info("Aucune donnée d'installation à afficher.")
 
                             st.dataframe(d_site_r.rename(columns={
                                 "Site":"Site","Installation":"Installation","Nombre":"Nombre des actions","Nature":"Nature","Pilote":"Pilote"
