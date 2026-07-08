@@ -866,6 +866,33 @@ COULEURS_INS = {
     "Installations de gaz":      "#eda100",
     "Appareil pression de gaz":  "#4a3aa7",
 }
+# Code interne (CI) de chaque type d'installation — adapte librement les libellés
+CI_CODES = {
+    "Installations de gaz":       "B1",
+    "Installations électriques":  "B2",
+    "Equipements de levage":      "B3",
+    "Appareil pression de gaz":   "A1",
+    "Sécurité incendie":          "A2",
+}
+# Ordre d'affichage dans le tableau (reprend celui de ta capture)
+ORDRE_CI = [
+    "Installations de gaz",
+    "Installations électriques",
+    "Equipements de levage",
+    "Appareil pression de gaz",
+    "Sécurité incendie",
+]
+
+# Durée de visite en jours, par site et par installation.
+# ⚠️ Cette donnée n'existe dans aucune feuille actuelle de ton Google Sheet :
+# soit tu la fixes ici "en dur", soit (mieux) tu ajoutes une colonne "Nbr_jour"
+# dans l'onglet Exigences et tu remplaces ce dict par une lecture de cette colonne.
+NB_JOURS_VISITE = {
+    "SGB": {"Installations de gaz": 1, "Installations électriques": 3, "Equipements de levage": 6,
+            "Appareil pression de gaz": 1, "Sécurité incendie": 2},
+    "MEG": {"Installations de gaz": 1, "Installations électriques": 3, "Equipements de levage": 6,
+            "Appareil pression de gaz": 1, "Sécurité incendie": 1},
+}
 MOIS_FR = ["","Janvier","Février","Mars","Avril","Mai","Juin",
            "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
 SOUS_EQUIPEMENTS = {
