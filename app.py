@@ -2276,7 +2276,6 @@ if acces_autorise:
 # ------------------------------------------------------------------------------
 # BLOC 3 — UI Streamlit (à insérer dans `with tab_exigences:`)
 # ------------------------------------------------------------------------------
-"""
         st.divider()
         st.markdown("### 🗓️ Calendrier de contrôle prochain")
         st.caption("Tableau récapitulatif des visites réalisées et planifiées, par site et par installation.")
@@ -2312,7 +2311,6 @@ if acces_autorise:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True, key="dl_calendrier_excel",
                 )
-"""
 
     # ===== SECTION 1 : CONTRAT D'ABONNEMENT =====
         st.markdown("### 📄 Contrat d'abonnement 2026")
