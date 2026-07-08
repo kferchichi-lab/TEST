@@ -924,10 +924,72 @@ st.html("""<style>
     div[data-baseweb="select"]>div{border:none!important;background-color:transparent!important;}
     div[data-baseweb="select"]:hover{border-color:#0EA5E9!important;background-color:#FFFFFF!important;box-shadow:0 0 0 3px rgba(14,165,233,0.12)!important;}
     div[data-baseweb="select"] span{color:#0F172A!important;font-weight:500!important;}
-    div[data-testid="stTabs"] button{font-size:14px!important;font-weight:600!important;color:#64748B!important;background-color:#F8FAFC!important;padding:10px 24px!important;margin-right:8px!important;border-radius:8px 8px 0px 0px!important;border:1px solid #E2E8F0!important;border-bottom:none!important;}
-    div[data-testid="stTabs"] button:hover{color:#1E3A8A!important;background-color:#F1F5F9!important;}
-    div[data-testid="stTabs"] button[aria-selected="true"]{color:#1E3A8A!important;background-color:#E0F2FE!important;border-color:#bae6fd!important;border-bottom:none!important;box-shadow:inset 0 3px 0px #0EA5E9!important;}
-    div[data-testid="stTabs"] [data-baseweb="tab-highlight-bar"]{background-color:transparent!important;}
+    div[data-testid="stTabs"] [data-baseweb="tab-list"],
+    [data-baseweb="tab-list"],
+    div[role="tablist"]{
+        gap:12px!important;
+        flex-wrap:wrap!important;
+        border-bottom:none!important;
+    }
+    /* Supprime la barre de soulignement native (rouge/couleur du theme) */
+    div[data-testid="stTabs"] [data-baseweb="tab-list"] > div:not([role="tab"]),
+    div[data-testid="stTabs"] [data-baseweb="tab-highlight"],
+    div[data-testid="stTabs"] [data-baseweb="tab-highlight-bar"],
+    div[data-testid="stTabs"] [data-baseweb="tab-border"]{
+        display:none!important;
+        height:0!important;
+        background:transparent!important;
+        box-shadow:none!important;
+        border:none!important;
+    }
+    div[data-testid="stTabs"] button,
+    button[data-baseweb="tab"],
+    [role="tab"]{
+        font-size:17px!important;
+        font-weight:700!important;
+        color:#475569!important;
+        background-color:#FFFFFF!important;
+        padding:16px 32px!important;
+        margin-right:0!important;
+        border-radius:14px!important;
+        border:2px solid #CBD5E1!important;
+        box-shadow:0 2px 6px rgba(15,23,42,0.05)!important;
+        transition:all 0.18s ease-in-out!important;
+    }
+    div[data-testid="stTabs"] button p,
+    button[data-baseweb="tab"] p,
+    [role="tab"] p,
+    div[data-testid="stTabs"] button div,
+    button[data-baseweb="tab"] div,
+    [role="tab"] div{
+        font-size:17px!important;
+        font-weight:700!important;
+        color:inherit!important;
+    }
+    div[data-testid="stTabs"] button:hover,
+    button[data-baseweb="tab"]:hover,
+    [role="tab"]:hover{
+        color:#FFFFFF!important;
+        background-color:#3B82F6!important;
+        border:2px solid #1E3A8A!important;
+        box-shadow:0 6px 14px rgba(30,58,138,0.25)!important;
+    }
+    div[data-testid="stTabs"] button[aria-selected="true"],
+    button[data-baseweb="tab"][aria-selected="true"],
+    [role="tab"][aria-selected="true"]{
+        color:#FFFFFF!important;
+        background-color:#1E3A8A!important;
+        border:2px solid #1E3A8A!important;
+        box-shadow:0 6px 16px rgba(14,165,233,0.35)!important;
+    }
+
+    /* Centrage global des titres de section (paragraphes en gras 1.2rem) */
+    p[style*="font-size:1.2rem"],
+    div[data-testid="stMarkdownContainer"] p[style*="font-size:1.2rem"]{
+        text-align:center!important;
+        width:100%!important;
+        display:block!important;
+    }
 </style>""")
 
 st.markdown("""<style>
@@ -2835,6 +2897,16 @@ if acces_autorise:
             st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
             st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📄 Rapport des actions par Pilote</p>",unsafe_allow_html=True)
 
+            def _deduire_site_installation(nom_installation):
+                """Déduit le site (SGB/MEG) à partir du nom de l'onglet/installation, si celui-ci
+                le mentionne explicitement (ex: 'SGB - Installations électriques')."""
+                n = str(nom_installation).upper()
+                if "SGB" in n:
+                    return "SGB"
+                if "MEG" in n:
+                    return "MEG"
+                return None
+
             entites_pilote_codif = sorted(set(
                 e.strip() for v in NATURE_PILOTE.values() for e in v[1].split("+") if e.strip()
             ))
@@ -2844,38 +2916,85 @@ if acces_autorise:
             with cpil2:
                 st.write("")
                 st.write("")
-                lancer_rapport_pilote = st.button("👁️ Générer",use_container_width=True,key="btn_gen_rapport_pilote",type="primary")
+                charger_classeur_pilote = st.button("🔍 Charger les installations",use_container_width=True,key="btn_charger_classeur_pilote")
 
-            if lancer_rapport_pilote:
+            if charger_classeur_pilote:
                 with st.spinner("Lecture du classeur de codification..."):
                     classeur, err = codif_charger_classeur(CODIF_SHEET_ID)
                     if err:
-                        st.session_state["pdf_pilote"] = None
+                        st.session_state["classeur_codif_pilote"] = None
                         st.error(err)
                     elif not classeur:
-                        st.session_state["pdf_pilote"] = None
+                        st.session_state["classeur_codif_pilote"] = None
                         st.warning("Aucun onglet trouvé dans le classeur de codification.")
                     else:
-                        frames = []
-                        for onglet, df_brut in classeur.items():
-                            valeurs = df_brut.fillna("").astype(str).values.tolist()
-                            d = _detecter_entete_et_nettoyer_codif(valeurs)
-                            if not d.empty:
-                                d["Installation"] = onglet
-                                frames.append(d)
-                        if not frames:
-                            st.session_state["pdf_pilote"] = None
-                            st.warning("Aucune donnée exploitable trouvée dans les onglets du classeur "
-                                       "(colonnes Désignation/Observation/Code introuvables).")
+                        st.session_state["classeur_codif_pilote"] = classeur
+                        st.session_state["pdf_pilote"] = None
+
+            classeur_pilote = st.session_state.get("classeur_codif_pilote")
+
+            if not classeur_pilote:
+                st.info("👆 Cliquez sur « Charger les installations » pour sélectionner précisément "
+                         "le site et l'installation à inclure dans le rapport.")
+            else:
+                frames = []
+                for onglet, df_brut in classeur_pilote.items():
+                    valeurs = df_brut.fillna("").astype(str).values.tolist()
+                    d = _detecter_entete_et_nettoyer_codif(valeurs)
+                    if not d.empty:
+                        d["Installation"] = onglet
+                        frames.append(d)
+
+                if not frames:
+                    st.warning("Aucune donnée exploitable trouvée dans les onglets du classeur "
+                               "(colonnes Désignation/Observation/Code introuvables).")
+                else:
+                    df_codif = pd.concat(frames,ignore_index=True)
+                    df_codif["Nature"] = df_codif["Code"].map(lambda c: NATURE_PILOTE.get(c,("",""))[0])
+                    codes_ok = _codes_pour_pilote(pilote_codif_choisi)
+                    df_pilote_codif = df_codif[df_codif["Code"].isin(codes_ok)]
+
+                    if df_pilote_codif.empty:
+                        st.info(f"Aucune action trouvée pour le pilote « {pilote_codif_choisi} » "
+                                f"(codes recherchés : {', '.join(codes_ok) if codes_ok else '—'}).")
+                    else:
+                        installations_dispo = sorted(df_pilote_codif["Installation"].unique().tolist())
+                        sites_dispo = sorted({
+                            s for s in (_deduire_site_installation(i) for i in installations_dispo) if s
+                        })
+
+                        cfil1,cfil2 = st.columns(2)
+                        with cfil1:
+                            if sites_dispo:
+                                site_filtre_pilote = st.selectbox(
+                                    "Site", ["Tous"]+sites_dispo, key="site_filtre_pilote_codif"
+                                )
+                            else:
+                                site_filtre_pilote = "Tous"
+                        installations_apres_site = [
+                            i for i in installations_dispo
+                            if site_filtre_pilote == "Tous" or _deduire_site_installation(i) == site_filtre_pilote
+                        ]
+                        with cfil2:
+                            installation_filtre_pilote = st.selectbox(
+                                "Installation", ["Toutes"]+installations_apres_site,
+                                key="installation_filtre_pilote_codif"
+                            )
+
+                        if installation_filtre_pilote == "Toutes":
+                            df_filtre_codif = df_pilote_codif[df_pilote_codif["Installation"].isin(installations_apres_site)]
                         else:
-                            df_codif = pd.concat(frames,ignore_index=True)
-                            df_codif["Nature"] = df_codif["Code"].map(lambda c: NATURE_PILOTE.get(c,("",""))[0])
-                            codes_ok = _codes_pour_pilote(pilote_codif_choisi)
-                            df_filtre_codif = df_codif[df_codif["Code"].isin(codes_ok)]
+                            df_filtre_codif = df_pilote_codif[df_pilote_codif["Installation"] == installation_filtre_pilote]
+
+                        lancer_rapport_pilote = st.button(
+                            "👁️ Générer",use_container_width=True,key="btn_gen_rapport_pilote",type="primary"
+                        )
+
+                        if lancer_rapport_pilote:
                             if df_filtre_codif.empty:
                                 st.session_state["pdf_pilote"] = None
                                 st.info(f"Aucune action trouvée pour le pilote « {pilote_codif_choisi} » "
-                                        f"(codes recherchés : {', '.join(codes_ok) if codes_ok else '—'}).")
+                                        f"avec les filtres sélectionnés.")
                             else:
                                 try:
                                     st.session_state["pdf_pilote"] = generer_rapport_pilote_pdf(
@@ -2948,7 +3067,7 @@ if acces_autorise:
             st.markdown(f"<p style='font-size:1.2rem;font-weight:700;color:#1E3A8A;'>📊 Indicateurs — {nom_resp}</p>",unsafe_allow_html=True)
             st.markdown(
                 "<div style='background:#EFF6FF;border-left:4px solid #2a78d6;padding:10px 14px;border-radius:6px;margin-bottom:14px;'>"
-                "<p style='margin:0;font-size:12px;color:#1e40af;font-weight:600;'>👁️ Consultation seule — vous ne voyez ici que les actions et le rapport qui vous concernent.</p>"
+                "<p style='margin:0;font-size:12px;color:#1e40af;font-weight:600;'>Consultation seule : Veuillez sélectionner votre site</p>"
                 "</div>", unsafe_allow_html=True)
 
             with st.spinner("Chargement des actions par nature..."):
@@ -2985,7 +3104,7 @@ if acces_autorise:
                             st.rerun()
 
                     site_choisi_r = st.session_state.site_kpi_responsable
-                    st.markdown(f"<p style='font-weight:700;font-size:14px;color:#0F172A;text-align:center;margin:14px 0 10px 0;'>Répartition de vos actions — Site {site_choisi_r}</p>",unsafe_allow_html=True)
+                    st.markdown(f"<p style='font-weight:700;font-size:14px;color:#0F172A;text-align:center;margin:14px 0 10px 0;'>Répartition des actions — Site {site_choisi_r}</p>",unsafe_allow_html=True)
 
                     all_natures_r = [v[0] for v in NATURE_PILOTE.values()]
                     palette_nat_r = px.colors.qualitative.Set2
@@ -2998,7 +3117,7 @@ if acces_autorise:
                         else:
                             total_r = int(d_site_r["Nombre"].sum())
                             st.markdown(f"""<div style="background:white;padding:14px;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,0.05);border-left:4px solid #1E3A8A;margin-bottom:14px;">
-                                <p style="margin:0;font-size:11px;color:#64748B;font-weight:600;text-transform:uppercase;">Total actions vous concernant — {site_choisi_r}</p>
+                                <p style="margin:0;font-size:11px;color:#64748B;font-weight:600;text-transform:uppercase;">Total actions — {site_choisi_r}</p>
                                 <p style="margin:4px 0 0 0;font-size:28px;color:#0F172A;font-weight:700;">{total_r}</p></div>""",unsafe_allow_html=True)
 
                             dv_r = d_site_r.groupby("Nature")["Nombre"].sum().reset_index()
@@ -3041,9 +3160,9 @@ if acces_autorise:
                 entite_pdf_choisie = st.selectbox("Périmètre", entites_resp, key="entite_pdf_responsable")
             else:
                 entite_pdf_choisie = entites_resp[0] if entites_resp else None
-                st.caption(f"Périmètre : {entite_pdf_choisie}")
+                
 
-            if st.button("👁️ Générer mon rapport", use_container_width=True, key="btn_gen_rapport_responsable", type="primary") and entite_pdf_choisie:
+            if st.button("Générer mon rapport", use_container_width=True, key="btn_gen_rapport_responsable", type="primary") and entite_pdf_choisie:
                 with st.spinner("Lecture du classeur de codification..."):
                     classeur, err = codif_charger_classeur(CODIF_SHEET_ID)
                     if err:
