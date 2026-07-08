@@ -1,6 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import plotly.express as px
+import plotly.graph_objects as go
 import pandas as pd
 import datetime
 import pytz
@@ -244,11 +245,13 @@ def construire_calendrier_controle(df_rapports: pd.DataFrame, annee_reference: i
             pct = round(min(nb_realisees_annee, attendu) / attendu * 100) if attendu else 0
             realisation_txt = f"{pct}%" if nb_realisees_annee > 0 else "À planifier"
 
-            # Dates planifiées : valeur manuelle (colonne "prochaine") si dispo, sinon +1 an
+            # Dates planifiées : valeur manuelle (colonne "prochaine") si dispo,
+            # sinon +périodicité de l'installation (6 mois pour l'électrique, 12 mois pour les autres)
+            periodicite_mois = PERIODICITE.get(installation, 12)
             if not df_grp.empty and df_grp["_date_prochaine_manuelle"].notna().any():
                 dates_planifiees = sorted(df_grp["_date_prochaine_manuelle"].dropna().unique())[-attendu:]
             else:
-                dates_planifiees = [pd.Timestamp(d) + pd.DateOffset(years=1) for d in dates_realisees]
+                dates_planifiees = [pd.Timestamp(d) + pd.DateOffset(months=periodicite_mois) for d in dates_realisees]
 
             lignes.append({
                 "Site": site,
@@ -2294,6 +2297,65 @@ if acces_autorise:
         if st.session_state.get("df_calendrier") is not None:
             df_cal = st.session_state["df_calendrier"]
             st.dataframe(df_cal, hide_index=True, use_container_width=True)
+
+            # ----- Taux de réalisation 2026 : barres par site + infographie globale -----
+            col_real = f"Réalisation {annee_ref_calendrier}"
+
+            def _pct_to_num(v):
+                if isinstance(v, str) and v.strip().endswith("%"):
+                    try:
+                        return float(v.strip().rstrip("%"))
+                    except ValueError:
+                        return 0.0
+                return 0.0
+
+            if col_real in df_cal.columns:
+                df_cal["_pct_num"] = df_cal[col_real].map(_pct_to_num)
+                taux_par_site = df_cal.groupby("Site")["_pct_num"].mean().round(1)
+                taux_meg = float(taux_par_site.get("MEG", 0.0))
+                taux_sgb = float(taux_par_site.get("SGB", 0.0))
+                taux_global = round(df_cal["_pct_num"].mean(), 1) if not df_cal.empty else 0.0
+
+                st.markdown(f"#### 📊 Taux de réalisation des contrôles — {annee_ref_calendrier}")
+                col_bars, col_gauge = st.columns([2, 1])
+
+                with col_bars:
+                    df_bars = pd.DataFrame({"Site": ["MEG", "SGB"], "Taux (%)": [taux_meg, taux_sgb]})
+                    fig_bars = px.bar(
+                        df_bars, x="Site", y="Taux (%)", text="Taux (%)", color="Site",
+                        color_discrete_map={"MEG": "#2a78d6", "SGB": "#1baf7a"},
+                        range_y=[0, 100],
+                    )
+                    fig_bars.update_traces(texttemplate='%{text}%', textposition='outside', cliponaxis=False)
+                    fig_bars.update_layout(
+                        title=f"Taux de réalisation par site — {annee_ref_calendrier}", title_x=0.5,
+                        showlegend=False, xaxis_title="", yaxis_title="Taux (%)",
+                        margin=dict(t=40, b=10, l=10, r=10), height=320,
+                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                    )
+                    st.plotly_chart(fig_bars, use_container_width=True, config={'displayModeBar': False})
+
+                with col_gauge:
+                    fig_gauge = go.Figure(go.Indicator(
+                        mode="gauge+number",
+                        value=taux_global,
+                        number={'suffix': "%", 'font': {'size': 36}},
+                        title={'text': f"Taux global {annee_ref_calendrier}", 'font': {'size': 14}},
+                        gauge={
+                            'axis': {'range': [0, 100]},
+                            'bar': {'color': "#1E3A8A"},
+                            'steps': [
+                                {'range': [0, 50], 'color': "#FCA5A5"},
+                                {'range': [50, 80], 'color': "#FDE68A"},
+                                {'range': [80, 100], 'color': "#86EFAC"},
+                            ],
+                        },
+                    ))
+                    fig_gauge.update_layout(
+                        margin=dict(t=40, b=10, l=20, r=20), height=320,
+                        paper_bgcolor='rgba(0,0,0,0)',
+                    )
+                    st.plotly_chart(fig_gauge, use_container_width=True, config={'displayModeBar': False})
 
             dl1, dl2 = st.columns(2)
             with dl1:
