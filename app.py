@@ -2064,7 +2064,7 @@ if acces_autorise:
                     else:
                         # Admin : édition de la date de dernière visite ET de la prochaine échéance
                         st.markdown("""<div style='background:#EFF6FF;border-left:4px solid #2a78d6;padding:10px 14px;border-radius:6px;margin-bottom:10px;'>
-                            <p style='margin:0;font-size:12px;color:#1e40af;font-weight:600;'>✏️ Mode administrateur — Modifiez la <b>Date de dernière visite</b> et/ou la <b>Prochaine échéance</b> puis sauvegardez. Par défaut, la prochaine échéance est calculée automatiquement selon la périodicité ; toute date saisie ici la remplace.</p>
+                            <p style='margin:0;font-size:12px;color:#1e40af;font-weight:600;'>✏️ Mode administrateur</p>
                         </div>""",unsafe_allow_html=True)
                         cols_resp=[]
                         if col_site_r:  cols_resp.append(col_site_r[0])
