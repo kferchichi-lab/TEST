@@ -2273,6 +2273,47 @@ if acces_autorise:
 
         df_exig = lire_exigences()
 
+# ------------------------------------------------------------------------------
+# BLOC 3 — UI Streamlit (à insérer dans `with tab_exigences:`)
+# ------------------------------------------------------------------------------
+"""
+        st.divider()
+        st.markdown("### 🗓️ Calendrier de contrôle prochain")
+        st.caption("Tableau récapitulatif des visites réalisées et planifiées, par site et par installation.")
+
+        annee_ref_calendrier = datetime.date.today().year
+
+        if st.button("🗓️ Générer le calendrier de contrôle", use_container_width=True, key="btn_gen_calendrier"):
+            with st.spinner("Construction du calendrier..."):
+                df_calendrier = construire_calendrier_controle(df_rapports, annee_ref_calendrier)
+                if df_calendrier.empty:
+                    st.warning("Aucune donnée exploitable pour construire le calendrier.")
+                    st.session_state["df_calendrier"] = None
+                else:
+                    st.session_state["df_calendrier"] = df_calendrier
+
+        if st.session_state.get("df_calendrier") is not None:
+            df_cal = st.session_state["df_calendrier"]
+            st.dataframe(df_cal, hide_index=True, use_container_width=True)
+
+            dl1, dl2 = st.columns(2)
+            with dl1:
+                pdf_cal = generer_calendrier_controle_pdf(df_cal, annee_ref_calendrier)
+                st.download_button(
+                    "📥 Télécharger en PDF", data=pdf_cal,
+                    file_name=f"Calendrier_Controle_{annee_ref_calendrier}_{datetime.date.today().strftime('%d_%m_%Y')}.pdf",
+                    mime="application/pdf", use_container_width=True, key="dl_calendrier_pdf",
+                )
+            with dl2:
+                excel_cal = generer_calendrier_controle_excel(df_cal, annee_ref_calendrier)
+                st.download_button(
+                    "📥 Télécharger en Excel", data=excel_cal,
+                    file_name=f"Calendrier_Controle_{annee_ref_calendrier}_{datetime.date.today().strftime('%d_%m_%Y')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True, key="dl_calendrier_excel",
+                )
+"""
+
     # ===== SECTION 1 : CONTRAT D'ABONNEMENT =====
         st.markdown("### 📄 Contrat d'abonnement 2026")
 
