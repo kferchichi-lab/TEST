@@ -264,13 +264,38 @@ def construire_calendrier_controle(df_rapports: pd.DataFrame, annee_reference: i
                 col_realisation: realisation_txt,
                 "Dates planifiées": (" | ".join(pd.Timestamp(d).strftime("%d/%m/%Y") for d in dates_planifiees)
                                       if len(dates_planifiees) else "-"),
+                "_nb_realisees_capped": min(nb_realisees_annee, attendu),  # colonne technique (masquée à l'affichage/export)
             })
 
     return pd.DataFrame(lignes)
 
 
+def calculer_taux_realisation(df_calendrier: pd.DataFrame) -> dict:
+    """
+    Calcule le taux de réalisation pondéré par le nombre réel de visites attendues
+    (et non une simple moyenne des % par installation), pour MEG, SGB et le global.
+    Ex: MEG 5 visites réalisées sur 6 attendues -> 83.3% (et non la moyenne des % par ligne).
+    """
+    if df_calendrier.empty or "_nb_realisees_capped" not in df_calendrier.columns:
+        return {"MEG": 0.0, "SGB": 0.0, "Global": 0.0}
+
+    resultat = {}
+    for site in ("MEG", "SGB"):
+        df_site = df_calendrier[df_calendrier["Site"] == site]
+        attendu_total = df_site["Nbr visite/An"].sum()
+        realise_total = df_site["_nb_realisees_capped"].sum()
+        resultat[site] = round(realise_total / attendu_total * 100, 1) if attendu_total else 0.0
+
+    attendu_global = df_calendrier["Nbr visite/An"].sum()
+    realise_global = df_calendrier["_nb_realisees_capped"].sum()
+    resultat["Global"] = round(realise_global / attendu_global * 100, 1) if attendu_global else 0.0
+    return resultat
+
+
 def generer_calendrier_controle_pdf(df_calendrier: pd.DataFrame, annee_reference: int) -> bytes:
     """Génère le PDF du calendrier de contrôle (paysage, une ligne par installation, Site fusionné)."""
+    import math
+
     col_realisation = f"Réalisation {annee_reference}"
     logo_url = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6q1BtDSDgVnJZFo0hOBfQJoDS6OYiub-qfQ&s"
 
@@ -298,6 +323,26 @@ def generer_calendrier_controle_pdf(df_calendrier: pd.DataFrame, annee_reference
                 <td class="center planifiee">{row['Dates planifiées']}</td>
             </tr>"""
 
+    # ----- Bloc graphiques : taux de réalisation par site (barres horizontales) + taux global (anneau) -----
+    taux = calculer_taux_realisation(df_calendrier)
+    taux_meg, taux_sgb, taux_global = taux.get("MEG", 0.0), taux.get("SGB", 0.0), taux.get("Global", 0.0)
+
+    couleurs_site = {"MEG": "#2563EB", "SGB": "#059669"}
+    barres_html = ""
+    for site_lbl, val in (("MEG", taux_meg), ("SGB", taux_sgb)):
+        barres_html += f"""
+        <div class="bar-row">
+            <div class="bar-label">{site_lbl}</div>
+            <div class="bar-track">
+                <div class="bar-fill" style="width:{val}%; background:{couleurs_site[site_lbl]};"></div>
+            </div>
+            <div class="bar-value">{val}%</div>
+        </div>"""
+
+    r_anneau = 68
+    circonf = 2 * math.pi * r_anneau
+    dash_val = circonf * (taux_global / 100)
+
     html_content = f"""
     <html><head><style>
         @page {{ size: A4 landscape; margin: 15mm 12mm; }}
@@ -314,6 +359,19 @@ def generer_calendrier_controle_pdf(df_calendrier: pd.DataFrame, annee_reference
         .center {{ text-align:center; }}
         .planifiee {{ font-weight:700; }}
         tr:nth-child(even) td:not(.site-cell) {{ background:#F8FAFC; }}
+
+        .charts-page {{ page-break-before: always; }}
+        .charts-title {{ font-size:14pt; font-weight:800; color:#1E3A8A; margin-bottom:18px; text-align:center; }}
+        .charts-wrap {{ display:flex; gap:30px; align-items:center; }}
+        .charts-left {{ flex:1.4; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:10px; padding:24px; }}
+        .charts-left-title {{ font-size:11pt; font-weight:700; color:#0F172A; margin-bottom:20px; text-align:center; }}
+        .bar-row {{ display:flex; align-items:center; margin-bottom:22px; }}
+        .bar-label {{ width:60px; font-weight:700; color:#0F172A; }}
+        .bar-track {{ flex:1; height:26px; background:#E2E8F0; border-radius:6px; overflow:hidden; }}
+        .bar-fill {{ height:100%; border-radius:6px; }}
+        .bar-value {{ width:55px; text-align:right; font-weight:800; color:#0F172A; }}
+        .charts-right {{ flex:1; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:10px; padding:24px; text-align:center; }}
+        .charts-right-title {{ font-size:11pt; font-weight:700; color:#0F172A; margin-bottom:16px; }}
     </style></head>
     <body>
         <div class="header">
@@ -328,22 +386,50 @@ def generer_calendrier_controle_pdf(df_calendrier: pd.DataFrame, annee_reference
             </tr></thead>
             <tbody>{lignes_html}</tbody>
         </table>
+
+        <div class="charts-page">
+            <div class="charts-title">Taux de réalisation des contrôles — {annee_reference}</div>
+            <div class="charts-wrap">
+                <div class="charts-left">
+                    <div class="charts-left-title">Taux de réalisation par site</div>
+                    {barres_html}
+                </div>
+                <div class="charts-right">
+                    <div class="charts-right-title">Taux global {annee_reference}</div>
+                    <svg width="200" height="200" viewBox="0 0 180 180">
+                        <circle cx="90" cy="90" r="{r_anneau}" fill="none" stroke="#E2E8F0" stroke-width="16"/>
+                        <circle cx="90" cy="90" r="{r_anneau}" fill="none" stroke="#1E3A8A" stroke-width="16"
+                                stroke-linecap="round"
+                                stroke-dasharray="{dash_val:.1f} {circonf:.1f}"
+                                transform="rotate(-90 90 90)"/>
+                        <text x="90" y="98" text-anchor="middle" font-size="30" font-weight="800" fill="#0F172A">{taux_global}%</text>
+                    </svg>
+                </div>
+            </div>
+        </div>
     </body></html>
     """
     return HTML(string=html_content).write_pdf()
 
 
 def generer_calendrier_controle_excel(df_calendrier: pd.DataFrame, annee_reference: int) -> bytes:
-    """Génère le fichier Excel du calendrier de contrôle (styles + fusion de la colonne Site)."""
+    """Génère le fichier Excel du calendrier de contrôle (styles + fusion de la colonne Site + graphiques)."""
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
+    from openpyxl.chart import BarChart, DoughnutChart, Reference
+    from openpyxl.chart.marker import DataPoint
+    from openpyxl.chart.label import DataLabelList
+
+    # Colonnes techniques (préfixées par "_") utilisées uniquement pour les calculs internes
+    df_export = df_calendrier[[c for c in df_calendrier.columns if not c.startswith("_")]]
+    taux = calculer_taux_realisation(df_calendrier)
 
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df_calendrier.to_excel(writer, index=False, sheet_name="Calendrier", startrow=1)
+        df_export.to_excel(writer, index=False, sheet_name="Calendrier", startrow=1)
         ws = writer.sheets["Calendrier"]
 
-        nb_cols = len(df_calendrier.columns)
+        nb_cols = len(df_export.columns)
         ws.cell(row=1, column=1, value=f"Calendrier de contrôle réglementaire — Année {annee_reference}")
         ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=nb_cols)
         ws.cell(row=1, column=1).font = Font(size=14, bold=True, color="1E3A8A")
@@ -362,7 +448,7 @@ def generer_calendrier_controle_excel(df_calendrier: pd.DataFrame, annee_referen
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
             cell.border = border
 
-        for row_idx in range(header_row + 1, header_row + 1 + len(df_calendrier)):
+        for row_idx in range(header_row + 1, header_row + 1 + len(df_export)):
             for col_idx in range(1, nb_cols + 1):
                 cell = ws.cell(row=row_idx, column=col_idx)
                 cell.border = border
@@ -370,7 +456,7 @@ def generer_calendrier_controle_excel(df_calendrier: pd.DataFrame, annee_referen
 
         # Fusion de la colonne "Site" par groupe de 5 installations (ordre déterministe = ORDRE_CI)
         nb_installations = len(ORDRE_CI)
-        for i in range(0, len(df_calendrier), nb_installations):
+        for i in range(0, len(df_export), nb_installations):
             r1 = header_row + 1 + i
             r2 = header_row + nb_installations + i
             ws.merge_cells(start_row=r1, start_column=1, end_row=r2, end_column=1)
@@ -379,6 +465,64 @@ def generer_calendrier_controle_excel(df_calendrier: pd.DataFrame, annee_referen
         largeurs = [10, 6, 26, 12, 10, 26, 18, 26]
         for i, largeur in enumerate(largeurs, start=1):
             ws.column_dimensions[get_column_letter(i)].width = largeur
+
+        # ================= FEUILLE "Taux de réalisation" (graphiques) =================
+        ws_g = writer.book.create_sheet("Taux de réalisation")
+        ws_g["A1"] = f"Taux de réalisation des contrôles — {annee_reference}"
+        ws_g.merge_cells("A1:D1")
+        ws_g["A1"].font = Font(size=14, bold=True, color="1E3A8A")
+        ws_g["A1"].alignment = Alignment(horizontal="center")
+
+        # --- Données pour la barre horizontale (par site) ---
+        ws_g["A3"] = "Site"; ws_g["B3"] = "Taux (%)"
+        ws_g["A3"].font = header_font; ws_g["A3"].fill = header_fill
+        ws_g["B3"].font = header_font; ws_g["B3"].fill = header_fill
+        ws_g["A4"] = "MEG"; ws_g["B4"] = taux.get("MEG", 0.0)
+        ws_g["A5"] = "SGB"; ws_g["B5"] = taux.get("SGB", 0.0)
+
+        bar = BarChart()
+        bar.type = "bar"  # barres horizontales
+        bar.title = f"Taux de réalisation par site — {annee_reference}"
+        bar.y_axis.title = None
+        bar.x_axis.title = "Taux (%)"
+        bar.x_axis.scaling.min = 0
+        bar.x_axis.scaling.max = 100
+        data_bar = Reference(ws_g, min_col=2, min_row=3, max_row=5)
+        cats_bar = Reference(ws_g, min_col=1, min_row=4, max_row=5)
+        bar.add_data(data_bar, titles_from_data=True)
+        bar.set_categories(cats_bar)
+        serie_bar = bar.series[0]
+        pt_meg = DataPoint(idx=0); pt_meg.graphicalProperties.solidFill = "2563EB"
+        pt_sgb = DataPoint(idx=1); pt_sgb.graphicalProperties.solidFill = "059669"
+        serie_bar.data_points = [pt_meg, pt_sgb]
+        serie_bar.dLbls = DataLabelList()
+        serie_bar.dLbls.showVal = True
+        bar.height, bar.width = 8.5, 16
+        bar.legend = None
+        ws_g.add_chart(bar, "D3")
+
+        # --- Données pour l'anneau (taux global) ---
+        ws_g["A8"] = "Répartition"; ws_g["B8"] = "Valeur"
+        ws_g["A8"].font = header_font; ws_g["A8"].fill = header_fill
+        ws_g["B8"].font = header_font; ws_g["B8"].fill = header_fill
+        ws_g["A9"] = "Réalisé"; ws_g["B9"] = taux.get("Global", 0.0)
+        ws_g["A10"] = "Restant"; ws_g["B10"] = round(100 - taux.get("Global", 0.0), 1)
+
+        doughnut = DoughnutChart()
+        doughnut.title = f"Taux global {annee_reference} : {taux.get('Global', 0.0)}%"
+        data_don = Reference(ws_g, min_col=2, min_row=9, max_row=10)
+        cats_don = Reference(ws_g, min_col=1, min_row=9, max_row=10)
+        doughnut.add_data(data_don, titles_from_data=False)
+        doughnut.set_categories(cats_don)
+        serie_don = doughnut.series[0]
+        pt_real = DataPoint(idx=0); pt_real.graphicalProperties.solidFill = "1E3A8A"
+        pt_reste = DataPoint(idx=1); pt_reste.graphicalProperties.solidFill = "E2E8F0"
+        serie_don.data_points = [pt_real, pt_reste]
+        doughnut.height, doughnut.width = 8.5, 10
+        ws_g.add_chart(doughnut, "D21")
+
+        ws_g.column_dimensions["A"].width = 14
+        ws_g.column_dimensions["B"].width = 12
 
     output.seek(0)
     return output.getvalue()
@@ -2298,64 +2442,51 @@ if acces_autorise:
             df_cal = st.session_state["df_calendrier"]
             st.dataframe(df_cal, hide_index=True, use_container_width=True)
 
-            # ----- Taux de réalisation 2026 : barres par site + infographie globale -----
-            col_real = f"Réalisation {annee_ref_calendrier}"
+            # ----- Taux de réalisation 2026 : barres horizontales par site + infographie globale -----
+            taux = calculer_taux_realisation(df_cal)
+            taux_meg = taux.get("MEG", 0.0)
+            taux_sgb = taux.get("SGB", 0.0)
+            taux_global = taux.get("Global", 0.0)
 
-            def _pct_to_num(v):
-                if isinstance(v, str) and v.strip().endswith("%"):
-                    try:
-                        return float(v.strip().rstrip("%"))
-                    except ValueError:
-                        return 0.0
-                return 0.0
+            st.markdown(f"#### 📊 Taux de réalisation des contrôles — {annee_ref_calendrier}")
+            col_bars, col_gauge = st.columns([2, 1])
 
-            if col_real in df_cal.columns:
-                df_cal["_pct_num"] = df_cal[col_real].map(_pct_to_num)
-                taux_par_site = df_cal.groupby("Site")["_pct_num"].mean().round(1)
-                taux_meg = float(taux_par_site.get("MEG", 0.0))
-                taux_sgb = float(taux_par_site.get("SGB", 0.0))
-                taux_global = round(df_cal["_pct_num"].mean(), 1) if not df_cal.empty else 0.0
+            with col_bars:
+                df_bars = pd.DataFrame({"Site": ["MEG", "SGB"], "Taux (%)": [taux_meg, taux_sgb]})
+                fig_bars = px.bar(
+                    df_bars, x="Taux (%)", y="Site", text="Taux (%)", color="Site",
+                    orientation="h",
+                    color_discrete_map={"MEG": "#2563EB", "SGB": "#059669"},
+                    range_x=[0, 100],
+                )
+                fig_bars.update_traces(texttemplate='%{text}%', textposition='outside', cliponaxis=False)
+                fig_bars.update_layout(
+                    title=f"Taux de réalisation par site — {annee_ref_calendrier}", title_x=0.5,
+                    showlegend=False, xaxis_title="Taux (%)", yaxis_title="",
+                    margin=dict(t=40, b=10, l=10, r=30), height=280,
+                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                )
+                st.plotly_chart(fig_bars, use_container_width=True, config={'displayModeBar': False})
 
-                st.markdown(f"#### 📊 Taux de réalisation des contrôles — {annee_ref_calendrier}")
-                col_bars, col_gauge = st.columns([2, 1])
-
-                with col_bars:
-                    df_bars = pd.DataFrame({"Site": ["MEG", "SGB"], "Taux (%)": [taux_meg, taux_sgb]})
-                    fig_bars = px.bar(
-                        df_bars, x="Site", y="Taux (%)", text="Taux (%)", color="Site",
-                        color_discrete_map={"MEG": "#2a78d6", "SGB": "#1baf7a"},
-                        range_y=[0, 100],
-                    )
-                    fig_bars.update_traces(texttemplate='%{text}%', textposition='outside', cliponaxis=False)
-                    fig_bars.update_layout(
-                        title=f"Taux de réalisation par site — {annee_ref_calendrier}", title_x=0.5,
-                        showlegend=False, xaxis_title="", yaxis_title="Taux (%)",
-                        margin=dict(t=40, b=10, l=10, r=10), height=320,
-                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                    )
-                    st.plotly_chart(fig_bars, use_container_width=True, config={'displayModeBar': False})
-
-                with col_gauge:
-                    fig_gauge = go.Figure(go.Indicator(
-                        mode="gauge+number",
-                        value=taux_global,
-                        number={'suffix': "%", 'font': {'size': 36}},
-                        title={'text': f"Taux global {annee_ref_calendrier}", 'font': {'size': 14}},
-                        gauge={
-                            'axis': {'range': [0, 100]},
-                            'bar': {'color': "#1E3A8A"},
-                            'steps': [
-                                {'range': [0, 50], 'color': "#FCA5A5"},
-                                {'range': [50, 80], 'color': "#FDE68A"},
-                                {'range': [80, 100], 'color': "#86EFAC"},
-                            ],
-                        },
-                    ))
-                    fig_gauge.update_layout(
-                        margin=dict(t=40, b=10, l=20, r=20), height=320,
-                        paper_bgcolor='rgba(0,0,0,0)',
-                    )
-                    st.plotly_chart(fig_gauge, use_container_width=True, config={'displayModeBar': False})
+            with col_gauge:
+                fig_gauge = go.Figure(go.Indicator(
+                    mode="gauge+number",
+                    value=taux_global,
+                    number={'suffix': "%", 'font': {'size': 34, 'color': "#0F172A"}},
+                    title={'text': f"Taux global {annee_ref_calendrier}", 'font': {'size': 14, 'color': "#334155"}},
+                    gauge={
+                        'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "#94A3B8"},
+                        'bar': {'color': "#1E3A8A", 'thickness': 0.8},
+                        'bgcolor': "white",
+                        'borderwidth': 0,
+                        'steps': [{'range': [0, 100], 'color': "#E2E8F0"}],
+                    },
+                ))
+                fig_gauge.update_layout(
+                    margin=dict(t=40, b=10, l=20, r=20), height=280,
+                    paper_bgcolor='rgba(0,0,0,0)',
+                )
+                st.plotly_chart(fig_gauge, use_container_width=True, config={'displayModeBar': False})
 
             dl1, dl2 = st.columns(2)
             with dl1:
