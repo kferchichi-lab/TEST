@@ -13,7 +13,7 @@ import calendar
 import base64
 import io
 from weasyprint import HTML
-import fitz  # PyMuPDF
+import fitz
 
 def afficher_apercu_pdf(pdf_bytes, hauteur=800):
     try:
@@ -31,11 +31,6 @@ def afficher_apercu_pdf(pdf_bytes, hauteur=800):
         st.info("Vous pouvez tout de même télécharger le rapport ci-dessous.")
     
 def afficher_apercu_pdf_grille(pdf_bytes, colonnes=2, largeur_colonne=380):
-    """
-    Affiche l'aperçu d'un PDF sous forme de grille (par défaut 2 colonnes),
-    chaque colonne présentant une page du rapport, réduisant ainsi la taille
-    d'affichage par rapport à un aperçu pleine largeur page par page.
-    """
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         nb_pages = len(doc)
@@ -54,9 +49,6 @@ def afficher_apercu_pdf_grille(pdf_bytes, colonnes=2, largeur_colonne=380):
 
 
 def generer_rapport_equipements_pdf(df_exigences, site_filtre):
-    """
-    Génère un rapport PDF de 5 pages pour un site spécifique (SGB ou MEG).
-    """
     installations = [
         "Installations électriques",
         "Equipements de levage",
@@ -65,10 +57,8 @@ def generer_rapport_equipements_pdf(df_exigences, site_filtre):
         "Appareil pression de gaz"
     ]
     
-    # 1. Filtrer uniquement les lignes de type "Equipement"
     df_eq = df_exigences[df_exigences.iloc[:, 0].astype(str).str.strip().str.lower() == "equipement"]
     
-    # 2. Filtrer selon le Site (Colonne index 1)
     df_eq = df_eq[df_eq.iloc[:, 1].astype(str).str.strip().str.upper() == site_filtre.upper()]
     logo_url = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6q1BtDSDgVnJZFo0hOBfQJoDS6OYiub-qfQ&s"
     
@@ -191,17 +181,11 @@ def generer_rapport_equipements_pdf(df_exigences, site_filtre):
     <body>
     """
 
-# ------------------------------------------------------------------------------
-# BLOC 2 — Calcul du tableau + génération PDF / Excel
-# ------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
+# Calcul du tableau + génération PDF / Excel
+# --------------------------------------------------------------------------------
 
 def construire_calendrier_controle(df_rapports: pd.DataFrame, annee_reference: int = None) -> pd.DataFrame:
-    """
-    Construit le tableau récapitulatif (Site / CI / Installation / Nbr visite-An /
-    Nbr jour / Dates réalisées / Réalisation / Dates planifiées) à partir de
-    l'onglet 'Rapports', avec la même logique de détection de colonnes que le
-    reste de l'app (col_ins_r, col_date_r, col_reelle, col_prochaine_r...).
-    """
     if annee_reference is None:
         annee_reference = datetime.date.today().year
     if df_rapports.empty:
@@ -234,19 +218,15 @@ def construire_calendrier_controle(df_rapports: pd.DataFrame, annee_reference: i
     for site in ("MEG", "SGB"):
         df_site = df[df["_site"] == site]
         for installation in ORDRE_CI:
-            attendu = round(12 / PERIODICITE.get(installation, 12))  # visites attendues / an
+            attendu = round(12 / PERIODICITE.get(installation, 12)) 
             df_grp = df_site[df_site["_installation"] == installation].sort_values("_date")
 
-            # Dernières dates réalisées connues (les `attendu` plus récentes, toutes années confondues)
             dates_realisees = sorted(df_grp["_date"].dropna().unique())[-attendu:] if not df_grp.empty else []
 
-            # Réalisées PENDANT l'année de référence -> détermine le % / statut
             nb_realisees_annee = df_grp[df_grp["_date"].dt.year == annee_reference]["_date"].nunique()
             pct = round(min(nb_realisees_annee, attendu) / attendu * 100) if attendu else 0
-            realisation_txt = f"{pct}%" if nb_realisees_annee > 0 else "À planifier"
+            realisation_txt = f"{pct}%" if nb_realisees_annee > 0 else "A planifier"
 
-            # Dates planifiées : valeur manuelle (colonne "prochaine") si dispo,
-            # sinon +périodicité de l'installation (6 mois pour l'électrique, 12 mois pour les autres)
             periodicite_mois = PERIODICITE.get(installation, 12)
             if not df_grp.empty and df_grp["_date_prochaine_manuelle"].notna().any():
                 dates_planifiees = sorted(df_grp["_date_prochaine_manuelle"].dropna().unique())[-attendu:]
@@ -262,32 +242,50 @@ def construire_calendrier_controle(df_rapports: pd.DataFrame, annee_reference: i
                 "Dates réalisées": (" | ".join(pd.Timestamp(d).strftime("%d/%m/%Y") for d in dates_realisees)
                                      if len(dates_realisees) else "-"),
                 col_realisation: realisation_txt,
-                "Dates planifiées": (" | ".join(pd.Timestamp(d).strftime("%d/%m/%Y") for d in dates_planifiees)
-                                      if len(dates_planifiees) else "-"),
-                "_nb_realisees_capped": min(nb_realisees_annee, attendu),  # colonne technique (masquée à l'affichage/export)
+                "Dates planifiées": "-",
+                "Nbr visites réalisées en 2026": min(nb_realisees_annee, attendu), 
+                "_dates_planifiees": list(dates_planifiees),
             })
+
+    # Repère, sur l'ensemble du calendrier (tous sites/installations confondus), la SEULE
+    # date planifiée la plus proche de la date du jour (= prochaine échéance à réaliser en priorité)
+    # pour y accoler un petit symbole. Toutes les autres dates restent affichées sans symbole.
+    aujourd_hui = pd.Timestamp(datetime.date.today())
+    idx_ligne_proche, idx_date_proche, ecart_min = None, None, None
+    for idx_ligne, ligne in enumerate(lignes):
+        for idx_date, d in enumerate(ligne["_dates_planifiees"]):
+            ecart = abs((pd.Timestamp(d) - aujourd_hui).days)
+            if ecart_min is None or ecart < ecart_min:
+                ecart_min, idx_ligne_proche, idx_date_proche = ecart, idx_ligne, idx_date
+
+    for idx_ligne, ligne in enumerate(lignes):
+        dates_planifiees = ligne.pop("_dates_planifiees")
+        if len(dates_planifiees):
+            ligne["Dates planifiées"] = " | ".join(
+                (f"★ {pd.Timestamp(d).strftime('%d/%m/%Y')}"
+                 if (idx_ligne == idx_ligne_proche and idx_date == idx_date_proche)
+                 else pd.Timestamp(d).strftime("%d/%m/%Y"))
+                for idx_date, d in enumerate(dates_planifiees)
+            )
+        else:
+            ligne["Dates planifiées"] = "-"
 
     return pd.DataFrame(lignes)
 
 
 def calculer_taux_realisation(df_calendrier: pd.DataFrame) -> dict:
-    """
-    Calcule le taux de réalisation pondéré par le nombre réel de visites attendues
-    (et non une simple moyenne des % par installation), pour MEG, SGB et le global.
-    Ex: MEG 5 visites réalisées sur 6 attendues -> 83.3% (et non la moyenne des % par ligne).
-    """
-    if df_calendrier.empty or "_nb_realisees_capped" not in df_calendrier.columns:
+    if df_calendrier.empty or "Nbr visites réalisées en 2026" not in df_calendrier.columns:
         return {"MEG": 0.0, "SGB": 0.0, "Global": 0.0}
 
     resultat = {}
     for site in ("MEG", "SGB"):
         df_site = df_calendrier[df_calendrier["Site"] == site]
         attendu_total = df_site["Nbr visite/An"].sum()
-        realise_total = df_site["_nb_realisees_capped"].sum()
+        realise_total = df_site["Nbr visites réalisées en 2026"].sum()
         resultat[site] = round(realise_total / attendu_total * 100, 1) if attendu_total else 0.0
 
     attendu_global = df_calendrier["Nbr visite/An"].sum()
-    realise_global = df_calendrier["_nb_realisees_capped"].sum()
+    realise_global = df_calendrier["Nbr visites réalisées en 2026"].sum()
     resultat["Global"] = round(realise_global / attendu_global * 100, 1) if attendu_global else 0.0
     return resultat
 
@@ -304,10 +302,13 @@ def generer_calendrier_controle_pdf(df_calendrier: pd.DataFrame, annee_reference
         df_site = df_calendrier[df_calendrier["Site"] == site].reset_index(drop=True)
         for i, row in df_site.iterrows():
             pct_val = row[col_realisation]
-            if pct_val == "À planifier":
+            if pct_val == "A planifier" or pd.isna(pct_val):
                 couleur = "#94A3B8"
             else:
-                pct_num = int(str(pct_val).replace("%", "") or 0)
+                try:
+                    pct_num = int(round(float(str(pct_val).replace("%", "").strip() or 0)))
+                except (ValueError, TypeError):
+                    pct_num = 0
                 couleur = "#16A34A" if pct_num >= 80 else "#F97316" if pct_num >= 50 else "#EF4444"
 
             lignes_html += "<tr>"
@@ -345,40 +346,47 @@ def generer_calendrier_controle_pdf(df_calendrier: pd.DataFrame, annee_reference
 
     html_content = f"""
     <html><head><style>
-        @page {{ size: A4 landscape; margin: 15mm 12mm; }}
-        body {{ font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color:#1E293B; font-size:9.5pt; }}
-        .header {{ display:flex; align-items:center; gap:12px; margin-bottom:14px; border-bottom:2px solid #1E3A8A; padding-bottom:10px; }}
-        .header img {{ height:34px; }}
-        .header-title {{ font-size:16pt; font-weight:800; color:#1E3A8A; text-transform:uppercase; }}
-        .subtitle {{ font-size:9.5pt; color:#64748B; margin:0 0 14px 0; }}
-        table {{ width:100%; border-collapse:collapse; }}
-        th, td {{ border:1px solid #CBD5E1; padding:7px 8px; text-align:left; }}
-        th {{ background:#1E3A8A; color:white; font-size:9pt; text-transform:uppercase; }}
+        @page {{ size: A4 landscape; margin: 10mm 12mm; }}
+        * {{ box-sizing: border-box; }}
+        body {{ font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color:#1E293B; font-size:9pt; }}
+        .header {{ display:flex; align-items:center; gap:12px; margin-bottom:10px; border-bottom:2px solid #1E3A8A; padding-bottom:6px; }}
+        .header img {{ height:28px; }}
+        .header-texts {{ display:flex; flex-direction:column; }}
+        .header-title {{ font-size:14pt; font-weight:800; color:#1E3A8A; text-transform:uppercase; }}
+        .header-company {{ font-size:9pt; font-weight:700; color:#334155; }}
+        .header-entite {{ font-size:8.3pt; font-weight:700; color:#0EA5E9; text-transform:uppercase; letter-spacing:0.3px; }}
+        .subtitle {{ font-size:9pt; color:#64748B; margin:0 0 10px 0; }}
+        table {{ width:100%; border-collapse:collapse; margin-bottom:14px; }}
+        th, td {{ border:1px solid #CBD5E1; padding:8px 9px; text-align:left; }}
+        th {{ background:#1E3A8A; color:white; font-size:8.5pt; text-transform:uppercase; }}
         .site-cell {{ font-weight:800; text-align:center; background:#F1F5F9; color:#1E3A8A; }}
         .ci-cell {{ font-weight:700; text-align:center; }}
         .center {{ text-align:center; }}
         .planifiee {{ font-weight:700; }}
         tr:nth-child(even) td:not(.site-cell) {{ background:#F8FAFC; }}
 
-        .charts-page {{ page-break-before: always; }}
-        .charts-title {{ font-size:14pt; font-weight:800; color:#1E3A8A; margin-bottom:18px; text-align:center; }}
-        .charts-wrap {{ display:flex; gap:30px; align-items:center; }}
-        .charts-left {{ flex:1.4; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:10px; padding:24px; }}
-        .charts-left-title {{ font-size:11pt; font-weight:700; color:#0F172A; margin-bottom:20px; text-align:center; }}
-        .bar-row {{ display:flex; align-items:center; margin-bottom:22px; }}
-        .bar-label {{ width:60px; font-weight:700; color:#0F172A; }}
-        .bar-track {{ flex:1; height:26px; background:#E2E8F0; border-radius:6px; overflow:hidden; }}
-        .bar-fill {{ height:100%; border-radius:6px; }}
-        .bar-value {{ width:55px; text-align:right; font-weight:800; color:#0F172A; }}
-        .charts-right {{ flex:1; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:10px; padding:24px; text-align:center; }}
-        .charts-right-title {{ font-size:11pt; font-weight:700; color:#0F172A; margin-bottom:16px; }}
+        .charts-title {{ font-size:11pt; font-weight:800; color:#1E3A8A; margin:10px 0 8px 0; text-align:center; }}
+        .charts-wrap {{ display:flex; gap:16px; align-items:stretch; }}
+        .charts-left {{ flex:1.5; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:10px; padding:12px 16px; }}
+        .charts-left-title {{ font-size:9.5pt; font-weight:700; color:#0F172A; margin-bottom:10px; text-align:center; }}
+        .bar-row {{ display:flex; align-items:center; margin-bottom:12px; }}
+        .bar-label {{ width:55px; font-weight:700; color:#0F172A; }}
+        .bar-track {{ flex:1; height:18px; background:#E2E8F0; border-radius:5px; overflow:hidden; }}
+        .bar-fill {{ height:100%; border-radius:5px; }}
+        .bar-value {{ width:50px; text-align:right; font-weight:800; color:#0F172A; }}
+        .charts-right {{ flex:1; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:10px; padding:8px 16px; text-align:center; }}
+        .charts-right-title {{ font-size:9.5pt; font-weight:700; color:#0F172A; margin-bottom:4px; }}
     </style></head>
     <body>
         <div class="header">
             <img src="{logo_url}"/>
-            <span class="header-title">Calendrier de contrôle réglementaire</span>
+            <div class="header-texts">
+                <span class="header-title">Calendrier de contrôle réglementaire</span>
+                <span class="header-company">Tunisie Profilés d'Aluminium</span>
+                <span class="header-entite">DMTN - BT</span>
+            </div>
         </div>
-        <p class="subtitle">Généré le {datetime.date.today().strftime('%d/%m/%Y')} — Année de référence : {annee_reference}</p>
+        <p class="subtitle">Année : {annee_reference}</p>
         <table>
             <thead><tr>
                 <th>Sites</th><th>CI</th><th>Les installations</th><th>Nbr visite/An</th><th>Nbr jour</th>
@@ -387,24 +395,22 @@ def generer_calendrier_controle_pdf(df_calendrier: pd.DataFrame, annee_reference
             <tbody>{lignes_html}</tbody>
         </table>
 
-        <div class="charts-page">
-            <div class="charts-title">Taux de réalisation des contrôles — {annee_reference}</div>
-            <div class="charts-wrap">
-                <div class="charts-left">
-                    <div class="charts-left-title">Taux de réalisation par site</div>
-                    {barres_html}
-                </div>
-                <div class="charts-right">
-                    <div class="charts-right-title">Taux global {annee_reference}</div>
-                    <svg width="200" height="200" viewBox="0 0 180 180">
-                        <circle cx="90" cy="90" r="{r_anneau}" fill="none" stroke="#E2E8F0" stroke-width="16"/>
-                        <circle cx="90" cy="90" r="{r_anneau}" fill="none" stroke="#1E3A8A" stroke-width="16"
-                                stroke-linecap="round"
-                                stroke-dasharray="{dash_val:.1f} {circonf:.1f}"
-                                transform="rotate(-90 90 90)"/>
-                        <text x="90" y="98" text-anchor="middle" font-size="30" font-weight="800" fill="#0F172A">{taux_global}%</text>
-                    </svg>
-                </div>
+        <div class="charts-title">Taux de réalisation des contrôles — {annee_reference}</div>
+        <div class="charts-wrap">
+            <div class="charts-left">
+                <div class="charts-left-title">Taux de réalisation par site</div>
+                {barres_html}
+            </div>
+            <div class="charts-right">
+                <div class="charts-right-title">Taux global {annee_reference}</div>
+                <svg width="150" height="150" viewBox="0 0 180 180">
+                    <circle cx="90" cy="90" r="{r_anneau}" fill="none" stroke="#E2E8F0" stroke-width="16"/>
+                    <circle cx="90" cy="90" r="{r_anneau}" fill="none" stroke="#1E3A8A" stroke-width="16"
+                            stroke-linecap="round"
+                            stroke-dasharray="{dash_val:.1f} {circonf:.1f}"
+                            transform="rotate(-90 90 90)"/>
+                    <text x="90" y="104" text-anchor="middle" font-size="46" font-weight="800" fill="#0F172A">{taux_global}%</text>
+                </svg>
             </div>
         </div>
     </body></html>
@@ -413,14 +419,12 @@ def generer_calendrier_controle_pdf(df_calendrier: pd.DataFrame, annee_reference
 
 
 def generer_calendrier_controle_excel(df_calendrier: pd.DataFrame, annee_reference: int) -> bytes:
-    """Génère le fichier Excel du calendrier de contrôle (styles + fusion de la colonne Site + graphiques)."""
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
     from openpyxl.chart import BarChart, DoughnutChart, Reference
     from openpyxl.chart.marker import DataPoint
     from openpyxl.chart.label import DataLabelList
 
-    # Colonnes techniques (préfixées par "_") utilisées uniquement pour les calculs internes
     df_export = df_calendrier[[c for c in df_calendrier.columns if not c.startswith("_")]]
     taux = calculer_taux_realisation(df_calendrier)
 
@@ -454,7 +458,6 @@ def generer_calendrier_controle_excel(df_calendrier: pd.DataFrame, annee_referen
                 cell.border = border
                 cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-        # Fusion de la colonne "Site" par groupe de 5 installations (ordre déterministe = ORDRE_CI)
         nb_installations = len(ORDRE_CI)
         for i in range(0, len(df_export), nb_installations):
             r1 = header_row + 1 + i
@@ -679,30 +682,37 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, df_nature, carto_b64, logo_url
         svg = (f'<svg viewBox="0 0 {w_total} {size+22}" width="{w_total}" height="{size+22}" '
                f'xmlns="http://www.w3.org/2000/svg">{titre_svg}{slices}{labels}</svg>')
         legend = "".join(
-            f'<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">'
+            f'<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:9px;">'
+            f'<div style="display:flex;align-items:center;gap:7px;">'
             f'<span style="width:11px;height:11px;min-width:11px;border-radius:3px;'
             f'background:{color_map.get(l,"#94A3B8")};display:inline-block;"></span>'
             f'<span style="font-size:10pt;color:#334155;white-space:nowrap;">{l}</span></div>'
-            for l in data.keys()
+            f'<span style="font-size:10pt;font-weight:800;color:#0F172A;white-space:nowrap;">{(v/total*100):.1f}%</span>'
+            f'</div>'
+            for l, v in data.items()
         )
         return svg, legend
 
-    def _hbar_chart(data_pct, color_map, width=300, bar_h=18, gap=9, label_w=100):
-        """data_pct: dict {label: pourcentage}, déjà trié décroissant."""
+    def _bar_list_html(data_pct, color_map):
+        """data_pct: dict {label: pourcentage}, déjà trié décroissant.
+        Présentation HTML (et non SVG) : libellé complet + barre + pourcentage en gras
+        bien séparés, pour rester lisibles quel que soit le nombre de pilotes ou la
+        longueur de leur nom (ex. « Chef service BT »)."""
         if not data_pct:
             return ""
-        max_pct = max(data_pct.values()) or 1
-        chart_w = width - label_w - 50
-        rows, y = "", 0
+        rows = ""
         for label, pct in data_pct.items():
-            bw = max((pct / max_pct) * chart_w, 2)
             color = color_map.get(label, "#F59E0B")
-            rows += (f'<text x="0" y="{y+bar_h*0.72:.1f}" font-size="9.5" fill="#334155">{label}</text>'
-                      f'<rect x="{label_w}" y="{y}" width="{bw:.1f}" height="{bar_h}" rx="3" fill="{color}"/>'
-                      f'<text x="{label_w+bw+6:.1f}" y="{y+bar_h*0.72:.1f}" font-size="9.5" fill="#334155">{pct:.1f}%</text>')
-            y += bar_h + gap
-        return (f'<svg viewBox="0 0 {width} {y}" width="{width}" height="{y}" '
-                f'xmlns="http://www.w3.org/2000/svg">{rows}</svg>')
+            rows += f"""
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:11px;">
+                <div style="flex:0 0 118px;font-size:9.3pt;font-weight:600;color:#334155;
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{label}</div>
+                <div style="flex:1;background:#E2E8F0;border-radius:5px;height:15px;overflow:hidden;">
+                    <div style="height:100%;width:{pct}%;background:{color};border-radius:5px;"></div>
+                </div>
+                <div style="flex:0 0 48px;text-align:right;font-size:9.8pt;font-weight:800;color:#0F172A;">{pct:.1f}%</div>
+            </div>"""
+        return rows
 
     # ---- Section 1 : Actions de contrôle — par site et par installation (source : PointsReserve) ----
     df_r = df_reserve.copy() if (df_reserve is not None and not df_reserve.empty) else pd.DataFrame()
@@ -758,7 +768,7 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, df_nature, carto_b64, logo_url
         if not compte or not total:
             return ""
         pct_dict = {k: round(v / total * 100, 1) for k, v in sorted(compte.items(), key=lambda x: -x[1])}
-        return _hbar_chart(pct_dict, COULEURS_PILOTE, width=300)
+        return _bar_list_html(pct_dict, COULEURS_PILOTE)
 
     sgb_nature_svg, sgb_nature_legend = _nature_donut("SGB")
     meg_nature_svg, meg_nature_legend = _nature_donut("MEG")
@@ -887,6 +897,7 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, df_nature, carto_b64, logo_url
             </div>
             <div style="flex:0 0 150px;">{sgb_nature_legend}</div>
             <div style="flex:1;">
+                <p style="font-size:9.5pt;font-weight:700;color:#64748B;margin:0 0 10px 0;text-transform:uppercase;">% par pilote</p>
                 {sgb_pilote_svg if sgb_pilote_svg else "<p style='color:#94A3B8;font-size:9pt;'>Aucune donnée</p>"}
             </div>
         </div>
@@ -898,6 +909,7 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, df_nature, carto_b64, logo_url
             </div>
             <div style="flex:0 0 150px;">{meg_nature_legend}</div>
             <div style="flex:1;">
+                <p style="font-size:9.5pt;font-weight:700;color:#64748B;margin:0 0 10px 0;text-transform:uppercase;">% par pilote</p>
                 {meg_pilote_svg if meg_pilote_svg else "<p style='color:#94A3B8;font-size:9pt;'>Aucune donnée</p>"}
             </div>
         </div>
@@ -1183,8 +1195,14 @@ tab3 = None
 TZ       = pytz.timezone('Africa/Tunis')
 SHEET_ID = "1ZK6VWg_gcCO70nt6DTyYogDeNeQUgovFmwWQufMVO-M"
 URL_GOOGLE_SHEET = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit?gid=0#gid=0"
-# Classeur externe "Classification des actions CR 2026" : un onglet par installation,
-# colonnes Désignation | Observation | Code (T/S/E/D/O/R). Utilisé pour le rapport PDF par pilote.
+# Classeurs externes "Classification des actions CR 2026" : un classeur par site, un onglet par
+# installation à l'intérieur, colonnes Désignation | Observation | Code (T/S/E/D/O/R).
+# Utilisés pour le rapport PDF par pilote ainsi que pour le suivi des actions.
+CODIF_SHEET_ID_PAR_SITE = {
+    "MEG": "1AF65P1sQPKM6JN7_r2mck-UrrZqz7tn5QmpnJD1iICA",
+    "SGB": "1bD6LUxs_nGgamVsC9DAmGffScUo5wgMhxjvPBuBxzx0",
+}
+# Conservé par compatibilité (ancien classeur unique) — non utilisé si les IDs par site ci-dessus sont renseignés.
 CODIF_SHEET_ID = "119hyynlCiIUzf-17iiSkcPnaEr2oCiFC"
 SEUIL_EN_LIGNE_SECONDES = 90
 calendar.setfirstweekday(0)
@@ -1582,6 +1600,55 @@ def _codes_pour_pilote(pilote_choisi):
         if pilote_choisi in entites:
             codes.append(code)
     return codes
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def codif_charger_toutes_actions():
+    """Charge et combine les classeurs de codification des deux sites (MEG et SGB).
+    Retourne (DataFrame combiné [Site, Installation, Designation, Observation, Code], message_erreur_ou_None)."""
+    frames, erreurs = [], []
+    for site, sheet_id in CODIF_SHEET_ID_PAR_SITE.items():
+        classeur, err = codif_charger_classeur(sheet_id)
+        if err:
+            erreurs.append(f"{site} : {err}")
+            continue
+        if not classeur:
+            continue
+        for onglet, df_brut in classeur.items():
+            valeurs = df_brut.fillna("").astype(str).values.tolist()
+            d = _detecter_entete_et_nettoyer_codif(valeurs)
+            if not d.empty:
+                d["Installation"] = onglet
+                d["Site"] = site
+                frames.append(d)
+    if not frames:
+        return pd.DataFrame(), (" / ".join(erreurs) if erreurs else "Aucune donnée trouvée dans les classeurs de codification.")
+    return pd.concat(frames, ignore_index=True), (" / ".join(erreurs) if erreurs else None)
+
+
+def _cle_action(row):
+    """Clé unique identifiant une action précise, utilisée pour repérer les actions déjà réalisées."""
+    return "||".join(str(row.get(c, "")).strip().upper() for c in
+                      ["Site", "Installation", "Designation", "Observation", "Code"])
+
+
+def lire_actions_realisees():
+    """Lit l'onglet ActionsRealisees : Site | Installation | Designation | Observation | Code | Pilote | Responsable | DateRealisation."""
+    return sheets_lire("ActionsRealisees", "A:H")
+
+
+def marquer_actions_realisees(df_lignes, responsable_nom):
+    """Enregistre chaque action cochée comme réalisée (une ligne par action) dans l'onglet ActionsRealisees."""
+    date_str = datetime.datetime.now(TZ).strftime("%d/%m/%Y %H:%M")
+    ok_total = True
+    for _, row in df_lignes.iterrows():
+        ok, _msg = sheets_append("ActionsRealisees", [
+            row.get("Site", ""), row.get("Installation", ""), row.get("Designation", ""),
+            row.get("Observation", ""), row.get("Code", ""), row.get("Pilote", ""),
+            responsable_nom, date_str
+        ])
+        ok_total = ok_total and ok
+    return ok_total
 
 
 def _lignes_avec_rowspan(d_ins):
@@ -1999,18 +2066,25 @@ if acces_autorise:
 
     st.markdown("<br>",unsafe_allow_html=True)
 
+    afficher_suivi_actions = (role == "Admin" and password_correct) or (role == "Responsable" and st.session_state.responsable_connecte)
+
     liste_onglets = ["📋 Rapports CR","📅 Planification","📌 Exigences"]
     if role == "Admin" and password_correct:
         liste_onglets.append("👥 Statistiques")
     liste_onglets.append("📊 KPI")
+    if afficher_suivi_actions:
+        liste_onglets.append("✅ Suivi des actions")
     onglets = st.tabs(liste_onglets)
     tab1, tab2, tab_exigences = onglets[0], onglets[1], onglets[2]
     tab3 = None
     tab_kpi = None
+    tab_suivi = None
     _idx = 3
     if role == "Admin" and password_correct:
         tab3 = onglets[_idx]; _idx += 1
-    tab_kpi = onglets[_idx]
+    tab_kpi = onglets[_idx]; _idx += 1
+    if afficher_suivi_actions:
+        tab_suivi = onglets[_idx]; _idx += 1
 
     def convertir_lien(url):
         try:
@@ -2414,22 +2488,18 @@ if acces_autorise:
                             st.markdown(carte_html, unsafe_allow_html=True)
                 elif evenements and jour_sel is None:
                     st.info("💡 Cliquez sur un jour coloré du calendrier pour voir les détails du contrôle.")
-    # ---- ONGLET EXIGENCES ----
-    with tab_exigences:
-        st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;margin-bottom:15px;'>📌 Exigences réglementaires</p>", unsafe_allow_html=True)
 
-        df_exig = lire_exigences()
 
 # ------------------------------------------------------------------------------
 # BLOC 3 — UI Streamlit (à insérer dans `with tab_exigences:`)
 # ------------------------------------------------------------------------------
         st.divider()
-        st.markdown("### 🗓️ Calendrier de contrôle prochain")
-        st.caption("Tableau récapitulatif des visites réalisées et planifiées, par site et par installation.")
+        st.markdown("### 🗓️ Calendrier de contrôle réglementaire")
+
 
         annee_ref_calendrier = datetime.date.today().year
 
-        if st.button("🗓️ Générer le calendrier de contrôle", use_container_width=True, key="btn_gen_calendrier"):
+        if st.button("🗓️ Générer le calendrier", use_container_width=True, key="btn_gen_calendrier"):
             with st.spinner("Construction du calendrier..."):
                 df_calendrier = construire_calendrier_controle(df_rapports, annee_ref_calendrier)
                 if df_calendrier.empty:
@@ -2472,7 +2542,7 @@ if acces_autorise:
                 fig_gauge = go.Figure(go.Indicator(
                     mode="gauge+number",
                     value=taux_global,
-                    number={'suffix': "%", 'font': {'size': 34, 'color': "#0F172A"}},
+                    number={'suffix': "%", 'font': {'size': 100, 'color': "#0F172A"}},
                     title={'text': f"Taux global {annee_ref_calendrier}", 'font': {'size': 14, 'color': "#334155"}},
                     gauge={
                         'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "#94A3B8"},
@@ -2504,6 +2574,14 @@ if acces_autorise:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True, key="dl_calendrier_excel",
                 )
+
+
+    # ---- ONGLET EXIGENCES ----
+    with tab_exigences:
+        st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;margin-bottom:15px;'>📌 Exigences réglementaires</p>", unsafe_allow_html=True)
+
+        df_exig = lire_exigences()
+
 
     # ===== SECTION 1 : CONTRAT D'ABONNEMENT =====
         st.markdown("### 📄 Contrat d'abonnement 2026")
@@ -3319,16 +3397,6 @@ if acces_autorise:
             st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
             st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#0F172A;'>📄 Rapport des actions par Pilote</p>",unsafe_allow_html=True)
 
-            def _deduire_site_installation(nom_installation):
-                """Déduit le site (SGB/MEG) à partir du nom de l'onglet/installation, si celui-ci
-                le mentionne explicitement (ex: 'SGB - Installations électriques')."""
-                n = str(nom_installation).upper()
-                if "SGB" in n:
-                    return "SGB"
-                if "MEG" in n:
-                    return "MEG"
-                return None
-
             entites_pilote_codif = sorted(set(
                 e.strip() for v in NATURE_PILOTE.values() for e in v[1].split("+") if e.strip()
             ))
@@ -3341,49 +3409,40 @@ if acces_autorise:
                 charger_classeur_pilote = st.button("🔍 Charger les installations",use_container_width=True,key="btn_charger_classeur_pilote")
 
             if charger_classeur_pilote:
-                with st.spinner("Lecture du classeur de codification..."):
-                    classeur, err = codif_charger_classeur(CODIF_SHEET_ID)
-                    if err:
+                with st.spinner("Lecture des classeurs de codification (MEG et SGB)..."):
+                    df_codif_brut, err = codif_charger_toutes_actions()
+                    if err and df_codif_brut.empty:
                         st.session_state["classeur_codif_pilote"] = None
                         st.error(err)
-                    elif not classeur:
-                        st.session_state["classeur_codif_pilote"] = None
-                        st.warning("Aucun onglet trouvé dans le classeur de codification.")
                     else:
-                        st.session_state["classeur_codif_pilote"] = classeur
+                        if err:
+                            st.warning(err)
+                        st.session_state["classeur_codif_pilote"] = df_codif_brut
                         st.session_state["pdf_pilote"] = None
 
             classeur_pilote = st.session_state.get("classeur_codif_pilote")
 
-            if not classeur_pilote:
+            if classeur_pilote is None or (hasattr(classeur_pilote,"empty") and classeur_pilote.empty):
                 st.info("👆 Cliquez sur « Charger les installations » pour sélectionner précisément "
                          "le site et l'installation à inclure dans le rapport.")
             else:
-                frames = []
-                for onglet, df_brut in classeur_pilote.items():
-                    valeurs = df_brut.fillna("").astype(str).values.tolist()
-                    d = _detecter_entete_et_nettoyer_codif(valeurs)
-                    if not d.empty:
-                        d["Installation"] = onglet
-                        frames.append(d)
+                df_codif = classeur_pilote.copy()
+                # Exclut les actions déjà cochées comme réalisées par un responsable
+                df_realisees_pilote = lire_actions_realisees()
+                if not df_realisees_pilote.empty:
+                    cles_faites = set(df_realisees_pilote.apply(_cle_action, axis=1))
+                    df_codif = df_codif[~df_codif.apply(_cle_action, axis=1).isin(cles_faites)]
 
-                if not frames:
-                    st.warning("Aucune donnée exploitable trouvée dans les onglets du classeur "
-                               "(colonnes Désignation/Observation/Code introuvables).")
+                df_codif["Nature"] = df_codif["Code"].map(lambda c: NATURE_PILOTE.get(c,("",""))[0])
+                codes_ok = _codes_pour_pilote(pilote_codif_choisi)
+                df_pilote_codif = df_codif[df_codif["Code"].isin(codes_ok)]
+
+                if df_pilote_codif.empty:
+                    st.info(f"Aucune action restante pour le pilote « {pilote_codif_choisi} » "
+                            f"(codes recherchés : {', '.join(codes_ok) if codes_ok else '—'}).")
                 else:
-                    df_codif = pd.concat(frames,ignore_index=True)
-                    df_codif["Nature"] = df_codif["Code"].map(lambda c: NATURE_PILOTE.get(c,("",""))[0])
-                    codes_ok = _codes_pour_pilote(pilote_codif_choisi)
-                    df_pilote_codif = df_codif[df_codif["Code"].isin(codes_ok)]
-
-                    if df_pilote_codif.empty:
-                        st.info(f"Aucune action trouvée pour le pilote « {pilote_codif_choisi} » "
-                                f"(codes recherchés : {', '.join(codes_ok) if codes_ok else '—'}).")
-                    else:
                         installations_dispo = sorted(df_pilote_codif["Installation"].unique().tolist())
-                        sites_dispo = sorted({
-                            s for s in (_deduire_site_installation(i) for i in installations_dispo) if s
-                        })
+                        sites_dispo = sorted(df_pilote_codif["Site"].dropna().unique().tolist())
 
                         cfil1,cfil2 = st.columns(2)
                         with cfil1:
@@ -3395,7 +3454,8 @@ if acces_autorise:
                                 site_filtre_pilote = "Tous"
                         installations_apres_site = [
                             i for i in installations_dispo
-                            if site_filtre_pilote == "Tous" or _deduire_site_installation(i) == site_filtre_pilote
+                            if site_filtre_pilote == "Tous" or i in
+                               df_pilote_codif[df_pilote_codif["Site"]==site_filtre_pilote]["Installation"].unique()
                         ]
                         with cfil2:
                             installation_filtre_pilote = st.selectbox(
@@ -3407,6 +3467,7 @@ if acces_autorise:
                             df_filtre_codif = df_pilote_codif[df_pilote_codif["Installation"].isin(installations_apres_site)]
                         else:
                             df_filtre_codif = df_pilote_codif[df_pilote_codif["Installation"] == installation_filtre_pilote]
+
 
                         lancer_rapport_pilote = st.button(
                             "👁️ Générer",use_container_width=True,key="btn_gen_rapport_pilote",type="primary"
@@ -3585,43 +3646,36 @@ if acces_autorise:
                 
 
             if st.button("Générer mon rapport", use_container_width=True, key="btn_gen_rapport_responsable", type="primary") and entite_pdf_choisie:
-                with st.spinner("Lecture du classeur de codification..."):
-                    classeur, err = codif_charger_classeur(CODIF_SHEET_ID)
-                    if err:
+                with st.spinner("Lecture des classeurs de codification (MEG et SGB)..."):
+                    df_codif_r, err = codif_charger_toutes_actions()
+                    if err and df_codif_r.empty:
                         st.session_state["pdf_responsable"] = None
                         st.error(err)
-                    elif not classeur:
-                        st.session_state["pdf_responsable"] = None
-                        st.warning("Aucun onglet trouvé dans le classeur de codification.")
                     else:
-                        frames_r = []
-                        for onglet_r, df_brut_r in classeur.items():
-                            valeurs_r = df_brut_r.fillna("").astype(str).values.tolist()
-                            d_r = _detecter_entete_et_nettoyer_codif(valeurs_r)
-                            if not d_r.empty:
-                                d_r["Installation"] = onglet_r
-                                frames_r.append(d_r)
-                        if not frames_r:
+                        if err:
+                            st.warning(err)
+                        # Exclut les actions déjà cochées comme réalisées (onglet « Suivi des actions »)
+                        df_realisees_r = lire_actions_realisees()
+                        if not df_realisees_r.empty:
+                            cles_faites_r = set(df_realisees_r.apply(_cle_action, axis=1))
+                            df_codif_r = df_codif_r[~df_codif_r.apply(_cle_action, axis=1).isin(cles_faites_r)]
+
+                        df_codif_r["Nature"] = df_codif_r["Code"].map(lambda c: NATURE_PILOTE.get(c,("",""))[0])
+                        codes_ok_r = _codes_pour_pilote(entite_pdf_choisie)
+                        df_filtre_codif_r = df_codif_r[df_codif_r["Code"].isin(codes_ok_r)]
+                        if df_filtre_codif_r.empty:
                             st.session_state["pdf_responsable"] = None
-                            st.warning("Aucune donnée exploitable trouvée dans les onglets du classeur.")
+                            st.info(f"Aucune action restante pour « {entite_pdf_choisie} ».")
                         else:
-                            df_codif_r = pd.concat(frames_r,ignore_index=True)
-                            df_codif_r["Nature"] = df_codif_r["Code"].map(lambda c: NATURE_PILOTE.get(c,("",""))[0])
-                            codes_ok_r = _codes_pour_pilote(entite_pdf_choisie)
-                            df_filtre_codif_r = df_codif_r[df_codif_r["Code"].isin(codes_ok_r)]
-                            if df_filtre_codif_r.empty:
+                            try:
+                                st.session_state["pdf_responsable"] = generer_rapport_pilote_pdf(
+                                    entite_pdf_choisie, df_filtre_codif_r,
+                                    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6q1BtDSDgVnJZFo0hOBfQJoDS6OYiub-qfQ&s"
+                                )
+                                st.session_state["nb_actions_responsable"] = len(df_filtre_codif_r)
+                            except Exception as e:
                                 st.session_state["pdf_responsable"] = None
-                                st.info(f"Aucune action trouvée pour « {entite_pdf_choisie} ».")
-                            else:
-                                try:
-                                    st.session_state["pdf_responsable"] = generer_rapport_pilote_pdf(
-                                        entite_pdf_choisie, df_filtre_codif_r,
-                                        "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6q1BtDSDgVnJZFo0hOBfQJoDS6OYiub-qfQ&s"
-                                    )
-                                    st.session_state["nb_actions_responsable"] = len(df_filtre_codif_r)
-                                except Exception as e:
-                                    st.session_state["pdf_responsable"] = None
-                                    st.error(f"Erreur lors de la génération du PDF : {e}")
+                                st.error(f"Erreur lors de la génération du PDF : {e}")
 
             if st.session_state.get("pdf_responsable"):
                 st.success(f"{st.session_state.get('nb_actions_responsable',0)} action(s) trouvée(s) pour « {entite_pdf_choisie} ».")
@@ -3712,3 +3766,134 @@ if acces_autorise:
                             st.plotly_chart(figv2,use_container_width=True,config={'displayModeBar':False})
                 else:
                     st.info("Aucune donnée à afficher pour les graphes.")
+
+    # ---- ONGLET 5 : SUIVI DES ACTIONS (cocher les actions terminées, historique persistant) ----
+    if tab_suivi:
+        with tab_suivi:
+            st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#1E3A8A;'>✅ Suivi des actions</p>",unsafe_allow_html=True)
+            st.markdown(
+                "<div style='background:#EFF6FF;border-left:4px solid #2a78d6;padding:10px 14px;border-radius:6px;margin-bottom:14px;'>"
+                "<p style='margin:0;font-size:12px;color:#1e40af;'>Cochez les actions terminées : elles seront retirées de vos "
+                "rapports tout en restant consultables ici, dans l'historique.</p>"
+                "</div>", unsafe_allow_html=True)
+
+            est_admin_suivi = (role == "Admin" and password_correct)
+            if est_admin_suivi:
+                entites_disponibles_suivi = sorted(set(
+                    e.strip() for v in NATURE_PILOTE.values() for e in v[1].split("+") if e.strip()
+                ))
+                pilote_suivi_choisi = st.selectbox("Responsable à suivre", entites_disponibles_suivi, key="pilote_suivi_admin")
+                nom_responsable_suivi = SOUS_PILOTE_NOMS.get(pilote_suivi_choisi, pilote_suivi_choisi)
+            else:
+                compte_resp_suivi = RESPONSABLES.get(st.session_state.responsable_actif, {})
+                entites_resp_suivi = compte_resp_suivi.get("entites", [])
+                nom_responsable_suivi = compte_resp_suivi.get("nom", st.session_state.responsable_actif)
+                if len(entites_resp_suivi) > 1:
+                    pilote_suivi_choisi = st.selectbox("Périmètre", entites_resp_suivi, key="pilote_suivi_resp")
+                else:
+                    pilote_suivi_choisi = entites_resp_suivi[0] if entites_resp_suivi else None
+
+            if not pilote_suivi_choisi:
+                st.info("Aucun périmètre associé à ce profil.")
+            else:
+                with st.spinner("Chargement des actions (MEG et SGB)..."):
+                    df_codif_suivi, err_suivi = codif_charger_toutes_actions()
+                    df_realisees_suivi = lire_actions_realisees()
+
+                if err_suivi and df_codif_suivi.empty:
+                    st.error(err_suivi)
+                else:
+                    if err_suivi:
+                        st.warning(err_suivi)
+
+                    codes_ok_suivi = _codes_pour_pilote(pilote_suivi_choisi)
+                    df_pilote_suivi = df_codif_suivi[df_codif_suivi["Code"].isin(codes_ok_suivi)].copy()
+                    df_pilote_suivi["Cle"] = df_pilote_suivi.apply(_cle_action, axis=1)
+
+                    cles_faites_suivi = set()
+                    df_hist_pilote = pd.DataFrame()
+                    if not df_realisees_suivi.empty and "Pilote" in df_realisees_suivi.columns:
+                        df_hist_pilote = df_realisees_suivi[df_realisees_suivi["Pilote"] == pilote_suivi_choisi]
+                        cles_faites_suivi = set(df_hist_pilote.apply(_cle_action, axis=1))
+
+                    df_restantes = df_pilote_suivi[~df_pilote_suivi["Cle"].isin(cles_faites_suivi)]
+
+                    total_pilote = len(df_pilote_suivi)
+                    nb_realisees = len(cles_faites_suivi & set(df_pilote_suivi["Cle"]))
+                    taux = round((nb_realisees/total_pilote*100), 1) if total_pilote else 0.0
+
+                    col_liste, col_graphe = st.columns([3, 1])
+
+                    with col_liste:
+                        st.markdown(f"<p style='font-weight:700;font-size:14px;color:#0F172A;'>Actions restantes — {nom_responsable_suivi}</p>",unsafe_allow_html=True)
+
+                        if df_restantes.empty:
+                            st.success("🎉 Toutes les actions de ce périmètre sont réalisées !")
+                        else:
+                            sites_dispo_suivi = sorted(df_restantes["Site"].dropna().unique().tolist())
+                            fcol1, fcol2 = st.columns(2)
+                            with fcol1:
+                                site_f_suivi = st.selectbox("Site", ["Tous"]+sites_dispo_suivi, key="site_filtre_suivi")
+                            df_apres_site_suivi = df_restantes if site_f_suivi == "Tous" else df_restantes[df_restantes["Site"] == site_f_suivi]
+                            with fcol2:
+                                installations_dispo_suivi = sorted(df_apres_site_suivi["Installation"].dropna().unique().tolist())
+                                install_f_suivi = st.selectbox("Installation", ["Toutes"]+installations_dispo_suivi, key="installation_filtre_suivi")
+                            df_affiche_suivi = df_apres_site_suivi if install_f_suivi == "Toutes" else df_apres_site_suivi[df_apres_site_suivi["Installation"] == install_f_suivi]
+
+                            df_edit = df_affiche_suivi[["Site", "Installation", "Designation", "Observation", "Code"]].copy()
+                            df_edit.insert(0, "Terminé", False)
+
+                            df_edit_out = st.data_editor(
+                                df_edit,
+                                hide_index=True,
+                                use_container_width=True,
+                                disabled=["Site", "Installation", "Designation", "Observation", "Code"],
+                                column_config={"Terminé": st.column_config.CheckboxColumn("Terminé ?")},
+                                key="editeur_suivi_actions"
+                            )
+
+                            nb_coches = int(df_edit_out["Terminé"].sum()) if not df_edit_out.empty else 0
+                            if not est_admin_suivi:
+                                if st.button(f"✅ Valider {nb_coches} action(s) terminée(s)", type="primary",
+                                             use_container_width=True, disabled=(nb_coches == 0), key="btn_valider_suivi"):
+                                    lignes_a_marquer = df_affiche_suivi.loc[df_edit_out[df_edit_out["Terminé"]].index].copy()
+                                    lignes_a_marquer["Pilote"] = pilote_suivi_choisi
+                                    ok = marquer_actions_realisees(lignes_a_marquer, nom_responsable_suivi)
+                                    if ok:
+                                        st.success(f"{nb_coches} action(s) enregistrée(s) comme réalisée(s).")
+                                        st.cache_data.clear()
+                                        st.rerun()
+                                    else:
+                                        st.error("Erreur lors de l'enregistrement dans Google Sheets (vérifiez l'onglet « ActionsRealisees »).")
+                            else:
+                                st.caption("ℹ️ Vue administrateur en lecture seule — seul le responsable connecté peut cocher ses actions.")
+
+                        with st.expander(f"🗂️ Historique des actions réalisées ({len(df_hist_pilote)})"):
+                            if df_hist_pilote.empty:
+                                st.info("Aucune action réalisée pour le moment.")
+                            else:
+                                cols_hist = [c for c in ["DateRealisation", "Site", "Installation", "Designation", "Observation", "Code", "Responsable"] if c in df_hist_pilote.columns]
+                                df_aff_hist = df_hist_pilote[cols_hist]
+                                if "DateRealisation" in df_aff_hist.columns:
+                                    df_aff_hist = df_aff_hist.sort_values("DateRealisation", ascending=False)
+                                st.dataframe(df_aff_hist, hide_index=True, use_container_width=True)
+
+                    with col_graphe:
+                        st.markdown("<p style='font-weight:700;font-size:13px;color:#0F172A;text-align:center;'>Taux de réalisation</p>",unsafe_allow_html=True)
+                        fig_gauge = go.Figure(go.Indicator(
+                            mode="gauge+number",
+                            value=taux,
+                            number={"suffix": "%"},
+                            gauge={
+                                "axis": {"range": [0, 100]},
+                                "bar": {"color": "#1baf7a"},
+                                "steps": [
+                                    {"range": [0, 50], "color": "#FEE2E2"},
+                                    {"range": [50, 80], "color": "#FEF3C7"},
+                                    {"range": [80, 100], "color": "#DCFCE7"},
+                                ],
+                            }
+                        ))
+                        fig_gauge.update_layout(height=220, margin=dict(t=20, b=10, l=20, r=20), paper_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(fig_gauge, use_container_width=True, config={'displayModeBar': False})
+                        st.markdown(f"<p style='text-align:center;font-size:12px;color:#64748B;'>{nb_realisees} / {total_pilote} action(s) réalisée(s)</p>",unsafe_allow_html=True)
