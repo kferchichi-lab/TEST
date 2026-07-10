@@ -1500,28 +1500,75 @@ def _obtenir_token_scope(scope):
 
 
 def codif_charger_classeur(sheet_id):
-    """Télécharge le classeur de codification via l'API Google Drive (fonctionne même si le
-    fichier est un .xlsx uploadé et jamais converti en Google Sheets natif, contrairement à
-    l'API Sheets). Retourne (dict {nom_onglet: DataFrame_brut_sans_entete}, message_erreur)."""
+    """Télécharge le classeur de codification via l'API Google Drive.
+    Essaie d'abord l'export Excel (/export?mimeType=...) qui fonctionne pour un Google Sheets
+    natif (cas des classeurs MEG/SGB), puis se rabat sur le téléchargement direct (alt=media),
+    utile pour un fichier .xlsx binaire jamais converti en Sheets natif.
+    Retourne (dict {nom_onglet: DataFrame_brut_sans_entete}, message_erreur détaillé)."""
     token = _obtenir_token_scope("https://www.googleapis.com/auth/drive.readonly")
     if not token:
         return None, "Impossible d'obtenir un jeton d'accès Google (scope Drive)."
+    headers = {"Authorization": f"Bearer {token}"}
     try:
-        url = f"https://www.googleapis.com/drive/v3/files/{sheet_id}?alt=media"
-        resp = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=30)
-        if resp.status_code in (403, 404):
-            try:
-                email = st.secrets["connections"]["gsheets"]["client_email"]
-            except Exception:
-                email = "(voir le champ client_email de vos secrets)"
-            return None, (f"Accès refusé au fichier de codification. Partagez-le (en lecture) "
-                           f"avec le compte de service : {email}")
-        if resp.status_code != 200:
-            return None, f"Erreur API Google Drive ({resp.status_code}) : {resp.text[:300]}"
-        classeur = pd.read_excel(io.BytesIO(resp.content), sheet_name=None, header=None, engine="openpyxl")
-        return classeur, None
+        email = st.secrets["connections"]["gsheets"]["client_email"]
+    except Exception:
+        email = "(voir le champ client_email de vos secrets)"
+
+    # 0) Vérification préalable : le compte de service voit-il seulement les métadonnées du fichier ?
+    #    Permet de distinguer "fichier introuvable / ID erroné" de "fichier vu mais export refusé".
+    meta_msg = ""
+    try:
+        resp_meta = requests.get(
+            f"https://www.googleapis.com/drive/v3/files/{sheet_id}",
+            headers=headers,
+            params={"fields": "id,name,mimeType,driveId", "supportsAllDrives": "true"},
+            timeout=15,
+        )
+        if resp_meta.status_code == 200:
+            meta_msg = f" (fichier vu : {resp_meta.json().get('name','?')})"
+        else:
+            meta_msg = f" [métadonnées: HTTP {resp_meta.status_code} — {resp_meta.text[:200]}]"
     except Exception as e:
-        return None, f"Erreur inattendue lors de la lecture du fichier Excel : {e}"
+        meta_msg = f" [métadonnées: erreur réseau — {e}]"
+
+    dernier_status = None
+    dernier_texte = ""
+
+    # 1) Tentative : export natif (Google Sheets -> xlsx). C'est la bonne méthode pour un
+    #    classeur Google Sheets classique (ex: liens docs.google.com/spreadsheets/.../edit).
+    try:
+        url_export = f"https://www.googleapis.com/drive/v3/files/{sheet_id}/export"
+        resp = requests.get(
+            url_export, headers=headers,
+            params={
+                "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "supportsAllDrives": "true",
+            },
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            classeur = pd.read_excel(io.BytesIO(resp.content), sheet_name=None, header=None, engine="openpyxl")
+            return classeur, None
+        dernier_status, dernier_texte = resp.status_code, resp.text
+    except Exception as e:
+        dernier_status, dernier_texte = None, str(e)
+
+    # 2) Repli : téléchargement direct (fichier .xlsx binaire jamais converti en Sheets natif).
+    try:
+        url = f"https://www.googleapis.com/drive/v3/files/{sheet_id}"
+        resp = requests.get(url, headers=headers, params={"alt": "media", "supportsAllDrives": "true"}, timeout=30)
+        if resp.status_code == 200:
+            classeur = pd.read_excel(io.BytesIO(resp.content), sheet_name=None, header=None, engine="openpyxl")
+            return classeur, None
+        dernier_status, dernier_texte = resp.status_code, resp.text
+    except Exception as e:
+        return None, f"Erreur inattendue lors de la lecture du fichier Excel : {e}{meta_msg}"
+
+    if dernier_status in (403, 404):
+        return None, (f"Accès refusé au fichier de codification (ID {sheet_id}){meta_msg}. "
+                       f"Vérifiez qu'il est bien partagé (en lecture) avec le compte de service : {email}. "
+                       f"Détail Google : HTTP {dernier_status} — {str(dernier_texte)[:300]}")
+    return None, f"Erreur API Google Drive ({dernier_status}){meta_msg} : {str(dernier_texte)[:300]}"
 
 
 def _detecter_entete_et_nettoyer_codif(valeurs):
@@ -3771,13 +3818,15 @@ if acces_autorise:
     if tab_suivi:
         with tab_suivi:
             st.markdown("<p style='font-size:1.2rem;font-weight:700;color:#1E3A8A;'>✅ Suivi des actions</p>",unsafe_allow_html=True)
-            st.markdown(
-                "<div style='background:#EFF6FF;border-left:4px solid #2a78d6;padding:10px 14px;border-radius:6px;margin-bottom:14px;'>"
-                "<p style='margin:0;font-size:12px;color:#1e40af;'>Cochez les actions terminées : elles seront retirées de vos "
-                "rapports tout en restant consultables ici, dans l'historique.</p>"
-                "</div>", unsafe_allow_html=True)
 
             est_admin_suivi = (role == "Admin" and password_correct)
+
+            if not est_admin_suivi:
+                st.markdown(
+                    "<div style='background:#EFF6FF;border-left:4px solid #2a78d6;padding:10px 14px;border-radius:6px;margin-bottom:14px;'>"
+                    "<p style='margin:0;font-size:12px;color:#1e40af;'>Cochez les actions terminées.</p>"
+                    "</div>", unsafe_allow_html=True)
+
             if est_admin_suivi:
                 entites_disponibles_suivi = sorted(set(
                     e.strip() for v in NATURE_PILOTE.values() for e in v[1].split("+") if e.strip()
@@ -3843,11 +3892,15 @@ if acces_autorise:
                             df_edit = df_affiche_suivi[["Site", "Installation", "Designation", "Observation", "Code"]].copy()
                             df_edit.insert(0, "Terminé", False)
 
+                            colonnes_verrouillees = ["Site", "Installation", "Designation", "Observation", "Code"]
+                            if est_admin_suivi:
+                                colonnes_verrouillees.append("Terminé")
+
                             df_edit_out = st.data_editor(
                                 df_edit,
                                 hide_index=True,
                                 use_container_width=True,
-                                disabled=["Site", "Installation", "Designation", "Observation", "Code"],
+                                disabled=colonnes_verrouillees,
                                 column_config={"Terminé": st.column_config.CheckboxColumn("Terminé ?")},
                                 key="editeur_suivi_actions"
                             )
@@ -3866,7 +3919,7 @@ if acces_autorise:
                                     else:
                                         st.error("Erreur lors de l'enregistrement dans Google Sheets (vérifiez l'onglet « ActionsRealisees »).")
                             else:
-                                st.caption("ℹ️ Vue administrateur en lecture seule — seul le responsable connecté peut cocher ses actions.")
+                                st.caption("ℹ️ Vue administrateur en lecture seule.")
 
                         with st.expander(f"🗂️ Historique des actions réalisées ({len(df_hist_pilote)})"):
                             if df_hist_pilote.empty:
