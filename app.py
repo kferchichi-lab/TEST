@@ -12,6 +12,7 @@ import requests
 import calendar
 import base64
 import io
+import unicodedata
 from weasyprint import HTML
 import fitz
 
@@ -89,42 +90,47 @@ def generer_rapport_equipements_pdf(df_exigences, site_filtre):
         .page:last-child {{
             page-break-after: avoid;
         }}
-        .header-title {{
-            text-align: center;
-            font-size: 18pt;
-            font-weight: bold;
-            color: #1E3A8A;
-            margin-bottom: 20px;
-            text-transform: uppercase;
-            border-bottom: 2px solid #1E3A8A;
-            padding-bottom: 10px;
-        }}
         .page-header {{
             display: flex;
             align-items: center;
             gap: 12px;
-            margin-bottom: 16px;
+            margin-bottom: 22px;
             padding-bottom: 10px;
             border-bottom: 1px solid #E2E8F0;
         }}
         .page-header img {{
-            height: 36px;
+            height: 30px;
         }}
         .page-header-text {{
             font-size: 9.5pt;
-            color: #64748B;
-            font-weight: 600;
+            color: #1E3A8A;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.4px;
         }}
+        .header-title {{
+            text-align: center;
+            font-size: 17pt;
+            font-weight: bold;
+            color: #1E3A8A;
+            margin-bottom: 22px;
+            text-transform: uppercase;
+            border-bottom: 2px solid #1E3A8A;
+            padding-bottom: 14px;
+            line-height: 1.35;
+        }}
         .meta-info {{
-            margin-bottom: 25px;
+            margin-bottom: 28px;
             background-color: #F8FAFC;
             border: 1px solid #E2E8F0;
-            padding: 15px;
+            padding: 16px 18px;
             border-radius: 6px;
-            line-height: 1.8;
+            line-height: 2.1;
             font-size: 11pt;
+        }}
+        .meta-info .dots {{
+            color: #94A3B8;
+            letter-spacing: 1px;
         }}
         .category-title {{
             font-size: 14pt;
@@ -156,7 +162,7 @@ def generer_rapport_equipements_pdf(df_exigences, site_filtre):
         .col-nb {{ width: 20%; text-align: center; }}
         .col-chk {{ width: 20%; text-align: center; }}
         .td-center {{ text-align: center; }}
-        
+
         .checkbox-box {{
             display: inline-block;
             width: 14px;
@@ -176,10 +182,98 @@ def generer_rapport_equipements_pdf(df_exigences, site_filtre):
             text-decoration: underline;
             margin-bottom: 60px;
         }}
+        .empty-message {{
+            color: #94A3B8;
+            font-size: 11pt;
+        }}
     </style>
     </head>
     <body>
     """
+
+    def bloc_entete():
+        return f"""
+        <div class="page-header">
+            <img src="{logo_url}"/>
+            <span class="page-header-text">Tunisie Profilés d'Aluminium — Direction Maintenance &amp; TN</span>
+        </div>
+        <div class="header-title">Rapport d'inspection réglementaire — Site {site_filtre.upper()}</div>
+        <div class="meta-info">
+            <strong>Inspecteur technique :</strong> <span class="dots">…………………………………………………………………</span><br>
+            <strong>Accompagnant :</strong> <span class="dots">……………………………………………………………………………</span><br>
+            <strong>Date :</strong> <span class="dots">………………………………………………………………………………………</span>
+        </div>
+        """
+
+    def bloc_signature():
+        return """
+        <div class="signature-section">
+            <p class="signature-title">Signature :</p>
+        </div>
+        """
+
+    if df_eq.empty:
+        html_content += f"""
+        <div class="page">
+            {bloc_entete()}
+            <p class="empty-message">Aucun équipement enregistré pour ce site.</p>
+            {bloc_signature()}
+        </div>
+        """
+    else:
+        pages_generees = 0
+        for installation in installations:
+            df_ins = df_eq[df_eq.get("Installation", pd.Series(dtype=str)).astype(str).str.strip() == installation]
+            if df_ins.empty:
+                continue
+            lignes_html = ""
+            for _, row in df_ins.iterrows():
+                sous_eq = row.get("Sous_equipement", "")
+                try:
+                    nombre = int(float(row.get("Nombre", 0) or 0))
+                except (ValueError, TypeError):
+                    nombre = row.get("Nombre", "")
+                lignes_html += f"""
+                <tr>
+                    <td class="col-sub">{sous_eq}</td>
+                    <td class="col-nb td-center">{nombre}</td>
+                    <td class="col-chk td-center"><span class="checkbox-box"></span></td>
+                </tr>"""
+
+            html_content += f"""
+            <div class="page">
+                {bloc_entete()}
+                <div class="category-title">{installation}</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="col-sub">Sous-équipements</th>
+                            <th class="col-nb">Nombre</th>
+                            <th class="col-chk">Case à cocher</th>
+                        </tr>
+                    </thead>
+                    <tbody>{lignes_html}</tbody>
+                </table>
+                {bloc_signature()}
+            </div>
+            """
+            pages_generees += 1
+
+        if pages_generees == 0:
+            html_content += f"""
+            <div class="page">
+                {bloc_entete()}
+                <p class="empty-message">Aucun équipement enregistré pour ce site.</p>
+                {bloc_signature()}
+            </div>
+            """
+
+    html_content += """
+    </body>
+    </html>
+    """
+
+    return HTML(string=html_content).write_pdf()
 
 # -------------------------------------------------------------------------------
 # Calcul du tableau + génération PDF / Excel
@@ -640,16 +734,18 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, df_nature, carto_b64, logo_url
                 f"L {p1i[0]:.2f} {p1i[1]:.2f} "
                 f"A {r_in:.2f} {r_in:.2f} 0 {large} 0 {p0i[0]:.2f} {p0i[1]:.2f} Z")
 
-    def _donut_chart(data, color_map, titre="", size=190):
+    def _donut_chart(data, color_map, titre="", size=190, show_pct_labels=True):
         """data: dict {label: valeur numérique}. Retourne (svg, legend_html).
         Les pourcentages des petites parts sont affichés à l'extérieur (avec un
         trait de rappel) pour rester lisibles ; les grandes parts gardent le
-        pourcentage centré à l'intérieur de l'anneau."""
+        pourcentage centré à l'intérieur de l'anneau.
+        show_pct_labels=False : n'affiche aucun pourcentage sur le graphique lui-même
+        (utile quand la légende à côté les affiche déjà, pour éviter la redondance)."""
         data = {k: v for k, v in data.items() if v and v > 0}
         total = sum(data.values())
         if not data or not total:
             return "", ""
-        pad = 34  # marge latérale pour les étiquettes extérieures
+        pad = 34 if show_pct_labels else 14  # marge latérale pour les étiquettes extérieures
         cx, cy = size / 2 + pad, size / 2 + 18
         r_out, r_in = size * 0.40, size * 0.40 * 0.58
         angle = 0.0
@@ -659,22 +755,23 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, df_nature, carto_b64, logo_url
             a1 = angle + pct / 100 * 360
             color = color_map.get(label, "#94A3B8")
             slices += f'<path d="{_donut_path(cx,cy,r_out,r_in,angle,a1)}" fill="{color}" stroke="#ffffff" stroke-width="1.5"/>'
-            mid = (angle + a1) / 2
-            if pct >= 6:
-                # part assez grande : pourcentage centré, en blanc, à l'intérieur de l'anneau
-                lx, ly = _polar(cx, cy, (r_out + r_in) / 2, mid)
-                labels += (f'<text x="{lx:.1f}" y="{ly:.1f}" font-size="11" font-weight="700" '
-                           f'fill="#ffffff" text-anchor="middle" dominant-baseline="middle">{pct:.1f}%</text>')
-            else:
-                # petite part : trait de rappel + pourcentage à l'extérieur, dans la couleur de la part
-                p0 = _polar(cx, cy, r_out, mid)
-                p1 = _polar(cx, cy, r_out + 12, mid)
-                anchor = "start" if p1[0] >= cx else "end"
-                tx = p1[0] + (4 if anchor == "start" else -4)
-                labels += (f'<line x1="{p0[0]:.1f}" y1="{p0[1]:.1f}" x2="{p1[0]:.1f}" y2="{p1[1]:.1f}" '
-                           f'stroke="{color}" stroke-width="1.2"/>'
-                           f'<text x="{tx:.1f}" y="{p1[1]:.1f}" font-size="9.5" font-weight="700" '
-                           f'fill="{color}" text-anchor="{anchor}" dominant-baseline="middle">{pct:.1f}%</text>')
+            if show_pct_labels:
+                mid = (angle + a1) / 2
+                if pct >= 6:
+                    # part assez grande : pourcentage centré, en blanc, à l'intérieur de l'anneau
+                    lx, ly = _polar(cx, cy, (r_out + r_in) / 2, mid)
+                    labels += (f'<text x="{lx:.1f}" y="{ly:.1f}" font-size="11" font-weight="700" '
+                               f'fill="#ffffff" text-anchor="middle" dominant-baseline="middle">{pct:.1f}%</text>')
+                else:
+                    # petite part : trait de rappel + pourcentage à l'extérieur, dans la couleur de la part
+                    p0 = _polar(cx, cy, r_out, mid)
+                    p1 = _polar(cx, cy, r_out + 12, mid)
+                    anchor = "start" if p1[0] >= cx else "end"
+                    tx = p1[0] + (4 if anchor == "start" else -4)
+                    labels += (f'<line x1="{p0[0]:.1f}" y1="{p0[1]:.1f}" x2="{p1[0]:.1f}" y2="{p1[1]:.1f}" '
+                               f'stroke="{color}" stroke-width="1.2"/>'
+                               f'<text x="{tx:.1f}" y="{p1[1]:.1f}" font-size="9.5" font-weight="700" '
+                               f'fill="{color}" text-anchor="{anchor}" dominant-baseline="middle">{pct:.1f}%</text>')
             angle = a1
         titre_svg = (f'<text x="{cx:.1f}" y="16" font-size="12.5" font-weight="700" fill="#0F172A" '
                      f'text-anchor="middle">{titre}</text>') if titre else ""
@@ -682,12 +779,11 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, df_nature, carto_b64, logo_url
         svg = (f'<svg viewBox="0 0 {w_total} {size+22}" width="{w_total}" height="{size+22}" '
                f'xmlns="http://www.w3.org/2000/svg">{titre_svg}{slices}{labels}</svg>')
         legend = "".join(
-            f'<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:9px;">'
-            f'<div style="display:flex;align-items:center;gap:7px;">'
+            f'<div style="display:flex;align-items:center;margin-bottom:9px;">'
             f'<span style="width:11px;height:11px;min-width:11px;border-radius:3px;'
-            f'background:{color_map.get(l,"#94A3B8")};display:inline-block;"></span>'
-            f'<span style="font-size:10pt;color:#334155;white-space:nowrap;">{l}</span></div>'
-            f'<span style="font-size:10pt;font-weight:800;color:#0F172A;white-space:nowrap;">{(v/total*100):.1f}%</span>'
+            f'background:{color_map.get(l,"#94A3B8")};display:inline-block;margin-right:8px;"></span>'
+            f'<span style="font-size:10pt;color:#334155;white-space:nowrap;">{l}</span>'
+            f'<span style="font-size:10pt;font-weight:800;color:#0F172A;white-space:nowrap;margin-left:14px;">{(v/total*100):.1f}%</span>'
             f'</div>'
             for l, v in data.items()
         )
@@ -704,13 +800,13 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, df_nature, carto_b64, logo_url
         for label, pct in data_pct.items():
             color = color_map.get(label, "#F59E0B")
             rows += f"""
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:11px;">
-                <div style="flex:0 0 118px;font-size:9.3pt;font-weight:600;color:#334155;
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:11px;">
+                <div style="flex:0 0 150px;font-size:9.5pt;font-weight:600;color:#334155;
                     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{label}</div>
-                <div style="flex:1;background:#E2E8F0;border-radius:5px;height:15px;overflow:hidden;">
+                <div style="flex:1;background:#E2E8F0;border-radius:5px;height:16px;overflow:hidden;">
                     <div style="height:100%;width:{pct}%;background:{color};border-radius:5px;"></div>
                 </div>
-                <div style="flex:0 0 48px;text-align:right;font-size:9.8pt;font-weight:800;color:#0F172A;">{pct:.1f}%</div>
+                <div style="flex:0 0 58px;text-align:right;font-size:10.5pt;font-weight:800;color:#0F172A;">{pct:.1f}%</div>
             </div>"""
         return rows
 
@@ -726,21 +822,12 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, df_nature, carto_b64, logo_url
 
     def _ins_donut(site):
         if df_r.empty or "Installation" not in df_r.columns or "Site" not in df_r.columns:
-            return ""
+            return "", ""
         d = df_r[df_r["Site"] == site].groupby("Installation")["Nombre"].sum().to_dict()
-        svg, _ = _donut_chart(d, COULEURS_INS, site, size=185)
-        return svg
+        return _donut_chart(d, COULEURS_INS, site, size=185, show_pct_labels=False)
 
-    meg_ins_svg = _ins_donut("MEG")
-    sgb_ins_svg = _ins_donut("SGB")
-    toutes_ins = sorted(df_r["Installation"].dropna().unique().tolist()) if (not df_r.empty and "Installation" in df_r.columns) else []
-    ins_legend_commune = "".join(
-        f'<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">'
-        f'<span style="width:11px;height:11px;min-width:11px;border-radius:3px;'
-        f'background:{COULEURS_INS.get(i,"#94A3B8")};display:inline-block;"></span>'
-        f'<span style="font-size:9.5pt;color:#334155;">{i}</span></div>'
-        for i in toutes_ins
-    )
+    meg_ins_svg, meg_ins_legend = _ins_donut("MEG")
+    sgb_ins_svg, sgb_ins_legend = _ins_donut("SGB")
 
     # ---- Section 2 : Répartition par site — Nature et Pilote (source : PointsReserveNature) ----
     df_n = df_nature.copy() if (df_nature is not None and not df_nature.empty) else pd.DataFrame()
@@ -751,7 +838,7 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, df_nature, carto_b64, logo_url
         if df_n.empty or "Nature" not in df_n.columns or "Site" not in df_n.columns:
             return "", ""
         d = df_n[df_n["Site"] == site].groupby("Nature")["Nombre"].sum().to_dict()
-        return _donut_chart(d, COULEURS_NATURE, f"{site} — % par nature", size=185)
+        return _donut_chart(d, COULEURS_NATURE, f"{site} — % par nature", size=185, show_pct_labels=False)
 
     def _pilote_bar(site):
         if df_n.empty or "Pilote" not in df_n.columns or "Site" not in df_n.columns:
@@ -781,15 +868,18 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, df_nature, carto_b64, logo_url
         carto_html = f"""
         <div class="page">
             <div class="category-title">Taux de non-conformité des sites</div>
-            <p style="font-size:10pt;color:#475569;margin-bottom:15px;">
+            <p style="font-size:10pt;color:#475569;margin-bottom:12px;">
             Cartographie de synthèse du taux de non-conformité par site et par installation,
             établie lors de la campagne de contrôle réglementaire 2026.</p>
-            <img src="data:image/png;base64,{carto_b64}" style="width:100%;border-radius:8px;border:1px solid #E2E8F0;"/>
+            <div style="text-align:center;">
+                <img src="data:image/png;base64,{carto_b64}" style="max-width:100%;max-height:150mm;width:auto;
+                    border-radius:8px;border:1px solid #E2E8F0;"/>
+            </div>
         </div>"""
 
     html_content = f"""
     <html><head><style>
-        @page {{ size: A4 portrait; margin: 20mm 15mm;
+        @page {{ size: A4 landscape; margin: 15mm 18mm;
             @bottom-right {{ content: "Page " counter(page) " / " counter(pages);
                 font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:9pt; color:#64748B; }} }}
         body {{ font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; color:#1E293B; margin:0; padding:0; font-size:10pt; }}
@@ -833,7 +923,8 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, df_nature, carto_b64, logo_url
 
 
 
-        <div class="kpi-card" style="border-left-color:#0EA5E9;">
+        <div style="display:flex;gap:20px;align-items:stretch;">
+        <div class="kpi-card" style="border-left-color:#0EA5E9;flex:1;">
             <p class="kpi-title">1. Taux de réalisation 2026</p>
             <p class="kpi-desc">Proportion des visites réalisées dont l'écart entre la date réelle de contrôle
             et l'échéance théorique initiale du cycle n'excède pas 1 mois, par rapport au nombre total
@@ -844,7 +935,7 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, df_nature, carto_b64, logo_url
             — sur {k1['total']} visites planifiées</p>
         </div>
 
-         <div class="kpi-card">
+         <div class="kpi-card" style="flex:1;">
             <p class="kpi-title">2. Taux de respect de délai de visite</p>
             <p class="kpi-desc">Proportion des contrôles réglementaires dont l'échéance théorique est comprise
             entre le 01/01/2026 et le 31/12/2026, effectivement réalisés (date réelle de visite enregistrée)
@@ -853,7 +944,7 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, df_nature, carto_b64, logo_url
             {barre(k2['taux'], '#0EA5E9')}
             <p style="font-size:9pt;color:#64748B;margin-top:8px;">{k2['respectes']} respectés / {k2['respectes']} réalisés</p>
         </div>
-
+        </div>
 
     </div>
 
@@ -874,13 +965,24 @@ def generer_rapport_kpi_pdf(kpi_data, df_reserve, df_nature, carto_b64, logo_url
         <p style="font-weight:700;font-size:12pt;color:#0F172A;text-align:center;margin:20px 0 12px 0;">
         Répartition par installation</p>
 
-        <div style="display:flex;justify-content:center;align-items:center;gap:15px;">
-            <div style="flex:1;text-align:center;">
-                {meg_ins_svg if meg_ins_svg else "<p style='color:#94A3B8;font-size:9pt;'>Aucune donnée MEG</p>"}
+        <div style="display:flex;gap:40px;">
+            <div style="flex:1;">
+                <p style="font-weight:700;font-size:11pt;color:#0F172A;text-align:center;margin:0 0 10px 0;">MEG</p>
+                <div style="display:flex;justify-content:center;align-items:center;gap:20px;">
+                    <div style="flex:0 0 auto;">
+                        {meg_ins_svg if meg_ins_svg else "<p style='color:#94A3B8;font-size:9pt;'>Aucune donnée MEG</p>"}
+                    </div>
+                    <div style="flex:0 0 180px;">{meg_ins_legend}</div>
+                </div>
             </div>
-            <div style="flex:0 0 170px;">{ins_legend_commune}</div>
-            <div style="flex:1;text-align:center;">
-                {sgb_ins_svg if sgb_ins_svg else "<p style='color:#94A3B8;font-size:9pt;'>Aucune donnée SGB</p>"}
+            <div style="flex:1;">
+                <p style="font-weight:700;font-size:11pt;color:#0F172A;text-align:center;margin:0 0 10px 0;">SGB</p>
+                <div style="display:flex;justify-content:center;align-items:center;gap:20px;">
+                    <div style="flex:0 0 auto;">
+                        {sgb_ins_svg if sgb_ins_svg else "<p style='color:#94A3B8;font-size:9pt;'>Aucune donnée SGB</p>"}
+                    </div>
+                    <div style="flex:0 0 180px;">{sgb_ins_legend}</div>
+                </div>
             </div>
         </div>
     </div>
@@ -928,12 +1030,38 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
     la codification (classeur externe) qui le concernent — une page par installation
     (= un onglet du classeur source), sous forme de fiche de suivi terrain :
     Equipement | Actions | Responsable | Etat (Immédiat/Sous-traitant*/Planifié*) | Réalisation (O/N) | Observation.
-    df_filtre doit contenir les colonnes : Installation, Designation, Observation, Code, Nature.
+    df_filtre doit contenir les colonnes : Installation, Désignation, Observation, Code, Nature.
     """
     date_str = datetime.date.today().strftime('%d/%m/%Y')
     installations = list(dict.fromkeys(df_filtre["Installation"].tolist()))  # ordre stable, sans doublons
     total_general = len(df_filtre)
-    nom_responsable = SOUS_PILOTE_NOMS.get(pilote_choisi, pilote_choisi)
+
+    # Détermine le(s) site(s) présent(s) dans le périmètre filtré, afin d'afficher le bon
+    # sous-pilote (ex : Maintenance -> Chafik ABID pour SGB, Saber BEN CHAABEN pour MEG).
+    sites_presents = []
+    if "Site" in df_filtre.columns:
+        sites_presents = sorted({
+            str(s).strip().upper() for s in df_filtre["Site"].dropna().unique().tolist() if str(s).strip()
+        })
+
+    def _nom_pour_site(site_val):
+        return nom_pour_pilote_site(pilote_choisi, site_val)
+
+    if len(sites_presents) == 1:
+        nom_responsable = _nom_pour_site(sites_presents[0])
+    else:
+        # Plusieurs sites (ou site inconnu) dans le même rapport : on garde le libellé générique.
+        nom_responsable = _nom_pour_site(None)
+
+    # Nom du sous-pilote par installation (une installation appartient toujours à un seul site).
+    nom_par_installation = {}
+    for ins in installations:
+        site_ins = None
+        if "Site" in df_filtre.columns:
+            valeurs_site = df_filtre.loc[df_filtre["Installation"] == ins, "Site"].dropna().unique().tolist()
+            if len(valeurs_site) == 1:
+                site_ins = valeurs_site[0]
+        nom_par_installation[ins] = _nom_pour_site(site_ins)
 
     html_content = f"""
     <html>
@@ -1070,7 +1198,7 @@ def generer_rapport_pilote_pdf(pilote_choisi, df_filtre, logo_url):
             </div>
             <div class="header-title" style="border-bottom: none; padding-bottom: 0;">Plan d'actions - Contrôle réglementaire</div>
             <div class="meta-info">
-                <strong>Sous-pilote :</strong> {nom_responsable}<br>
+                <strong>Sous-pilote :</strong> {nom_par_installation.get(ins, nom_responsable)}<br>
                 <strong>Installation :</strong> {ins}<br>
                 <strong>Date d'édition :</strong> {date_str}
             </div>
@@ -1571,9 +1699,63 @@ def codif_charger_classeur(sheet_id):
     return None, f"Erreur API Google Drive ({dernier_status}){meta_msg} : {str(dernier_texte)[:300]}"
 
 
-def _detecter_entete_et_nettoyer_codif(valeurs):
+# Noms EXACTS des colonnes (Désignation | Observation | Code) pour chaque type d'installation,
+# tels que mis à jour dans les classeurs de codification MEG et SGB (structure identique sur les
+# deux sites, seul le nom de l'onglet change : "... - MEG" / "... - SGB").
+# Format : (mots-clés identifiant le type d'installation à partir du nom de l'onglet,
+#           nom exact colonne désignation, nom exact colonne observation, nom exact colonne code)
+COLONNES_CODIF_PAR_INSTALLATION = [
+    (["electrique"],           "Désignation", "Observation",                    "C"),
+    (["levage"],                "Rapport",     "Organes examines NC",            "C"),
+    (["pression"],               "Rapport",     "Points examines non conforme",   "C"),
+    (["gaz"],                   "Rapport",     "Points examines non conforme",   "C"),
+    (["incendie"],               "Local",       "Observation",                    "C"),
+]
+
+
+def _sans_accents(texte):
+    """Retire les accents d'une chaîne pour faciliter les comparaisons insensibles aux accents."""
+    return "".join(c for c in unicodedata.normalize("NFD", str(texte)) if unicodedata.category(c) != "Mn")
+
+
+def _normaliser(texte):
+    return _sans_accents(texte).strip().lower()
+
+
+def _colonnes_attendues_pour_onglet(onglet):
+    """Détermine, à partir du nom de l'onglet (ex: 'Installation électrique - MEG' ou
+    'Sécurité incendie - SGB'), les noms exacts des colonnes Désignation/Observation/Code à
+    utiliser pour cet onglet. Retourne None si le type d'installation n'est pas reconnu
+    (repli sur la détection générique par mots-clés)."""
+    if not onglet:
+        return None
+    # On retire un éventuel suffixe de site ("- MEG" / "- SGB") pour ne garder que le type
+    # d'installation, puis on teste les mots-clés dans un ordre où les plus spécifiques
+    # ("pression") sont vérifiés avant les plus génériques ("gaz").
+    base = re.sub(r"\s*-\s*(meg|sgb)\s*$", "", onglet, flags=re.IGNORECASE).strip()
+    base_norm = _normaliser(base)
+    for mots_cles, nom_desig, nom_obs, nom_code in COLONNES_CODIF_PAR_INSTALLATION:
+        if all(mc in base_norm for mc in mots_cles):
+            return (nom_desig, nom_obs, nom_code)
+    return None
+
+
+def _trouver_colonne_exacte(colonnes, nom_attendu):
+    """Recherche une colonne correspondant exactement (insensible aux accents/casse) au nom
+    attendu ; à défaut, se rabat sur une correspondance partielle."""
+    cible = _normaliser(nom_attendu)
+    for c in colonnes:
+        if _normaliser(c) == cible:
+            return c
+    for c in colonnes:
+        if cible in _normaliser(c):
+            return c
+    return None
+
+
+def _detecter_entete_et_nettoyer_codif(valeurs, onglet=None):
     """Prend les lignes brutes (liste de listes) d'un onglet du classeur de codification et
-    retourne un DataFrame propre avec les colonnes Designation | Observation | Code.
+    retourne un DataFrame propre avec les colonnes Désignation | Observation | Code.
     Cherche automatiquement la ligne d'en-tête, en tolérant les différents intitulés utilisés
     selon les onglets (ex: 'Désignation'/'Rapport' pour l'équipement,
     'Observation'/'Organes examinés NC'/'Problème' pour l'action), et complète (forward-fill)
@@ -1581,14 +1763,25 @@ def _detecter_entete_et_nettoyer_codif(valeurs):
     if not valeurs:
         return pd.DataFrame()
 
-    MOTS_CLES_EQUIP = ["désignation", "designation", "équipement", "equipement", "rapport"]
+    MOTS_CLES_EQUIP = ["désignation", "désignation", "équipement", "equipement", "rapport"]
     MOTS_CLES_OBS   = ["observation", "organe", "examin", "problème", "probleme", "action"]
+
+    # Colonnes exactes attendues pour ce type d'installation (déduites du nom de l'onglet),
+    # sinon repli sur la détection générique par mots-clés (ancien comportement).
+    colonnes_attendues = _colonnes_attendues_pour_onglet(onglet)
 
     idx_entete = None
     for i, ligne in enumerate(valeurs):
         cellules = [str(c).strip().lower() for c in ligne]
-        a_equip = any(any(mc in c for mc in MOTS_CLES_EQUIP) for c in cellules)
-        a_obs   = any(any(mc in c for mc in MOTS_CLES_OBS) for c in cellules)
+        if colonnes_attendues:
+            nom_desig, nom_obs, _nom_code = colonnes_attendues
+            cible_desig = _normaliser(nom_desig)
+            cible_obs = _normaliser(nom_obs)
+            a_equip = any(_normaliser(c) == cible_desig for c in cellules)
+            a_obs   = any(_normaliser(c) == cible_obs for c in cellules)
+        else:
+            a_equip = any(any(mc in c for mc in MOTS_CLES_EQUIP) for c in cellules)
+            a_obs   = any(any(mc in c for mc in MOTS_CLES_OBS) for c in cellules)
         if a_equip and a_obs:
             idx_entete = i
             break
@@ -1612,26 +1805,32 @@ def _detecter_entete_et_nettoyer_codif(valeurs):
                     return c
         return None
 
-    col_desig = _trouver_colonne(df.columns, [
-        ["désignation", "designation", "équipement", "equipement"],
-        ["rapport"],
-    ])
-    col_obs = _trouver_colonne(df.columns, [
-        ["observation"],
-        ["organe", "examin"],
-        ["problème", "probleme"],
-        ["action"],
-    ])
-    col_code  = next((c for c in df.columns if c.strip().lower() in ("c", "code")), None)
+    if colonnes_attendues:
+        nom_desig, nom_obs, nom_code = colonnes_attendues
+        col_desig = _trouver_colonne_exacte(df.columns, nom_desig)
+        col_obs   = _trouver_colonne_exacte(df.columns, nom_obs)
+        col_code  = _trouver_colonne_exacte(df.columns, nom_code)
+    else:
+        col_desig = _trouver_colonne(df.columns, [
+            ["désignation", "désignation", "équipement", "equipement"],
+            ["rapport"],
+        ])
+        col_obs = _trouver_colonne(df.columns, [
+            ["observation"],
+            ["organe", "examin"],
+            ["problème", "probleme"],
+            ["action"],
+        ])
+        col_code  = next((c for c in df.columns if c.strip().lower() in ("c", "code")), None)
     if not (col_desig and col_obs and col_code):
         return pd.DataFrame()
 
     df = df[[col_desig, col_obs, col_code]].copy()
-    df.columns = ["Designation", "Observation", "Code"]
+    df.columns = ["Désignation", "Observation", "Code"]
     for c in df.columns:
         df[c] = df[c].astype(str).str.strip()
         df[c] = df[c].replace("nan", "")
-    df["Designation"] = df["Designation"].replace("", pd.NA).ffill().fillna("")
+    df["Désignation"] = df["Désignation"].replace("", pd.NA).ffill().fillna("")
     df["Code"] = df["Code"].str.upper()
     df = df[(df["Observation"] != "") & (df["Code"] != "")]
     df = df[df["Code"].isin(NATURE_PILOTE.keys())]
@@ -1652,7 +1851,7 @@ def _codes_pour_pilote(pilote_choisi):
 @st.cache_data(ttl=300, show_spinner=False)
 def codif_charger_toutes_actions():
     """Charge et combine les classeurs de codification des deux sites (MEG et SGB).
-    Retourne (DataFrame combiné [Site, Installation, Designation, Observation, Code], message_erreur_ou_None)."""
+    Retourne (DataFrame combiné [Site, Installation, Désignation, Observation, Code], message_erreur_ou_None)."""
     frames, erreurs = [], []
     for site, sheet_id in CODIF_SHEET_ID_PAR_SITE.items():
         classeur, err = codif_charger_classeur(sheet_id)
@@ -1663,7 +1862,7 @@ def codif_charger_toutes_actions():
             continue
         for onglet, df_brut in classeur.items():
             valeurs = df_brut.fillna("").astype(str).values.tolist()
-            d = _detecter_entete_et_nettoyer_codif(valeurs)
+            d = _detecter_entete_et_nettoyer_codif(valeurs, onglet)
             if not d.empty:
                 d["Installation"] = onglet
                 d["Site"] = site
@@ -1676,11 +1875,11 @@ def codif_charger_toutes_actions():
 def _cle_action(row):
     """Clé unique identifiant une action précise, utilisée pour repérer les actions déjà réalisées."""
     return "||".join(str(row.get(c, "")).strip().upper() for c in
-                      ["Site", "Installation", "Designation", "Observation", "Code"])
+                      ["Site", "Installation", "Désignation", "Observation", "Code"])
 
 
 def lire_actions_realisees():
-    """Lit l'onglet ActionsRealisees : Site | Installation | Designation | Observation | Code | Pilote | Responsable | DateRealisation."""
+    """Lit l'onglet ActionsRealisees : Site | Installation | Désignation | Observation | Code | Pilote | Responsable | DateRealisation."""
     return sheets_lire("ActionsRealisees", "A:H")
 
 
@@ -1690,7 +1889,7 @@ def marquer_actions_realisees(df_lignes, responsable_nom):
     ok_total = True
     for _, row in df_lignes.iterrows():
         ok, _msg = sheets_append("ActionsRealisees", [
-            row.get("Site", ""), row.get("Installation", ""), row.get("Designation", ""),
+            row.get("Site", ""), row.get("Installation", ""), row.get("Désignation", ""),
             row.get("Observation", ""), row.get("Code", ""), row.get("Pilote", ""),
             responsable_nom, date_str
         ])
@@ -1698,11 +1897,36 @@ def marquer_actions_realisees(df_lignes, responsable_nom):
     return ok_total
 
 
+def lire_suivi_encours():
+    """Lit l'onglet SuiviActions : Site | Installation | Désignation | Observation | Code | Pilote |
+    Statut | Type | Commentaire | Responsable | DateMaJ.
+    Ne garde que la dernière saisie connue pour chaque action (une action peut être mise à jour
+    plusieurs fois : seule la ligne la plus récente fait foi)."""
+    df = sheets_lire("SuiviActions", "A:K")
+    if df.empty:
+        return df
+    df["Cle"] = df.apply(_cle_action, axis=1)
+    df = df.drop_duplicates(subset="Cle", keep="last").reset_index(drop=True)
+    return df
+
+
+def enregistrer_statut_en_cours(row, type_suivi, commentaire, responsable_nom):
+    """Enregistre (nouvelle ligne d'historique) le statut « En cours » d'une action, avec son type
+    de suivi (Immédiat / Sous-traitance / Planifié) et un commentaire libre facultatif."""
+    date_str = datetime.datetime.now(TZ).strftime("%d/%m/%Y %H:%M")
+    ok, _msg = sheets_append("SuiviActions", [
+        row.get("Site", ""), row.get("Installation", ""), row.get("Désignation", ""),
+        row.get("Observation", ""), row.get("Code", ""), row.get("Pilote", ""),
+        "En cours", type_suivi, commentaire, responsable_nom, date_str
+    ])
+    return ok
+
+
 def _lignes_avec_rowspan(d_ins):
-    """Regroupe les lignes consécutives ayant le même Equipement (Designation) pour permettre
+    """Regroupe les lignes consécutives ayant le même Equipement (Désignation) pour permettre
     une fusion de cellules (rowspan) dans le tableau PDF.
     Retourne une liste de tuples (equipement_ou_None, rowspan_ou_None, observation)."""
-    valeurs = d_ins["Designation"].tolist()
+    valeurs = d_ins["Désignation"].tolist()
     obs = d_ins["Observation"].tolist()
     lignes = []
     i, n = 0, len(valeurs)
@@ -1886,6 +2110,19 @@ SOUS_PILOTE_NOMS = {
     "DG":              "Aïcha BELLAKHAL",
 }
 
+def nom_pour_pilote_site(pilote, site=None):
+    """Renvoie le nom du responsable à afficher pour un pilote donné, en tenant compte du site
+    lorsque plusieurs responsables se partagent le même pilote (ex : Maintenance -> Saber pour MEG,
+    Chafik pour SGB)."""
+    if pilote == "Maintenance":
+        site_norm = (site or "").strip().upper()
+        if site_norm == "MEG":
+            return "Saber BEN CHAABEN"
+        if site_norm == "SGB":
+            return "Chafik ABID"
+        return "Maintenance (Saber BEN CHAABEN — MEG / Chafik ABID — SGB)"
+    return SOUS_PILOTE_NOMS.get(pilote, pilote)
+
 def lire_points_reserve_nature():
     """Lit l'onglet PointsReserveNature : Site | Installation | Nombre | Nature | Pilote."""
     return sheets_lire("PointsReserveNature", "A:E")
@@ -1942,9 +2179,10 @@ with st.sidebar:
 
     # ---- Comptes Responsable (identifiant + mot de passe) ----
     RESPONSABLES={
-        "SABER": {"password":"SABER123*","nom":"Saber BEN CHAABEN","entites":["Maintenance"]},
-        "HSE":   {"password":"HSE123*",  "nom":"Montassar MEHRABI","entites":["HSE"]},
-        "AICHA": {"password":"AICHA123*","nom":"Aïcha BELLAKHAL",  "entites":["BT","Chef service BT","RH","DG"]},
+        "SABER": {"password":"SABER123*","nom":"Saber BEN CHAABEN","entites":["Maintenance"],"site":"MEG"},
+        "HSE":   {"password":"HSE123*",  "nom":"Montassar MEHRABI","entites":["HSE"],"site":None},
+        "AICHA": {"password":"AICHA123*","nom":"Aïcha BELLAKHAL",  "entites":["BT","Chef service BT","RH","DG"],"site":None},
+        "CHAFIK": {"password":"chafik123*","nom":"Chafik ABID",    "entites":["Maintenance"],"site":"SGB"},
     }
     if "responsable_connecte" not in st.session_state: st.session_state.responsable_connecte=False
     if "responsable_actif" not in st.session_state: st.session_state.responsable_actif=None
@@ -3418,6 +3656,8 @@ if acces_autorise:
                     st.plotly_chart(fig,use_container_width=True,config={'displayModeBar':False})
 
                 if {"Nature","Pilote","Site","Nombre"}.issubset(df_nature_f.columns):
+                    g1, g2 = st.columns(2)
+                    with g1: _pie_nature_site(df_nature_f,"SGB",color_map_nat,"SGB — % par nature")
                     with g2: _bar_pilote_site(df_nature_f,"SGB",color_map_pil,"SGB — % par pilote")
                     g3,g4 = st.columns(2)
                     with g3: _pie_nature_site(df_nature_f,"MEG",color_map_nat,"MEG — % par nature")
@@ -3593,6 +3833,7 @@ if acces_autorise:
             compte_resp = RESPONSABLES.get(st.session_state.responsable_actif, {})
             nom_resp = compte_resp.get("nom", st.session_state.responsable_actif)
             entites_resp = compte_resp.get("entites", [])
+            site_resp = compte_resp.get("site")
 
             st.markdown(f"<p style='font-size:1.2rem;font-weight:700;color:#1E3A8A;'>📊 Indicateurs — {nom_resp}</p>",unsafe_allow_html=True)
             st.markdown(
@@ -3620,18 +3861,23 @@ if acces_autorise:
                 if df_nature_r.empty:
                     st.info("Aucune action trouvée pour votre périmètre.")
                 else:
-                    if "site_kpi_responsable" not in st.session_state:
-                        st.session_state.site_kpi_responsable = "SGB"
-
-                    rcol1,rcol2,_ = st.columns([1,1,4])
-                    with rcol1:
-                        if st.button("🏭 SGB", key="btn_kpi_sgb_resp", type=("primary" if st.session_state.site_kpi_responsable=="SGB" else "secondary"), use_container_width=True):
+                    if site_resp:
+                        # Compte restreint à un seul site (ex : Saber -> MEG, Chafik -> SGB)
+                        st.session_state.site_kpi_responsable = site_resp
+                        st.markdown(f"<p style='font-size:12px;color:#64748B;margin-bottom:6px;'>🏭 Site : <strong>{site_resp}</strong></p>",unsafe_allow_html=True)
+                    else:
+                        if "site_kpi_responsable" not in st.session_state:
                             st.session_state.site_kpi_responsable = "SGB"
-                            st.rerun()
-                    with rcol2:
-                        if st.button("🏭 MEG", key="btn_kpi_meg_resp", type=("primary" if st.session_state.site_kpi_responsable=="MEG" else "secondary"), use_container_width=True):
-                            st.session_state.site_kpi_responsable = "MEG"
-                            st.rerun()
+
+                        rcol1,rcol2,_ = st.columns([1,1,4])
+                        with rcol1:
+                            if st.button("🏭 SGB", key="btn_kpi_sgb_resp", type=("primary" if st.session_state.site_kpi_responsable=="SGB" else "secondary"), use_container_width=True):
+                                st.session_state.site_kpi_responsable = "SGB"
+                                st.rerun()
+                        with rcol2:
+                            if st.button("🏭 MEG", key="btn_kpi_meg_resp", type=("primary" if st.session_state.site_kpi_responsable=="MEG" else "secondary"), use_container_width=True):
+                                st.session_state.site_kpi_responsable = "MEG"
+                                st.rerun()
 
                     site_choisi_r = st.session_state.site_kpi_responsable
                     st.markdown(f"<p style='font-weight:700;font-size:14px;color:#0F172A;text-align:center;margin:14px 0 10px 0;'>Répartition des actions — Site {site_choisi_r}</p>",unsafe_allow_html=True)
@@ -3710,9 +3956,11 @@ if acces_autorise:
                         df_codif_r["Nature"] = df_codif_r["Code"].map(lambda c: NATURE_PILOTE.get(c,("",""))[0])
                         codes_ok_r = _codes_pour_pilote(entite_pdf_choisie)
                         df_filtre_codif_r = df_codif_r[df_codif_r["Code"].isin(codes_ok_r)]
+                        if site_resp and "Site" in df_filtre_codif_r.columns:
+                            df_filtre_codif_r = df_filtre_codif_r[df_filtre_codif_r["Site"].astype(str).str.strip().str.upper() == site_resp.upper()]
                         if df_filtre_codif_r.empty:
                             st.session_state["pdf_responsable"] = None
-                            st.info(f"Aucune action restante pour « {entite_pdf_choisie} ».")
+                            st.info(f"Aucune action restante pour « {entite_pdf_choisie} »" + (f" — site {site_resp}." if site_resp else "."))
                         else:
                             try:
                                 st.session_state["pdf_responsable"] = generer_rapport_pilote_pdf(
@@ -3832,11 +4080,13 @@ if acces_autorise:
                     e.strip() for v in NATURE_PILOTE.values() for e in v[1].split("+") if e.strip()
                 ))
                 pilote_suivi_choisi = st.selectbox("Responsable à suivre", entites_disponibles_suivi, key="pilote_suivi_admin")
-                nom_responsable_suivi = SOUS_PILOTE_NOMS.get(pilote_suivi_choisi, pilote_suivi_choisi)
+                nom_responsable_suivi = nom_pour_pilote_site(pilote_suivi_choisi, None)
+                site_resp_suivi = None
             else:
                 compte_resp_suivi = RESPONSABLES.get(st.session_state.responsable_actif, {})
                 entites_resp_suivi = compte_resp_suivi.get("entites", [])
                 nom_responsable_suivi = compte_resp_suivi.get("nom", st.session_state.responsable_actif)
+                site_resp_suivi = compte_resp_suivi.get("site")
                 if len(entites_resp_suivi) > 1:
                     pilote_suivi_choisi = st.selectbox("Périmètre", entites_resp_suivi, key="pilote_suivi_resp")
                 else:
@@ -3848,6 +4098,7 @@ if acces_autorise:
                 with st.spinner("Chargement des actions (MEG et SGB)..."):
                     df_codif_suivi, err_suivi = codif_charger_toutes_actions()
                     df_realisees_suivi = lire_actions_realisees()
+                    df_encours_suivi = lire_suivi_encours()
 
                 if err_suivi and df_codif_suivi.empty:
                     st.error(err_suivi)
@@ -3857,6 +4108,8 @@ if acces_autorise:
 
                     codes_ok_suivi = _codes_pour_pilote(pilote_suivi_choisi)
                     df_pilote_suivi = df_codif_suivi[df_codif_suivi["Code"].isin(codes_ok_suivi)].copy()
+                    if site_resp_suivi and "Site" in df_pilote_suivi.columns:
+                        df_pilote_suivi = df_pilote_suivi[df_pilote_suivi["Site"].astype(str).str.strip().str.upper() == site_resp_suivi.upper()]
                     df_pilote_suivi["Cle"] = df_pilote_suivi.apply(_cle_action, axis=1)
 
                     cles_faites_suivi = set()
@@ -3871,61 +4124,128 @@ if acces_autorise:
                     nb_realisees = len(cles_faites_suivi & set(df_pilote_suivi["Cle"]))
                     taux = round((nb_realisees/total_pilote*100), 1) if total_pilote else 0.0
 
+                    # Dernier statut « En cours » connu (Type + commentaire), par clé d'action
+                    info_encours_par_cle = {}
+                    if not df_encours_suivi.empty:
+                        for _, r_enc in df_encours_suivi.iterrows():
+                            info_encours_par_cle[r_enc["Cle"]] = {
+                                "Type": r_enc.get("Type", "") or "",
+                                "Commentaire": r_enc.get("Commentaire", "") or "",
+                            }
+
                     col_liste, col_graphe = st.columns([3, 1])
 
                     with col_liste:
-                        st.markdown(f"<p style='font-weight:700;font-size:14px;color:#0F172A;'>Actions restantes — {nom_responsable_suivi}</p>",unsafe_allow_html=True)
-
                         if df_restantes.empty:
+                            st.markdown(f"<p style='font-weight:700;font-size:14px;color:#0F172A;'>Actions restantes — {nom_responsable_suivi}</p>",unsafe_allow_html=True)
                             st.success("🎉 Toutes les actions de ce périmètre sont réalisées !")
                         else:
-                            sites_dispo_suivi = sorted(df_restantes["Site"].dropna().unique().tolist())
-                            fcol1, fcol2 = st.columns(2)
-                            with fcol1:
-                                site_f_suivi = st.selectbox("Site", ["Tous"]+sites_dispo_suivi, key="site_filtre_suivi")
-                            df_apres_site_suivi = df_restantes if site_f_suivi == "Tous" else df_restantes[df_restantes["Site"] == site_f_suivi]
-                            with fcol2:
+                            site_f_suivi = "Tous"
+                            if site_resp_suivi:
+                                # Compte restreint à un seul site : pas de sélecteur de site
+                                st.markdown(f"<p style='font-weight:700;font-size:14px;color:#0F172A;'>Actions restantes — {nom_responsable_suivi}</p>",unsafe_allow_html=True)
+                                df_apres_site_suivi = df_restantes
                                 installations_dispo_suivi = sorted(df_apres_site_suivi["Installation"].dropna().unique().tolist())
                                 install_f_suivi = st.selectbox("Installation", ["Toutes"]+installations_dispo_suivi, key="installation_filtre_suivi")
+                            else:
+                                sites_dispo_suivi = sorted(df_restantes["Site"].dropna().unique().tolist())
+                                fcol1, fcol2 = st.columns(2)
+                                with fcol1:
+                                    site_f_suivi = st.selectbox("Site", ["Tous"]+sites_dispo_suivi, key="site_filtre_suivi")
+                                if est_admin_suivi:
+                                    nom_responsable_suivi = nom_pour_pilote_site(pilote_suivi_choisi, None if site_f_suivi == "Tous" else site_f_suivi)
+                                st.markdown(f"<p style='font-weight:700;font-size:14px;color:#0F172A;'>Actions restantes — {nom_responsable_suivi}</p>",unsafe_allow_html=True)
+                                df_apres_site_suivi = df_restantes if site_f_suivi == "Tous" else df_restantes[df_restantes["Site"] == site_f_suivi]
+                                with fcol2:
+                                    installations_dispo_suivi = sorted(df_apres_site_suivi["Installation"].dropna().unique().tolist())
+                                    install_f_suivi = st.selectbox("Installation", ["Toutes"]+installations_dispo_suivi, key="installation_filtre_suivi")
                             df_affiche_suivi = df_apres_site_suivi if install_f_suivi == "Toutes" else df_apres_site_suivi[df_apres_site_suivi["Installation"] == install_f_suivi]
 
-                            df_edit = df_affiche_suivi[["Site", "Installation", "Designation", "Observation", "Code"]].copy()
-                            df_edit.insert(0, "Terminé", False)
+                            # ---- Recalcul des statistiques (jauge + graphes) selon le site sélectionné ----
+                            site_effectif_stats = site_resp_suivi if site_resp_suivi else (None if site_f_suivi == "Tous" else site_f_suivi)
+                            if site_effectif_stats and "Site" in df_pilote_suivi.columns:
+                                df_pilote_suivi_stats = df_pilote_suivi[df_pilote_suivi["Site"].astype(str).str.strip().str.upper() == site_effectif_stats.upper()]
+                                df_restantes = df_restantes[df_restantes["Site"].astype(str).str.strip().str.upper() == site_effectif_stats.upper()]
+                            else:
+                                df_pilote_suivi_stats = df_pilote_suivi
+                            total_pilote = len(df_pilote_suivi_stats)
+                            nb_realisees = len(cles_faites_suivi & set(df_pilote_suivi_stats["Cle"]))
+                            taux = round((nb_realisees/total_pilote*100), 1) if total_pilote else 0.0
 
-                            colonnes_verrouillees = ["Site", "Installation", "Designation", "Observation", "Code"]
-                            if est_admin_suivi:
-                                colonnes_verrouillees.append("Terminé")
-
-                            df_edit_out = st.data_editor(
-                                df_edit,
-                                hide_index=True,
-                                use_container_width=True,
-                                disabled=colonnes_verrouillees,
-                                column_config={"Terminé": st.column_config.CheckboxColumn("Terminé ?")},
-                                key="editeur_suivi_actions"
-                            )
-
-                            nb_coches = int(df_edit_out["Terminé"].sum()) if not df_edit_out.empty else 0
                             if not est_admin_suivi:
-                                if st.button(f"✅ Valider {nb_coches} action(s) terminée(s)", type="primary",
-                                             use_container_width=True, disabled=(nb_coches == 0), key="btn_valider_suivi"):
-                                    lignes_a_marquer = df_affiche_suivi.loc[df_edit_out[df_edit_out["Terminé"]].index].copy()
-                                    lignes_a_marquer["Pilote"] = pilote_suivi_choisi
-                                    ok = marquer_actions_realisees(lignes_a_marquer, nom_responsable_suivi)
-                                    if ok:
-                                        st.success(f"{nb_coches} action(s) enregistrée(s) comme réalisée(s).")
+                                # ---- Vue responsable : un tableau, avec colonnes Statut / Type de suivi / Commentaire ----
+                                TYPES_SUIVI = ["Immédiat", "Sous-traitance", "Planifié"]
+
+                                df_edit = df_affiche_suivi[["Site", "Installation", "Désignation", "Observation", "Code"]].copy()
+                                df_edit.insert(0, "Statut", "En cours")
+                                df_edit["Type de suivi"] = df_affiche_suivi["Cle"].map(
+                                    lambda c: info_encours_par_cle.get(c, {}).get("Type") or None
+                                )
+                                df_edit["Commentaire"] = df_affiche_suivi["Cle"].map(
+                                    lambda c: info_encours_par_cle.get(c, {}).get("Commentaire", "")
+                                )
+
+                                df_edit_out = st.data_editor(
+                                    df_edit,
+                                    hide_index=True,
+                                    use_container_width=True,
+                                    disabled=["Site", "Installation", "Désignation", "Observation", "Code"],
+                                    column_config={
+                                        "Statut": st.column_config.SelectboxColumn("Statut", options=["En cours", "Terminé"], required=True),
+                                        "Type de suivi": st.column_config.SelectboxColumn("Type de suivi (si en cours)", options=TYPES_SUIVI, required=False),
+                                        "Commentaire": st.column_config.TextColumn("Commentaire (optionnel)"),
+                                    },
+                                    key="editeur_suivi_actions"
+                                )
+
+                                nb_termine_saisi = int((df_edit_out["Statut"] == "Terminé").sum()) if not df_edit_out.empty else 0
+                                if st.button(f"💾 Enregistrer les modifications ({nb_termine_saisi} terminée(s))", type="primary",
+                                             use_container_width=True, key="btn_valider_suivi"):
+                                    erreur_maj = False
+                                    nb_termine_ok, nb_encours_ok = 0, 0
+                                    for idx, row_edit in df_edit_out.iterrows():
+                                        row_orig = df_affiche_suivi.loc[idx].copy()
+                                        row_orig["Pilote"] = pilote_suivi_choisi
+                                        statut_c = row_edit["Statut"]
+                                        type_c = row_edit.get("Type de suivi")
+                                        commentaire_c = row_edit.get("Commentaire", "")
+                                        if statut_c == "Terminé":
+                                            ok = marquer_actions_realisees(pd.DataFrame([row_orig]), nom_responsable_suivi)
+                                            erreur_maj = erreur_maj or not ok
+                                            nb_termine_ok += 1 if ok else 0
+                                        else:
+                                            info_prealable = info_encours_par_cle.get(row_orig["Cle"], {})
+                                            type_defaut = info_prealable.get("Type", "")
+                                            commentaire_defaut = info_prealable.get("Commentaire", "")
+                                            if (type_c or "") == (type_defaut or "") and (commentaire_c or "") == (commentaire_defaut or ""):
+                                                continue  # rien n'a changé pour cette action, inutile de ré-écrire
+                                            ok = enregistrer_statut_en_cours(row_orig, type_c or TYPES_SUIVI[0], commentaire_c or "", nom_responsable_suivi)
+                                            erreur_maj = erreur_maj or not ok
+                                            nb_encours_ok += 1 if ok else 0
+
+                                    if erreur_maj:
+                                        st.error("Une erreur est survenue lors de l'enregistrement (vérifiez les onglets « ActionsRealisees » / « SuiviActions »).")
+                                    else:
+                                        st.success(f"{nb_termine_ok} action(s) marquée(s) terminée(s), {nb_encours_ok} mise(s) à jour « en cours ».")
                                         st.cache_data.clear()
                                         st.rerun()
-                                    else:
-                                        st.error("Erreur lors de l'enregistrement dans Google Sheets (vérifiez l'onglet « ActionsRealisees »).")
                             else:
+                                # ---- Vue admin : tableau récapitulatif en lecture seule ----
+                                df_recap = df_affiche_suivi[["Site", "Installation", "Désignation", "Observation", "Code"]].copy()
+                                df_recap["Type de suivi"] = df_affiche_suivi["Cle"].map(
+                                    lambda c: info_encours_par_cle.get(c, {}).get("Type") or "Non défini"
+                                )
+                                df_recap["Commentaire"] = df_affiche_suivi["Cle"].map(
+                                    lambda c: info_encours_par_cle.get(c, {}).get("Commentaire", "")
+                                )
+                                st.dataframe(df_recap, hide_index=True, use_container_width=True)
                                 st.caption("ℹ️ Vue administrateur en lecture seule.")
 
                         with st.expander(f"🗂️ Historique des actions réalisées ({len(df_hist_pilote)})"):
                             if df_hist_pilote.empty:
                                 st.info("Aucune action réalisée pour le moment.")
                             else:
-                                cols_hist = [c for c in ["DateRealisation", "Site", "Installation", "Designation", "Observation", "Code", "Responsable"] if c in df_hist_pilote.columns]
+                                cols_hist = [c for c in ["DateRealisation", "Site", "Installation", "Désignation", "Observation", "Code", "Responsable"] if c in df_hist_pilote.columns]
                                 df_aff_hist = df_hist_pilote[cols_hist]
                                 if "DateRealisation" in df_aff_hist.columns:
                                     df_aff_hist = df_aff_hist.sort_values("DateRealisation", ascending=False)
@@ -3950,3 +4270,50 @@ if acces_autorise:
                         fig_gauge.update_layout(height=220, margin=dict(t=20, b=10, l=20, r=20), paper_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig_gauge, use_container_width=True, config={'displayModeBar': False})
                         st.markdown(f"<p style='text-align:center;font-size:12px;color:#64748B;'>{nb_realisees} / {total_pilote} action(s) réalisée(s)</p>",unsafe_allow_html=True)
+
+                    # ---- Graphes complémentaires (Admin uniquement), affichés sous le tableau ----
+                    if est_admin_suivi:
+                        st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
+                        st.markdown(f"<p style='font-size:1.05rem;font-weight:700;color:#1E3A8A;'>📈 Analyse du suivi — {nom_responsable_suivi}</p>",unsafe_allow_html=True)
+
+                        gA, gB = st.columns(2)
+
+                        # --- Graphe 1 : % Terminé vs En cours (pour le pilote sélectionné) ---
+                        with gA:
+                            en_cours_total = max(total_pilote - nb_realisees, 0)
+                            if total_pilote:
+                                df_g1 = pd.DataFrame({"Statut": ["Terminé", "En cours"], "Nombre": [nb_realisees, en_cours_total]})
+                                fig1 = px.pie(df_g1, values="Nombre", names="Statut", hole=0.6, color="Statut",
+                                              color_discrete_map={"Terminé": "#16A34A", "En cours": "#F97316"})
+                                fig1.update_traces(textposition='inside', textinfo='percent+value')
+                                fig1.update_layout(title="Terminé vs En cours", title_x=0.5,
+                                                    margin=dict(t=40,b=10,l=10,r=10), height=300,
+                                                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                                                    legend=dict(font=dict(size=9)))
+                                st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
+                            else:
+                                st.info("Aucune donnée.")
+
+                        # --- Graphe 2 : % Immédiat / Sous-traitance / Planifié parmi les actions en cours ---
+                        with gB:
+                            cles_en_cours_g = set(df_restantes["Cle"]) if "Cle" in df_restantes.columns else set()
+                            compte_type_g = {"Immédiat": 0, "Sous-traitance": 0, "Planifié": 0, "Non défini": 0}
+                            for cle_g in cles_en_cours_g:
+                                t_g = info_encours_par_cle.get(cle_g, {}).get("Type") or "Non défini"
+                                if t_g not in compte_type_g:
+                                    t_g = "Non défini"
+                                compte_type_g[t_g] += 1
+                            df_g2 = pd.DataFrame({"Type": list(compte_type_g.keys()), "Nombre": list(compte_type_g.values())})
+                            df_g2 = df_g2[df_g2["Nombre"] > 0]
+                            if not df_g2.empty:
+                                fig2 = px.pie(df_g2, values="Nombre", names="Type", hole=0.6, color="Type",
+                                              color_discrete_map={"Immédiat": "#2563EB", "Sous-traitance": "#F59E0B",
+                                                                   "Planifié": "#8B5CF6", "Non défini": "#94A3B8"})
+                                fig2.update_traces(textposition='inside', textinfo='percent+value')
+                                fig2.update_layout(title="Répartition des actions en cours", title_x=0.5,
+                                                    margin=dict(t=40,b=10,l=10,r=10), height=300,
+                                                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                                                    legend=dict(font=dict(size=9)))
+                                st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
+                            else:
+                                st.info("Aucune action en cours.")
