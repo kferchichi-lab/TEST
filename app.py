@@ -3234,6 +3234,7 @@ if acces_autorise:
                     use_container_width=True, key="dl_calendrier_excel",
                 )
         # ---- Relance des échéances proches (notification manuelle par e-mail) ----
+            st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
             st.markdown("<br>",unsafe_allow_html=True)
             st.markdown("### 📧 Relance des échéances")
             st.caption("Envoie un e-mail récapitulatif des contrôles en retard ou à venir sous 30 jours. ")
