@@ -2450,28 +2450,23 @@ df_planning = charger_donnees_sheet("Planning")
 # SIDEBAR
 # ==========================================
 with st.sidebar:
-    # ---- Force la sidebar à occuper toute la hauteur de l'écran en colonne flex,
-    # afin que le pied de page (#tpr-sidebar-footer) reste TOUJOURS collé tout en bas,
-    # peu importe la quantité de contenu affichée au-dessus (Visiteur/Responsable/Admin). ----
+    # ---- Le pied de page (#tpr-sidebar-footer) est épinglé tout en bas de la sidebar via
+    # position:fixed. Comme Streamlit applique un `transform` sur la section de la sidebar
+    # (pour son animation d'ouverture/fermeture), ce `transform` crée un nouveau repère de
+    # positionnement : bottom:0 se cale donc sur le bas de la SIDEBAR elle-même (et non sur
+    # le bas de la page). Le contenu au-dessus (logo, titre, champs) garde ainsi toujours
+    # exactement la même position, quel que soit le profil sélectionné. ----
     st.markdown("""<style>
         section[data-testid="stSidebar"]{
             overflow:hidden!important;
         }
-        section[data-testid="stSidebar"] > div:first-child{
-            height:100vh!important;
-            overflow:hidden!important;
-        }
-        section[data-testid="stSidebar"] div[data-testid="stSidebarUserContent"]{
-            display:flex!important;
-            flex-direction:column!important;
-            height:100vh!important;
-            overflow:hidden!important;
-        }
-        section[data-testid="stSidebar"] div[data-testid="stSidebarUserContent"] > div:has(#tpr-sidebar-footer){
-            margin-top:auto!important;
-        }
         #tpr-sidebar-footer{
-            padding-top:20px!important;
+            position:fixed!important;
+            bottom:0!important;
+            left:0!important;
+            width:100%!important;
+            background:#F8FAFC!important;
+            z-index:999!important;
         }
     </style>""",unsafe_allow_html=True)
     st.markdown("<br>",unsafe_allow_html=True)
@@ -2555,11 +2550,11 @@ with st.sidebar:
                 st.session_state.responsable_actif=None
 
     # ---- Pied de page de la sidebar : version de l'application + copyright ----
-    # id="tpr-sidebar-footer" est utilisé par le CSS ci-dessus (margin-top:auto) pour
-    # forcer ce bloc tout en bas de la sidebar, sans jamais se déplacer.
+    # id="tpr-sidebar-footer" est utilisé par le CSS ci-dessus (position:fixed) pour
+    # ancrer ce bloc tout en bas de la sidebar, sans jamais bouger ni décaler le contenu au-dessus.
     APP_VERSION = "v1.0.0"
-    st.markdown(f"""<div id="tpr-sidebar-footer" style="text-align:center;padding-bottom:18px;border-top:1px solid #E2E8F0;">
-        <p style="font-size:0.75rem;color:#94A3B8;margin:12px 0 0 0;font-weight:600;letter-spacing:0.3px;">{APP_VERSION}</p>
+    st.markdown(f"""<div id="tpr-sidebar-footer" style="text-align:center;padding:12px 0 18px 0;border-top:1px solid #E2E8F0;">
+        <p style="font-size:0.75rem;color:#94A3B8;margin:0;font-weight:600;letter-spacing:0.3px;">{APP_VERSION}</p>
         <p style="font-size:0.72rem;color:#94A3B8;margin:2px 0 0 0;">© 2026 TPR - Application de Suivi Réglementaire</p>
     </div>""", unsafe_allow_html=True)
 
