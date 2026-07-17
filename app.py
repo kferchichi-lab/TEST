@@ -13,36 +13,191 @@ import calendar
 import base64
 import io
 import unicodedata
+import hashlib
+import hmac
+import secrets as secrets_lib
+import smtplib
+from email.mime.text import MIMEText
 from weasyprint import HTML
 import fitz
 
-def afficher_apercu_pdf(pdf_bytes, hauteur=800):
+# ==========================================
+# SÉCURITÉ : HACHAGE DES MOTS DE PASSE
+# ==========================================
+# Les mots de passe ne doivent JAMAIS être stockés/comparés en clair dans le code.
+# On utilise PBKDF2-HMAC-SHA256 (module standard `hashlib`, aucune dépendance
+# supplémentaire à installer). Le hash stocké a la forme "sel_hex$hash_hex".
+#
+# Pour générer le hash d'un mot de passe (une seule fois, en local) :
+#   python3 -c "from app import hacher_mot_de_passe; print(hacher_mot_de_passe('MonMotDePasse123*'))"
+# puis copier la chaîne obtenue dans .streamlit/secrets.toml (voir plus bas).
+_PBKDF2_ITERATIONS = 200_000
+
+def hacher_mot_de_passe(mot_de_passe: str, sel: bytes = None) -> str:
+    """Retourne 'sel_hex$hash_hex' à stocker dans st.secrets."""
+    if sel is None:
+        sel = secrets_lib.token_bytes(16)
+    h = hashlib.pbkdf2_hmac("sha256", mot_de_passe.encode("utf-8"), sel, _PBKDF2_ITERATIONS)
+    return f"{sel.hex()}${h.hex()}"
+
+def verifier_mot_de_passe(mot_de_passe_saisi: str, hash_stocke: str) -> bool:
+    """Compare en temps constant le mot de passe saisi au hash stocké (format 'sel_hex$hash_hex')."""
+    try:
+        sel_hex, hash_hex = hash_stocke.split("$", 1)
+        sel = bytes.fromhex(sel_hex)
+        h_saisi = hashlib.pbkdf2_hmac("sha256", mot_de_passe_saisi.encode("utf-8"), sel, _PBKDF2_ITERATIONS)
+        return hmac.compare_digest(h_saisi.hex(), hash_hex)
+    except Exception:
+        return False
+
+# ==========================================
+# SÉCURITÉ : LIMITATION DES TENTATIVES (ANTI-BRUTEFORCE)
+# ==========================================
+# Verrouillage par session Streamlit après plusieurs échecs consécutifs.
+# ⚠️ Limite connue : basé sur st.session_state, donc propre à un navigateur/onglet ;
+# n'empêche pas une attaque distribuée sur plusieurs sessions. Pour une protection
+# globale, il faudrait comptabiliser les échecs côté serveur (ex. dans Google Sheets
+# ou une base externe), ce qui dépasse la portée de ce correctif ponctuel.
+_MAX_TENTATIVES = 5
+_DUREE_BLOCAGE_SECONDES = 300  # 5 minutes
+
+def tentative_bloquee(cle: str) -> int:
+    """Retourne le nb de secondes restant avant déblocage (0 si non bloqué)."""
+    blocage_jusqu_a = st.session_state.get(f"blocage_{cle}", 0)
+    reste = blocage_jusqu_a - time.time()
+    return max(0, int(reste))
+
+def enregistrer_echec(cle: str):
+    nb = st.session_state.get(f"echecs_{cle}", 0) + 1
+    st.session_state[f"echecs_{cle}"] = nb
+    if nb >= _MAX_TENTATIVES:
+        st.session_state[f"blocage_{cle}"] = time.time() + _DUREE_BLOCAGE_SECONDES
+        st.session_state[f"echecs_{cle}"] = 0
+
+def reinitialiser_echecs(cle: str):
+    st.session_state[f"echecs_{cle}"] = 0
+    st.session_state[f"blocage_{cle}"] = 0
+
+# ==========================================
+# ENVOI D'E-MAILS (SMTP) — utilisé pour la vérification Visiteur (code OTP)
+# et pour les relances automatiques d'échéances
+# ==========================================
+# Configuration attendue dans .streamlit/secrets.toml :
+#   [smtp]
+#   host = "smtp.gmail.com"
+#   port = 587
+#   utilisateur = "compte@domaine.com"
+#   mot_de_passe = "..."          # mot de passe d'application, pas le mot de passe principal
+#   expediteur = "Contrôle Réglementaire <compte@domaine.com>"
+def envoyer_email(destinataire: str, sujet: str, corps_texte: str) -> tuple:
+    """Envoie un e-mail texte simple via SMTP. Retourne (succes: bool, erreur: str|None)."""
+    try:
+        cfg = st.secrets["smtp"]
+    except Exception:
+        return False, "Configuration SMTP absente (section [smtp] manquante dans secrets.toml)."
+    try:
+        msg = MIMEText(corps_texte, "plain", "utf-8")
+        msg["Subject"] = sujet
+        msg["From"] = cfg.get("expediteur", cfg.get("utilisateur"))
+        msg["To"] = destinataire
+        with smtplib.SMTP(cfg["host"], int(cfg.get("port", 587)), timeout=15) as serveur:
+            serveur.starttls()
+            serveur.login(cfg["utilisateur"], cfg["mot_de_passe"])
+            serveur.sendmail(msg["From"], [destinataire], msg.as_string())
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+# ==========================================
+# JOURNAL D'AUDIT (traçabilité des actions de modification)
+# ==========================================
+# Écrit chaque action de création/modification/suppression dans l'onglet
+# Google Sheet "AuditLog" (à créer manuellement : colonnes Date | Utilisateur | Action | Détails).
+def journaliser_action(utilisateur: str, action: str, details: str = ""):
+    try:
+        now_str = datetime.datetime.now(TZ).strftime("%d/%m/%Y %H:%M:%S")
+        sheets_append("AuditLog", [now_str, utilisateur or "inconnu", action, details])
+    except Exception:
+        pass  # la journalisation ne doit jamais bloquer l'action métier principale
+
+def utilisateur_courant() -> str:
+    """Identifie l'utilisateur actif (Admin / identifiant responsable / e-mail visiteur),
+    pour le journal d'audit. Robuste même si appelé avant que `role` n'existe encore."""
+    try:
+        if role == "Admin" and password_correct:
+            return "Admin"
+        if role == "Responsable" and st.session_state.get("responsable_connecte"):
+            return f"Responsable:{st.session_state.get('responsable_actif','?')}"
+        if role == "Visiteur" and st.session_state.get("email_visiteur"):
+            return f"Visiteur:{st.session_state.get('email_visiteur')}"
+    except NameError:
+        pass
+    return "inconnu"
+
+def afficher_apercu_pdf(pdf_bytes, hauteur=800, cle=None):
+    """Aperçu PDF paginé : ne rend (PyMuPDF, 130 DPI) que la page actuellement affichée,
+    au lieu de toutes les pages d'un coup — beaucoup plus léger pour les rapports longs."""
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         nb_pages = len(doc)
-        for i, page in enumerate(doc):
-            pix = page.get_pixmap(dpi=130)
-            img_bytes = pix.tobytes("png")
-            st.image(img_bytes, use_container_width=True)
-            if nb_pages > 1:
-                st.caption(f"Page {i + 1} / {nb_pages}")
+        if cle is None:
+            cle = hashlib.md5(pdf_bytes[:4096]).hexdigest()[:10]
+        etat_key = f"page_apercu_{cle}"
+        if etat_key not in st.session_state:
+            st.session_state[etat_key] = 0
+        st.session_state[etat_key] = max(0, min(st.session_state[etat_key], nb_pages - 1))
+
+        if nb_pages > 1:
+            c_prev, c_mid, c_next = st.columns([1, 3, 1])
+            with c_prev:
+                if st.button("⬅️ Précédente", key=f"prev_{cle}", use_container_width=True, disabled=(st.session_state[etat_key] <= 0)):
+                    st.session_state[etat_key] -= 1
+                    st.rerun()
+            with c_mid:
+                st.markdown(f"<p style='text-align:center;margin-top:6px;color:#475569;font-weight:600;'>Page {st.session_state[etat_key] + 1} / {nb_pages}</p>", unsafe_allow_html=True)
+            with c_next:
+                if st.button("Suivante ➡️", key=f"next_{cle}", use_container_width=True, disabled=(st.session_state[etat_key] >= nb_pages - 1)):
+                    st.session_state[etat_key] += 1
+                    st.rerun()
+
+        page = doc[st.session_state[etat_key]]
+        pix = page.get_pixmap(dpi=130)
+        img_bytes = pix.tobytes("png")
+        st.image(img_bytes, use_container_width=True)
+        if nb_pages > 1:
+            st.caption(f"Page {st.session_state[etat_key] + 1} / {nb_pages}")
         doc.close()
     except Exception as e:
         st.error(f"Impossible d'afficher l'aperçu du PDF : {e}")
         st.info("Vous pouvez tout de même télécharger le rapport ci-dessous.")
-    
-def afficher_apercu_pdf_grille(pdf_bytes, colonnes=2, largeur_colonne=380):
+
+def afficher_apercu_pdf_grille(pdf_bytes, colonnes=2, largeur_colonne=380, cle=None, taille_lot=6):
+    """Aperçu PDF en grille, chargé par lots (au lieu de rendre toutes les pages en une fois) :
+    seules les `taille_lot` premières pages sont rendues, avec un bouton pour en charger davantage."""
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         nb_pages = len(doc)
+        if cle is None:
+            cle = hashlib.md5(pdf_bytes[:4096]).hexdigest()[:10]
+        etat_key = f"nb_pages_affichees_{cle}"
+        if etat_key not in st.session_state:
+            st.session_state[etat_key] = min(taille_lot, nb_pages)
+
+        nb_a_afficher = min(st.session_state[etat_key], nb_pages)
         cols = st.columns(colonnes)
-        for i, page in enumerate(doc):
+        for i in range(nb_a_afficher):
+            page = doc[i]
             pix = page.get_pixmap(dpi=110)
             img_bytes = pix.tobytes("png")
             col = cols[i % colonnes]
             with col:
                 st.image(img_bytes, width=largeur_colonne)
                 st.caption(f"Page {i + 1} / {nb_pages}")
+
+        if nb_a_afficher < nb_pages:
+            if st.button(f"⬇️ Afficher {min(taille_lot, nb_pages - nb_a_afficher)} page(s) de plus ({nb_a_afficher}/{nb_pages})", key=f"plus_{cle}", use_container_width=True):
+                st.session_state[etat_key] = min(st.session_state[etat_key] + taille_lot, nb_pages)
+                st.rerun()
         doc.close()
     except Exception as e:
         st.error(f"Impossible d'afficher l'aperçu du PDF : {e}")
@@ -366,6 +521,54 @@ def construire_calendrier_controle(df_rapports: pd.DataFrame, annee_reference: i
 
     return pd.DataFrame(lignes)
 
+
+# ==========================================
+# NOTIFICATIONS / RELANCES D'ÉCHÉANCES
+# ==========================================
+# ⚠️ Streamlit n'exécute du code que lorsqu'une page est ouverte/interagie : il n'y a pas
+# de tâche planifiée en arrière-plan ici. Le bouton de relance (onglet Statistiques) doit
+# donc être déclenché manuellement par un administrateur, ou automatisé de l'extérieur
+# (ex. une tâche planifiée GitHub Actions / cron qui appelle un petit script Python
+# réutilisant ces mêmes fonctions, indépendamment de l'app Streamlit).
+def extraire_echeances_proches(df_calendrier: pd.DataFrame, jours_horizon: int = 30) -> list:
+    """Parcourt la colonne 'Dates planifiées' du calendrier et retourne la liste des échéances
+    en retard ou à venir dans les `jours_horizon` prochains jours : [{Site, Installation, Date, Jours}]."""
+    if df_calendrier.empty or "Dates planifiées" not in df_calendrier.columns:
+        return []
+    aujourd_hui = pd.Timestamp(datetime.date.today())
+    resultats = []
+    for _, row in df_calendrier.iterrows():
+        brut = str(row.get("Dates planifiées", "") or "")
+        if brut in ("", "-"):
+            continue
+        for morceau in brut.split("|"):
+            morceau = morceau.replace("★", "").strip()
+            try:
+                d = pd.to_datetime(morceau, format="%d/%m/%Y")
+            except Exception:
+                continue
+            jours = (d - aujourd_hui).days
+            if jours <= jours_horizon:
+                resultats.append({"Site": row.get("Site", ""), "Installation": row.get("Installation", ""),
+                                   "Date": d.strftime("%d/%m/%Y"), "Jours": int(jours)})
+    resultats.sort(key=lambda r: r["Jours"])
+    return resultats
+
+def construire_message_relance(echeances: list) -> str:
+    if not echeances:
+        return "Aucune échéance de contrôle réglementaire en retard ou à venir dans les 30 prochains jours."
+    lignes = ["Échéances de contrôle réglementaire à surveiller :", ""]
+    for e in echeances:
+        if e["Jours"] < 0:
+            statut = f"⚠️ EN RETARD de {abs(e['Jours'])} jour(s)"
+        elif e["Jours"] == 0:
+            statut = "📅 Aujourd'hui"
+        else:
+            statut = f"À venir dans {e['Jours']} jour(s)"
+        lignes.append(f"- [{e['Site']}] {e['Installation']} — prévue le {e['Date']} ({statut})")
+    lignes.append("")
+    lignes.append("Merci de vérifier la planification correspondante dans le Tableau de Bord Réglementaire.")
+    return "\n".join(lignes)
 
 def calculer_taux_realisation(df_calendrier: pd.DataFrame) -> dict:
     if df_calendrier.empty or "Nbr visites réalisées en 2026" not in df_calendrier.columns:
@@ -1349,6 +1552,17 @@ COULEURS_INS = {
     "Installations de gaz":      "#eda100",
     "Appareil pression de gaz":  "#4a3aa7",
 }
+# Couleur d'accent par site, pour une identification visuelle rapide dans les badges,
+# titres et graphes comparatifs (MEG = bleu, SGB = vert).
+COULEUR_SITE = {
+    "MEG": {"principale": "#2563EB", "claire": "#DBEAFE", "fonce": "#1E3A8A"},
+    "SGB": {"principale": "#059669", "claire": "#D1FAE5", "fonce": "#065F46"},
+}
+def badge_site(site: str) -> str:
+    """Retourne un petit badge HTML coloré selon le site (MEG bleu / SGB vert)."""
+    c = COULEUR_SITE.get(str(site).upper(), {"principale": "#64748B", "claire": "#F1F5F9", "fonce": "#334155"})
+    return (f'<span style="background:{c["claire"]};color:{c["fonce"]};padding:2px 10px;'
+            f'border-radius:999px;font-weight:700;font-size:12px;">{site}</span>')
 # Code interne (CI) de chaque type d'installation — adapte librement les libellés
 CI_CODES = {
     "Installations de gaz":       "B1",
@@ -1472,6 +1686,31 @@ st.html("""<style>
         text-align:center!important;
         width:100%!important;
         display:block!important;
+    }
+
+    /* ================= RESPONSIVE / MOBILE ================= */
+    @media (max-width: 768px){
+        h1{font-size:1.7rem!important;}
+        div[data-testid="stTabs"] button,
+        button[data-baseweb="tab"],
+        [role="tab"]{
+            font-size:13px!important;
+            padding:10px 14px!important;
+        }
+        div[data-testid="stTabs"] button p,
+        button[data-baseweb="tab"] p,
+        [role="tab"] p{
+            font-size:13px!important;
+        }
+        /* Les colonnes Streamlit passent en pile verticale sur petit écran */
+        div[data-testid="stHorizontalBlock"]{
+            flex-wrap:wrap!important;
+        }
+        div[data-testid="column"]{
+            min-width:100%!important;
+            flex:1 1 100%!important;
+        }
+        div[data-testid="stMetricValue"]{font-size:22px!important;}
     }
 </style>""")
 
@@ -1894,6 +2133,9 @@ def marquer_actions_realisees(df_lignes, responsable_nom):
             responsable_nom, date_str
         ])
         ok_total = ok_total and ok
+    if ok_total and not df_lignes.empty:
+        journaliser_action(utilisateur_courant(), "Action marquée réalisée",
+                            f"{len(df_lignes)} action(s), pilote={responsable_nom}")
     return ok_total
 
 
@@ -1919,6 +2161,9 @@ def enregistrer_statut_en_cours(row, type_suivi, commentaire, responsable_nom):
         row.get("Observation", ""), row.get("Code", ""), row.get("Pilote", ""),
         "En cours", type_suivi, commentaire, responsable_nom, date_str
     ])
+    if ok:
+        journaliser_action(utilisateur_courant(), "Action mise à jour (En cours)",
+                            f"{row.get('Code','')} — {type_suivi} — pilote={responsable_nom}")
     return ok
 
 
@@ -2012,6 +2257,10 @@ def lire_presence():
 
 def lire_logs():
     return sheets_lire("Logs","A:B")
+def lire_audit_log():
+    """Lit l'onglet AuditLog : Date | Utilisateur | Action | Détails.
+    (Onglet à créer manuellement dans le Google Sheet s'il n'existe pas encore.)"""
+    return sheets_lire("AuditLog", "A:D")
 def lire_exigences():
     """Lit l'onglet Exigences."""
     return sheets_lire("Exigences", "A:F")
@@ -2032,9 +2281,15 @@ def ecrire_contrat(lien_pdf):
                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
                 params={"valueInputOption": "RAW"},
                 json={"values": [[lien_pdf]]}, timeout=15)
-            return (resp.status_code == 200), ""
+            ok = (resp.status_code == 200)
+            if ok:
+                journaliser_action(utilisateur_courant(), "Contrat mis à jour", lien_pdf)
+            return ok, ""
 
-    return sheets_append("Exigences", ["Contrat", "", "", "", "", lien_pdf])
+    ok, msg = sheets_append("Exigences", ["Contrat", "", "", "", "", lien_pdf])
+    if ok:
+        journaliser_action(utilisateur_courant(), "Contrat créé", lien_pdf)
+    return ok, msg
 
 
 def supprimer_contrat():
@@ -2052,12 +2307,18 @@ def supprimer_contrat():
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         params={"valueInputOption": "RAW"},
         json={"values": [[""]]}, timeout=15)
-    return resp.status_code == 200
+    ok = resp.status_code == 200
+    if ok:
+        journaliser_action(utilisateur_courant(), "Contrat supprimé")
+    return ok
 
 
 def ajouter_equipement(site, installation, sous_eq, nombre):
     """Ajoute une ligne équipement dans Exigences."""
-    return sheets_append("Exigences", ["Equipement", site, installation, sous_eq, str(nombre), ""])
+    ok, msg = sheets_append("Exigences", ["Equipement", site, installation, sous_eq, str(nombre), ""])
+    if ok:
+        journaliser_action(utilisateur_courant(), "Equipement ajouté", f"{site} / {installation} / {sous_eq} x{nombre}")
+    return ok, msg
 
 
 def supprimer_equipement_ligne(num_ligne_sheet):
@@ -2069,7 +2330,10 @@ def supprimer_equipement_ligne(num_ligne_sheet):
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         params={"valueInputOption": "RAW"},
         json={"values": [["", "", "", "", "", ""]]}, timeout=15)
-    return resp.status_code == 200
+    ok = resp.status_code == 200
+    if ok:
+        journaliser_action(utilisateur_courant(), "Equipement supprimé", f"ligne {num_ligne_sheet}")
+    return ok
 
 
 # ==========================================
@@ -2082,7 +2346,10 @@ def lire_points_reserve():
 
 def ajouter_point_reserve(site, installation, sous_eq, nombre):
     """Ajoute une ligne dans l'onglet PointsReserve."""
-    return sheets_append("PointsReserve", [site, installation, sous_eq, str(nombre)])
+    ok, msg = sheets_append("PointsReserve", [site, installation, sous_eq, str(nombre)])
+    if ok:
+        journaliser_action(utilisateur_courant(), "Point de réserve ajouté", f"{site} / {installation} / {sous_eq} x{nombre}")
+    return ok, msg
 
 
 # ==========================================
@@ -2131,7 +2398,10 @@ def lire_points_reserve_nature():
 def ajouter_point_reserve_nature(site, installation, nombre, code_nature):
     """Ajoute une ligne dans l'onglet PointsReserveNature. Le pilote est calculé depuis le code de la nature."""
     nature_nom, pilote = NATURE_PILOTE[code_nature]
-    return sheets_append("PointsReserveNature", [site, installation, str(nombre), nature_nom, pilote])
+    ok, msg = sheets_append("PointsReserveNature", [site, installation, str(nombre), nature_nom, pilote])
+    if ok:
+        journaliser_action(utilisateur_courant(), "Point de réserve (nature) ajouté", f"{site} / {installation} — {nature_nom} x{nombre}")
+    return ok, msg
 
 
 def supprimer_ligne_generique(onglet, num_ligne_sheet, nb_colonnes):
@@ -2144,7 +2414,10 @@ def supprimer_ligne_generique(onglet, num_ligne_sheet, nb_colonnes):
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         params={"valueInputOption": "RAW"},
         json={"values": [[""] * nb_colonnes]}, timeout=15)
-    return resp.status_code == 200
+    ok = resp.status_code == 200
+    if ok:
+        journaliser_action(utilisateur_courant(), "Ligne supprimée", f"onglet={onglet}, ligne={num_ligne_sheet}")
+    return ok
 # ==========================================
 # CHARGEMENT DONNÉES
 # ==========================================
@@ -2178,46 +2451,86 @@ with st.sidebar:
     password_correct=False
 
     # ---- Comptes Responsable (identifiant + mot de passe) ----
+    # Les mots de passe ne sont plus stockés en clair : seul un hash PBKDF2 (sel + hash)
+    # figure dans le code, et il est prioritairement lu depuis st.secrets["auth"] si
+    # configuré (recommandé). Les valeurs ci-dessous sont les hashs des anciens mots de
+    # passe (admin123*, SABER123*, HSE123*, AICHA123*, chafik123*) — change-les dès que
+    # possible en générant de nouveaux hashs avec `hacher_mot_de_passe("...")`.
+    #
+    # Pour passer entièrement par secrets.toml (recommandé), ajoute dans
+    # .streamlit/secrets.toml :
+    #   [auth]
+    #   admin_hash = "sel_hex$hash_hex"
+    #   [auth.responsables]
+    #   SABER = "sel_hex$hash_hex"
+    #   HSE   = "sel_hex$hash_hex"
+    #   ...
+    ADMIN_HASH_DEFAUT = "69d097edbe715222649bfc7296f14331$ed69ae3c1298c0254a053fa6650745b588637332095855e2541c1aeb784fff98"
     RESPONSABLES={
-        "SABER": {"password":"SABER123*","nom":"Saber BEN CHAABEN","entites":["Maintenance"],"site":"MEG"},
-        "HSE":   {"password":"HSE123*",  "nom":"Montassar MEHRABI","entites":["HSE"],"site":None},
-        "AICHA": {"password":"AICHA123*","nom":"Aïcha BELLAKHAL",  "entites":["BT","Chef service BT","RH","DG"],"site":None},
-        "CHAFIK": {"password":"chafik123*","nom":"Chafik ABID",    "entites":["Maintenance"],"site":"SGB"},
+        "SABER": {"hash":"df08cf138fa54315e428e454a2bfcd91$2a12dbc095764565b0fe5682001a39eb738dc01c1b8c4fbedead2a9d170b3a13","nom":"Saber BEN CHAABEN","entites":["Maintenance"],"site":"MEG"},
+        "HSE":   {"hash":"316b35609d01dcc04bd1cc0610bc6768$a3835ace3975737dcda29c8c83ff6e7cbab3a223a40ec464ea4d6dfd4cf01da1",  "nom":"Montassar MEHRABI","entites":["HSE"],"site":None},
+        "AICHA": {"hash":"4c990dd6d323e5c52ed2175e4ebc9580$5bc468e84a0d1323ee52a1d6b1e0281d27c9ddf184b417290fceeacc10ba6a99","nom":"Aïcha BELLAKHAL",  "entites":["BT","Chef service BT","RH","DG"],"site":None},
+        "CHAFIK": {"hash":"a69216e51a745c746dce04d1d9a9ea3f$9263b18f3fdfb31fabd1a912dc8009fe054b2e0b1818e2c1f090ca07494f150f","nom":"Chafik ABID",    "entites":["Maintenance"],"site":"SGB"},
     }
+    # Surcharge par st.secrets si configuré (prioritaire sur les valeurs par défaut ci-dessus)
+    try:
+        ADMIN_HASH = st.secrets["auth"]["admin_hash"]
+    except Exception:
+        ADMIN_HASH = ADMIN_HASH_DEFAUT
+    try:
+        _hash_secrets = st.secrets["auth"]["responsables"]
+        for _id, _h in _hash_secrets.items():
+            if _id in RESPONSABLES:
+                RESPONSABLES[_id]["hash"] = _h
+    except Exception:
+        pass
+
     if "responsable_connecte" not in st.session_state: st.session_state.responsable_connecte=False
     if "responsable_actif" not in st.session_state: st.session_state.responsable_actif=None
 
     if role=="Admin":
-        password=st.text_input("Code d'accès :",type="password",placeholder="•••")
-        if password=="admin123*":
-            password_correct=True
-            st.success("Accès administrateur validé")
-            if "responsable_log_enregistre" not in st.session_state:
-                st.session_state.responsable_log_enregistre=True
-                now_str=datetime.datetime.now(TZ).strftime("%d/%m/%Y %H:%M")
-                sheets_append("Logs",[now_str,"responsable@admin"])
-        elif password:
-            st.error("Code d'accès incorrect")
-    elif role=="Responsable":
-        identifiant=st.text_input("Identifiant :",placeholder="Identifiant").strip().upper()
-        mdp_resp=st.text_input("Mot de passe :",type="password",placeholder="•••")
-        if identifiant and mdp_resp:
-            compte=RESPONSABLES.get(identifiant)
-            if compte and mdp_resp==compte["password"]:
-                st.session_state.responsable_connecte=True
-                st.session_state.responsable_actif=identifiant
-                st.success(f"Accès responsable validé : {compte['nom']}")
-                if st.session_state.get("responsable_dernier_log")!=identifiant:
-                    st.session_state.responsable_dernier_log=identifiant
+        secondes_restantes = tentative_bloquee("admin")
+        if secondes_restantes > 0:
+            st.error(f"🔒 Trop de tentatives échouées. Réessaie dans {secondes_restantes} s.")
+        else:
+            password=st.text_input("Code d'accès :",type="password",placeholder="•••")
+            if password and verifier_mot_de_passe(password, ADMIN_HASH):
+                password_correct=True
+                reinitialiser_echecs("admin")
+                st.success("Accès administrateur validé")
+                if "responsable_log_enregistre" not in st.session_state:
+                    st.session_state.responsable_log_enregistre=True
                     now_str=datetime.datetime.now(TZ).strftime("%d/%m/%Y %H:%M")
-                    sheets_append("Logs",[now_str,f"{identifiant.lower()}@responsable"])
+                    sheets_append("Logs",[now_str,"responsable@admin"])
+            elif password:
+                enregistrer_echec("admin")
+                st.error("Code d'accès incorrect")
+    elif role=="Responsable":
+        secondes_restantes = tentative_bloquee("responsable")
+        if secondes_restantes > 0:
+            st.error(f"🔒 Trop de tentatives échouées. Réessaie dans {secondes_restantes} s.")
+        else:
+            identifiant=st.text_input("Identifiant :",placeholder="Identifiant").strip().upper()
+            mdp_resp=st.text_input("Mot de passe :",type="password",placeholder="•••")
+            if identifiant and mdp_resp:
+                compte=RESPONSABLES.get(identifiant)
+                if compte and verifier_mot_de_passe(mdp_resp, compte["hash"]):
+                    st.session_state.responsable_connecte=True
+                    st.session_state.responsable_actif=identifiant
+                    reinitialiser_echecs("responsable")
+                    st.success(f"Accès responsable validé : {compte['nom']}")
+                    if st.session_state.get("responsable_dernier_log")!=identifiant:
+                        st.session_state.responsable_dernier_log=identifiant
+                        now_str=datetime.datetime.now(TZ).strftime("%d/%m/%Y %H:%M")
+                        sheets_append("Logs",[now_str,f"{identifiant.lower()}@responsable"])
+                else:
+                    st.session_state.responsable_connecte=False
+                    st.session_state.responsable_actif=None
+                    enregistrer_echec("responsable")
+                    st.error("Identifiant ou mot de passe incorrect")
             else:
                 st.session_state.responsable_connecte=False
                 st.session_state.responsable_actif=None
-                st.error("Identifiant ou mot de passe incorrect")
-        else:
-            st.session_state.responsable_connecte=False
-            st.session_state.responsable_actif=None
 
 # ==========================================
 # CONTRÔLE D'ACCÈS
@@ -2243,25 +2556,87 @@ with col_icone:
     st.image(MAINTENANCE_ICON_PATH, use_container_width=True)
 
 if not acces_autorise and role=="Visiteur":
-    st.markdown("""<div style="margin-bottom:14px;">
-        <p style="color:#0F172A;font-size:15px;font-weight:700;margin:0 0 6px 0;">Adresse e-mail :</p>
-        <p style="color:#64748B;font-size:13.5px;margin:0;line-height:1.5;">Veuillez renseigner votre adresse e-mail.</p>
-    </div>""",unsafe_allow_html=True)
-    email_saisi=st.text_input("Adresse e-mail :",placeholder="exemple@domain.com",label_visibility="collapsed")
-    if st.button("Valider l'accès",type="primary"):
-        if format_email_valide(email_saisi):
-            st.session_state.email_visiteur=email_saisi
-            with st.spinner("Enregistrement de votre accès..."):
-                succes,erreur=ecrire_log(email_saisi)
-                mettre_a_jour_presence(email_saisi)
-            if succes:
-                st.success("✅ Accès accordé. Bienvenue !")
-                st.rerun()
+    # ---- Vérification réelle de l'adresse e-mail par code à usage unique (OTP) ----
+    # Étape 1 : l'utilisateur saisit son e-mail et reçoit un code à 6 chiffres (valable 10 min).
+    # Étape 2 : il doit saisir ce code pour prouver qu'il possède bien cette boîte e-mail.
+    if "otp_code" not in st.session_state: st.session_state.otp_code = None
+    if "otp_email" not in st.session_state: st.session_state.otp_email = None
+    if "otp_expire_a" not in st.session_state: st.session_state.otp_expire_a = 0
+    if "otp_dernier_envoi" not in st.session_state: st.session_state.otp_dernier_envoi = 0
+
+    otp_deja_envoye = st.session_state.otp_code is not None and time.time() < st.session_state.otp_expire_a
+
+    if not otp_deja_envoye:
+        st.markdown("""<div style="margin-bottom:14px;">
+            <p style="color:#0F172A;font-size:15px;font-weight:700;margin:0 0 6px 0;">Adresse e-mail :</p>
+            <p style="color:#64748B;font-size:13.5px;margin:0;line-height:1.5;">Un code de vérification à 6 chiffres vous sera envoyé par e-mail.</p>
+        </div>""",unsafe_allow_html=True)
+        email_saisi=st.text_input("Adresse e-mail :",placeholder="exemple@domain.com",label_visibility="collapsed",key="otp_email_input")
+        blocage_otp = tentative_bloquee("otp")
+        if blocage_otp > 0:
+            st.error(f"🔒 Trop de tentatives échouées. Réessaie dans {blocage_otp} s.")
+        elif st.button("Envoyer le code de vérification",type="primary"):
+            if not format_email_valide(email_saisi):
+                st.error("Veuillez saisir une adresse e-mail valide.")
+            elif time.time() - st.session_state.otp_dernier_envoi < 60:
+                st.warning("Merci de patienter avant de redemander un code.")
             else:
-                st.error(f"❌ Erreur d'enregistrement : {erreur}")
-                st.stop()
-        else:
-            st.error("Veuillez saisir une adresse e-mail valide.")
+                code = f"{secrets_lib.randbelow(1_000_000):06d}"
+                succes_envoi, erreur_envoi = envoyer_email(
+                    email_saisi,
+                    "Votre code d'accès — Tableau de Bord Réglementaire",
+                    f"Votre code de vérification est : {code}\n\nCe code est valable 10 minutes.\nSi vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail."
+                )
+                if succes_envoi:
+                    st.session_state.otp_code = code
+                    st.session_state.otp_email = email_saisi
+                    st.session_state.otp_expire_a = time.time() + 600
+                    st.session_state.otp_dernier_envoi = time.time()
+                    st.success("✅ Code envoyé. Vérifiez votre boîte e-mail (et vos spams).")
+                    st.rerun()
+                elif "Configuration SMTP absente" in (erreur_envoi or ""):
+                    # Repli si l'administrateur n'a pas encore configuré le SMTP : on ne bloque
+                    # pas l'accès, mais on ne peut pas garantir que l'adresse est vérifiée.
+                    st.session_state.email_visiteur=email_saisi
+                    with st.spinner("Enregistrement de votre accès..."):
+                        succes,erreur=ecrire_log(email_saisi)
+                        mettre_a_jour_presence(email_saisi)
+                    st.warning("⚠️ Vérification par code indisponible (SMTP non configuré côté administrateur) — accès accordé sans confirmation de l'e-mail.")
+                    st.rerun()
+                else:
+                    st.error(f"❌ Impossible d'envoyer le code : {erreur_envoi}")
+    else:
+        st.markdown(f"""<div style="margin-bottom:14px;">
+            <p style="color:#0F172A;font-size:15px;font-weight:700;margin:0 0 6px 0;">Code de vérification :</p>
+            <p style="color:#64748B;font-size:13.5px;margin:0;line-height:1.5;">Un code a été envoyé à {st.session_state.otp_email}. Saisissez-le ci-dessous.</p>
+        </div>""",unsafe_allow_html=True)
+        code_saisi = st.text_input("Code :",placeholder="123456",label_visibility="collapsed",max_chars=6,key="otp_code_input")
+        c_valider, c_renvoyer = st.columns(2)
+        with c_valider:
+            if st.button("Valider le code",type="primary",use_container_width=True):
+                if code_saisi and hmac.compare_digest(code_saisi.strip(), st.session_state.otp_code):
+                    email_confirme = st.session_state.otp_email
+                    st.session_state.email_visiteur=email_confirme
+                    st.session_state.otp_code = None
+                    st.session_state.otp_email = None
+                    reinitialiser_echecs("otp")
+                    with st.spinner("Enregistrement de votre accès..."):
+                        succes,erreur=ecrire_log(email_confirme)
+                        mettre_a_jour_presence(email_confirme)
+                    if succes:
+                        st.success("✅ Accès accordé. Bienvenue !")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Erreur d'enregistrement : {erreur}")
+                        st.stop()
+                else:
+                    enregistrer_echec("otp")
+                    st.error("Code incorrect.")
+        with c_renvoyer:
+            if st.button("↻ Renvoyer / changer d'e-mail",use_container_width=True):
+                st.session_state.otp_code = None
+                st.session_state.otp_email = None
+                st.rerun()
 
 # ==========================================
 # HEARTBEAT
@@ -2335,16 +2710,16 @@ if acces_autorise:
         st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #0EA5E9;height:118px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:8px;">
             <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Contrôles Réalisés 2026</p>
             <div style="display:flex;align-items:center;gap:8px;">
-                <span style="font-size:11px;color:#334155;font-weight:700;width:32px;flex-shrink:0;">SGB</span>
+                <span>{badge_site("SGB")}</span>
                 <div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden;">
-                    <div style="width:{pct_sgb}%;height:100%;background:{couleur_sgb};border-radius:4px;"></div>
+                    <div style="width:{pct_sgb}%;height:100%;background:{COULEUR_SITE['SGB']['principale']};border-radius:4px;transition:width 0.6s ease-in-out;"></div>
                 </div>
                 <span style="font-size:11px;color:{couleur_sgb};font-weight:700;white-space:nowrap;width:70px;text-align:right;">{nb_ctrl_site["SGB"]}/{TOTAL_CATEGORIES_PAR_SITE} ({pct_sgb}%)</span>
             </div>
             <div style="display:flex;align-items:center;gap:8px;">
-                <span style="font-size:11px;color:#334155;font-weight:700;width:32px;flex-shrink:0;">MEG</span>
+                <span>{badge_site("MEG")}</span>
                 <div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden;">
-                    <div style="width:{pct_meg}%;height:100%;background:{couleur_meg};border-radius:4px;"></div>
+                    <div style="width:{pct_meg}%;height:100%;background:{COULEUR_SITE['MEG']['principale']};border-radius:4px;transition:width 0.6s ease-in-out;"></div>
                 </div>
                 <span style="font-size:11px;color:{couleur_meg};font-weight:700;white-space:nowrap;width:70px;text-align:right;">{nb_ctrl_site["MEG"]-1}/{TOTAL_CATEGORIES_PAR_SITE} ({pct_meg}%)</span>
             </div></div>""",unsafe_allow_html=True)
@@ -2441,7 +2816,7 @@ if acces_autorise:
                 with g2:
                     fig2=px.bar(df_c.sort_values('Nombre'),x='Nombre',y='Domaine',orientation='h',text='Nombre',color_discrete_sequence=['#1E3A8A'])
                     fig2.update_traces(textposition='outside',cliponaxis=False)
-                    fig2.update_layout(margin=dict(t=5,b=5,l=10,r=40),height=220,xaxis_title=None,yaxis_title=None,paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
+                    fig2.update_layout(margin=dict(t=5,b=5,l=10,r=40),height=220,xaxis_title=None,yaxis_title=None,paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)',transition_duration=500,transition_easing="cubic-in-out")
                     fig2.update_xaxes(showgrid=True,gridcolor='#E2E8F0')
                     st.plotly_chart(fig2,use_container_width=True,config={'displayModeBar':False})
         if role=="Admin" and password_correct:
@@ -2840,6 +3215,7 @@ if acces_autorise:
                 fig_gauge.update_layout(
                     margin=dict(t=40, b=10, l=20, r=20), height=280,
                     paper_bgcolor='rgba(0,0,0,0)',
+                    transition_duration=600, transition_easing="cubic-in-out",
                 )
                 st.plotly_chart(fig_gauge, use_container_width=True, config={'displayModeBar': False})
 
@@ -3201,6 +3577,69 @@ if acces_autorise:
                     "Email":st.column_config.TextColumn("📧 E-mail")},
                     hide_index=True,use_container_width=True)
 
+            # ---- Journal d'audit (traçabilité des actions de modification) ----
+            st.markdown("<br>",unsafe_allow_html=True)
+            st.markdown("### 🧾 Journal d'audit")
+            st.caption("Historique des créations/modifications/suppressions effectuées dans l'application "
+                       "(nécessite l'onglet « AuditLog » dans le Google Sheet : colonnes Date | Utilisateur | Action | Détails).")
+            with st.spinner("Chargement du journal d'audit..."):
+                df_audit = lire_audit_log()
+            if df_audit.empty:
+                st.info("Aucune action journalisée pour le moment (ou onglet « AuditLog » absent du Google Sheet).")
+            else:
+                st.dataframe(df_audit.sort_index(ascending=False), hide_index=True, use_container_width=True)
+
+            # ---- Export global (toutes les données, tous sites/années, en un seul fichier) ----
+            st.markdown("<br>",unsafe_allow_html=True)
+            st.markdown("### 📦 Export global")
+            st.caption("Génère un classeur Excel unique regroupant tous les rapports, la planification, "
+                       "les exigences, les points de réserve et le suivi des actions.")
+            if st.button("📥 Générer l'export global (.xlsx)", use_container_width=True):
+                with st.spinner("Génération de l'export global..."):
+                    excel_global = generer_export_global_excel()
+                st.download_button("⬇️ Télécharger l'export global", data=excel_global,
+                    file_name=f"Export_Global_{datetime.date.today().strftime('%Y%m%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True)
+                journaliser_action(utilisateur_courant(), "Export global généré")
+
+            # ---- Relance des échéances proches (notification manuelle par e-mail) ----
+            st.markdown("<br>",unsafe_allow_html=True)
+            st.markdown("### 📧 Relance des échéances")
+            st.caption("Envoie un e-mail récapitulatif des contrôles en retard ou à venir sous 30 jours. "
+                       "Nécessite la configuration [smtp] dans secrets.toml. Pour une relance vraiment "
+                       "automatique (sans clic), il faut déclencher cette même logique depuis un service "
+                       "externe planifié (cron / GitHub Actions), Streamlit n'exécutant du code que sur interaction.")
+            df_calendrier_relance = construire_calendrier_controle(df_rapports)
+            echeances_proches = extraire_echeances_proches(df_calendrier_relance, jours_horizon=30)
+            if echeances_proches:
+                st.warning(f"⚠️ {len(echeances_proches)} échéance(s) en retard ou à venir sous 30 jours.")
+            else:
+                st.success("✅ Aucune échéance en retard ou à venir sous 30 jours.")
+            destinataires_defaut = ""
+            try:
+                destinataires_defaut = ", ".join(st.secrets["notifications"]["destinataires"])
+            except Exception:
+                pass
+            destinataires_saisis = st.text_input("Destinataires (séparés par des virgules) :",
+                                                   value=destinataires_defaut, placeholder="a@domaine.com, b@domaine.com")
+            if st.button("📧 Envoyer la relance maintenant", use_container_width=True, disabled=not echeances_proches):
+                emails = [e.strip() for e in destinataires_saisis.split(",") if format_email_valide(e.strip())]
+                if not emails:
+                    st.error("Aucune adresse e-mail valide renseignée.")
+                else:
+                    corps = construire_message_relance(echeances_proches)
+                    nb_ok, nb_ko = 0, 0
+                    for dest in emails:
+                        ok_env, err_env = envoyer_email(dest, "Relance — Échéances de contrôle réglementaire", corps)
+                        nb_ok += 1 if ok_env else 0
+                        nb_ko += 0 if ok_env else 1
+                    if nb_ok:
+                        st.success(f"✅ Relance envoyée à {nb_ok} destinataire(s).")
+                        journaliser_action(utilisateur_courant(), "Relance échéances envoyée", f"{nb_ok} destinataire(s)")
+                    if nb_ko:
+                        st.error(f"❌ Échec d'envoi pour {nb_ko} destinataire(s) (vérifier la configuration SMTP).")
+
     # ---- ONGLET 4 : KPI (Admin uniquement — vue complète) ----
     if tab_kpi and role=="Admin" and password_correct:
         with tab_kpi:
@@ -3310,7 +3749,8 @@ if acces_autorise:
                                     color_discrete_map={"Réalisés":"#10B981","Restants":"#EF4444"})
                         fig1.update_traces(textposition='inside',textinfo='percent')
                         fig1.update_layout(margin=dict(t=10,b=10,l=10,r=10),height=260,showlegend=False,
-                                            paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
+                                            paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)',
+                                            transition_duration=500,transition_easing="cubic-in-out")
                         st.plotly_chart(fig1,use_container_width=True,config={'displayModeBar':False})
                         st.markdown(f"<p style='text-align:center;font-size:13px;color:#64748B;'>{taux1}% réalisés ({nb_realises_2026}/{nb_total_2026} contrôles d'installation)</p>",unsafe_allow_html=True)
                     else:
@@ -3324,7 +3764,8 @@ if acces_autorise:
                                     color_discrete_map={"Respecté":"#0EA5E9","Non respecté":"#EF4444"})
                         fig2.update_traces(textposition='inside',textinfo='percent')
                         fig2.update_layout(margin=dict(t=10,b=10,l=10,r=10),height=260,showlegend=False,
-                                            paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)')
+                                            paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)',
+                                            transition_duration=500,transition_easing="cubic-in-out")
                         st.plotly_chart(fig2,use_container_width=True,config={'displayModeBar':False})
                         st.markdown(f"<p style='text-align:center;font-size:13px;color:#64748B;'>{taux2}% respectés ({nb_respectes}/{nb_visites_realisees})</p>",unsafe_allow_html=True)
                     else:
@@ -4267,7 +4708,8 @@ if acces_autorise:
                                 ],
                             }
                         ))
-                        fig_gauge.update_layout(height=220, margin=dict(t=20, b=10, l=20, r=20), paper_bgcolor='rgba(0,0,0,0)')
+                        fig_gauge.update_layout(height=220, margin=dict(t=20, b=10, l=20, r=20), paper_bgcolor='rgba(0,0,0,0)',
+                                                 transition_duration=600, transition_easing="cubic-in-out")
                         st.plotly_chart(fig_gauge, use_container_width=True, config={'displayModeBar': False})
                         st.markdown(f"<p style='text-align:center;font-size:12px;color:#64748B;'>{nb_realisees} / {total_pilote} action(s) réalisée(s)</p>",unsafe_allow_html=True)
 
@@ -4289,7 +4731,8 @@ if acces_autorise:
                                 fig1.update_layout(title="Terminé vs En cours", title_x=0.5,
                                                     margin=dict(t=40,b=10,l=10,r=10), height=300,
                                                     paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                                    legend=dict(font=dict(size=9)))
+                                                    legend=dict(font=dict(size=9)),
+                                                    transition_duration=500, transition_easing="cubic-in-out")
                                 st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
                             else:
                                 st.info("Aucune donnée.")
@@ -4313,7 +4756,8 @@ if acces_autorise:
                                 fig2.update_layout(title="Répartition des actions en cours", title_x=0.5,
                                                     margin=dict(t=40,b=10,l=10,r=10), height=300,
                                                     paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                                    legend=dict(font=dict(size=9)))
+                                                    legend=dict(font=dict(size=9)),
+                                                    transition_duration=500, transition_easing="cubic-in-out")
                                 st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
                             else:
                                 st.info("Aucune action en cours.")
