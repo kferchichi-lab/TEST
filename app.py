@@ -44,11 +44,6 @@ def verifier_mot_de_passe(mot_de_passe_saisi: str, hash_stocke: str) -> bool:
 # ==========================================
 # SÉCURITÉ : LIMITATION DES TENTATIVES (ANTI-BRUTEFORCE)
 # ==========================================
-# Verrouillage par session Streamlit après plusieurs échecs consécutifs.
-# ⚠️ Limite connue : basé sur st.session_state, donc propre à un navigateur/onglet ;
-# n'empêche pas une attaque distribuée sur plusieurs sessions. Pour une protection
-# globale, il faudrait comptabiliser les échecs côté serveur (ex. dans Google Sheets
-# ou une base externe), ce qui dépasse la portée de ce correctif ponctuel.
 _MAX_TENTATIVES = 5
 _DUREE_BLOCAGE_SECONDES = 60  # 5 minutes
 
@@ -73,13 +68,6 @@ def reinitialiser_echecs(cle: str):
 # ENVOI D'E-MAILS (SMTP) — utilisé pour la vérification Visiteur (code OTP)
 # et pour les relances automatiques d'échéances
 # ==========================================
-# Configuration attendue dans .streamlit/secrets.toml :
-#   [smtp]
-#   host = "smtp.gmail.com"
-#   port = 587
-#   utilisateur = "compte@domaine.com"
-#   mot_de_passe = "..."          # mot de passe d'application, pas le mot de passe principal
-#   expediteur = "Contrôle Réglementaire <compte@domaine.com>"
 def envoyer_email(destinataire: str, sujet: str, corps_texte: str) -> tuple:
     """Envoie un e-mail texte simple via SMTP. Retourne (succes: bool, erreur: str|None)."""
     try:
@@ -102,8 +90,6 @@ def envoyer_email(destinataire: str, sujet: str, corps_texte: str) -> tuple:
 # ==========================================
 # JOURNAL D'AUDIT (traçabilité des actions de modification)
 # ==========================================
-# Écrit chaque action de création/modification/suppression dans l'onglet
-# Google Sheet "AuditLog" (à créer manuellement : colonnes Date | Utilisateur | Action | Détails).
 def journaliser_action(utilisateur: str, action: str, details: str = ""):
     try:
         now_str = datetime.datetime.now(TZ).strftime("%d/%m/%Y %H:%M:%S")
