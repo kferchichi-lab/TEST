@@ -2457,6 +2457,7 @@ with st.sidebar:
     st.markdown("""<div style="text-align:center;margin-top:15px;margin-bottom:25px;">
         <h3 style="font-size:1.15rem;font-weight:700;margin-bottom:4px;color:#0F172A;">Tunisie Profilés d'Aluminium</h3>
         <p style="font-size:0.85rem;color:#64748B;margin:0;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Direction Maintenance & TN</p>
+        <p style="font-size:0.85rem;color:#64748B;margin:0;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">© 2026 TPR - Application de Suivi Réglementaire</p>
     </div>""",unsafe_allow_html=True)
     st.divider()
     st.markdown("<p style='font-weight:600;color:#334155;margin-bottom:0;'>🔐 Espace sécurisé</p>",unsafe_allow_html=True)
