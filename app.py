@@ -2247,6 +2247,13 @@ def mettre_a_jour_presence(email):
     else:
         sheets_append("Presence",[email,maintenant,"En ligne"])
 
+def visiteur_deja_verifie(email: str) -> bool:
+    """Retourne True si cet e-mail figure déjà dans l'onglet 'Presence', c.-à-d. qu'il
+    s'agit d'un visiteur déjà connu (première vérification OTP déjà effectuée par le passé).
+    Dans ce cas, on ne renvoie plus de code : l'accès est direct, mais on continue à
+    tracer sa présence/historique comme pour n'importe quelle connexion."""
+    return sheets_trouver_ligne_email("Presence", email) is not None
+
 def lire_presence():
     df = sheets_lire("Presence","A:C")
     if df.empty: return pd.DataFrame(columns=["Email","Derniere_activite","Statut","Activite"])
@@ -2567,15 +2574,28 @@ if not acces_autorise and role=="Visiteur":
     if not otp_deja_envoye:
         st.markdown("""<div style="margin-bottom:14px;">
             <p style="color:#0F172A;font-size:15px;font-weight:700;margin:0 0 6px 0;">Adresse e-mail :</p>
-            <p style="color:#64748B;font-size:13.5px;margin:0;line-height:1.5;">Un code de vérification à 6 chiffres vous sera envoyé par e-mail.</p>
+            <p style="color:#64748B;font-size:13.5px;margin:0;line-height:1.5;">Lors de votre première connexion, un code de vérification à 6 chiffres vous sera envoyé par e-mail. Les fois suivantes, l'accès est direct.</p>
         </div>""",unsafe_allow_html=True)
         email_saisi=st.text_input("Adresse e-mail :",placeholder="exemple@domain.com",label_visibility="collapsed",key="otp_email_input")
         blocage_otp = tentative_bloquee("otp")
         if blocage_otp > 0:
             st.error(f"🔒 Trop de tentatives échouées. Réessaie dans {blocage_otp} s.")
-        elif st.button("Envoyer le code de vérification",type="primary"):
+        elif st.button("Continuer",type="primary"):
             if not format_email_valide(email_saisi):
                 st.error("Veuillez saisir une adresse e-mail valide.")
+            elif visiteur_deja_verifie(email_saisi):
+                # ---- Visiteur déjà connu (déjà vérifié par le passé) : accès direct, sans nouveau code ----
+                # On garde malgré tout la traçabilité (log + présence) pour l'historique.
+                st.session_state.email_visiteur=email_saisi
+                with st.spinner("Enregistrement de votre accès..."):
+                    succes,erreur=ecrire_log(email_saisi)
+                    mettre_a_jour_presence(email_saisi)
+                if succes:
+                    st.success("✅ Bon retour ! Accès accordé.")
+                    st.rerun()
+                else:
+                    st.error(f"❌ Erreur d'enregistrement : {erreur}")
+                    st.stop()
             elif time.time() - st.session_state.otp_dernier_envoi < 60:
                 st.warning("Merci de patienter avant de redemander un code.")
             else:
