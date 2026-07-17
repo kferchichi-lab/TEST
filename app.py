@@ -3578,24 +3578,22 @@ if acces_autorise:
             # ---- Journal d'audit (traçabilité des actions de modification) ----
             st.markdown("<br>",unsafe_allow_html=True)
             st.markdown("### 🧾 Journal d'audit")
-            st.caption("Historique des créations/modifications/suppressions effectuées dans l'application "
-                       "(nécessite l'onglet « AuditLog » dans le Google Sheet : colonnes Date | Utilisateur | Action | Détails).")
+            st.caption("Historique des créations, modifications, suppressions effectuées dans l'application.")
             with st.spinner("Chargement du journal d'audit..."):
                 df_audit = lire_audit_log()
             if df_audit.empty:
-                st.info("Aucune action journalisée pour le moment (ou onglet « AuditLog » absent du Google Sheet).")
+                st.info("Aucune action journalisée.")
             else:
                 st.dataframe(df_audit.sort_index(ascending=False), hide_index=True, use_container_width=True)
 
             # ---- Export global (toutes les données, tous sites/années, en un seul fichier) ----
             st.markdown("<br>",unsafe_allow_html=True)
             st.markdown("### 📦 Export global")
-            st.caption("Génère un classeur Excel unique regroupant tous les rapports, la planification, "
-                       "les exigences, les points de réserve et le suivi des actions.")
-            if st.button("📥 Générer l'export global (.xlsx)", use_container_width=True):
+            st.caption("Génère un classeur Excel regroupant tous les rapports.")
+            if st.button("📥 Générer le classeur, use_container_width=True):
                 with st.spinner("Génération de l'export global..."):
                     excel_global = generer_export_global_excel()
-                st.download_button("⬇️ Télécharger l'export global", data=excel_global,
+                st.download_button("⬇️ Télécharger le classeur", data=excel_global,
                     file_name=f"Export_Global_{datetime.date.today().strftime('%Y%m%d')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True)
@@ -3604,10 +3602,7 @@ if acces_autorise:
             # ---- Relance des échéances proches (notification manuelle par e-mail) ----
             st.markdown("<br>",unsafe_allow_html=True)
             st.markdown("### 📧 Relance des échéances")
-            st.caption("Envoie un e-mail récapitulatif des contrôles en retard ou à venir sous 30 jours. "
-                       "Nécessite la configuration [smtp] dans secrets.toml. Pour une relance vraiment "
-                       "automatique (sans clic), il faut déclencher cette même logique depuis un service "
-                       "externe planifié (cron / GitHub Actions), Streamlit n'exécutant du code que sur interaction.")
+            st.caption("Envoie un e-mail récapitulatif des contrôles en retard ou à venir sous 30 jours. ")
             df_calendrier_relance = construire_calendrier_controle(df_rapports)
             echeances_proches = extraire_echeances_proches(df_calendrier_relance, jours_horizon=30)
             if echeances_proches:
