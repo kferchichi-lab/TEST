@@ -534,15 +534,15 @@ def extraire_echeances_proches(df_calendrier: pd.DataFrame, jours_horizon: int =
 def construire_message_relance(echeances: list) -> str:
     if not echeances:
         return "Aucune échéance de contrôle réglementaire en retard ou à venir dans les 30 prochains jours."
-    lignes = ["Échéances de contrôle réglementaire à surveiller :", ""]
+    lignes = ["Echéances de contrôle réglementaire à surveiller :", ""]
     for e in echeances:
         if e["Jours"] < 0:
             statut = f"⚠️ EN RETARD de {abs(e['Jours'])} jour(s)"
         elif e["Jours"] == 0:
             statut = "📅 Aujourd'hui"
         else:
-            statut = f"À venir dans {e['Jours']} jour(s)"
-        lignes.append(f"- [{e['Site']}] {e['Installation']} — prévue le {e['Date']} ({statut})")
+            statut = f"A venir dans {e['Jours']} jour(s)"
+        lignes.append(f"[{e['Site']}] {e['Installation']} — prévue le {e['Date']} ({statut})")
     lignes.append("")
     lignes.append("Merci de vérifier la planification correspondante dans le Tableau de Bord Réglementaire.")
     return "\n".join(lignes)
