@@ -50,7 +50,7 @@ def verifier_mot_de_passe(mot_de_passe_saisi: str, hash_stocke: str) -> bool:
 # globale, il faudrait comptabiliser les échecs côté serveur (ex. dans Google Sheets
 # ou une base externe), ce qui dépasse la portée de ce correctif ponctuel.
 _MAX_TENTATIVES = 5
-_DUREE_BLOCAGE_SECONDES = 300  # 5 minutes
+_DUREE_BLOCAGE_SECONDES = 60  # 5 minutes
 
 def tentative_bloquee(cle: str) -> int:
     """Retourne le nb de secondes restant avant déblocage (0 si non bloqué)."""
