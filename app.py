@@ -4305,6 +4305,7 @@ if acces_autorise:
                         key="dl_kpi"
                     )
             # ---- Export global (toutes les données, tous sites/années, en un seul fichier) ----
+            st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
             st.markdown("<br>",unsafe_allow_html=True)
             st.markdown("### 📦 Export global")
             st.caption("Génère un classeur Excel regroupant tous les rapports.")
