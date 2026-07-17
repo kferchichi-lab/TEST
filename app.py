@@ -3619,18 +3619,7 @@ if acces_autorise:
             else:
                 st.dataframe(df_audit.sort_index(ascending=False), hide_index=True, use_container_width=True)
 
-            # ---- Export global (toutes les données, tous sites/années, en un seul fichier) ----
-            st.markdown("<br>",unsafe_allow_html=True)
-            st.markdown("### 📦 Export global")
-            st.caption("Génère un classeur Excel regroupant tous les rapports.")
-            if st.button("📥 Générer le classeur", use_container_width=True):
-                with st.spinner("Génération de l'export global..."):
-                    excel_global = generer_export_global_excel()
-                st.download_button("⬇️ Télécharger le classeur", data=excel_global,
-                    file_name=f"Export_Global_{datetime.date.today().strftime('%Y%m%d')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True)
-                journaliser_action(utilisateur_courant(), "Export global généré")
+            
 
             
     # ---- ONGLET 4 : KPI (Admin uniquement — vue complète) ----
@@ -4315,6 +4304,21 @@ if acces_autorise:
                         use_container_width=True,
                         key="dl_kpi"
                     )
+            # ---- Export global (toutes les données, tous sites/années, en un seul fichier) ----
+            st.markdown("<br>",unsafe_allow_html=True)
+            st.markdown("### 📦 Export global")
+            st.caption("Génère un classeur Excel regroupant tous les rapports.")
+            if st.button("📥 Générer le classeur", use_container_width=True):
+                with st.spinner("Génération de l'export global..."):
+                    excel_global = generer_export_global_excel()
+                st.download_button("⬇️ Télécharger le classeur", data=excel_global,
+                    file_name=f"Export_Global_{datetime.date.today().strftime('%Y%m%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True)
+                journaliser_action(utilisateur_courant(), "Export global généré")
+
+
+
 
     # ---- ONGLET 4 : KPI (Responsable — vue filtrée sur ses propres actions/rapport) ----
     if tab_kpi and role=="Responsable" and st.session_state.responsable_connecte:
