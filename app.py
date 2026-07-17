@@ -3590,7 +3590,7 @@ if acces_autorise:
             st.markdown("<br>",unsafe_allow_html=True)
             st.markdown("### 📦 Export global")
             st.caption("Génère un classeur Excel regroupant tous les rapports.")
-            if st.button("📥 Générer le classeur, use_container_width=True):
+            if st.button("📥 Générer le classeur", use_container_width=True):
                 with st.spinner("Génération de l'export global..."):
                     excel_global = generer_export_global_excel()
                 st.download_button("⬇️ Télécharger le classeur", data=excel_global,
