@@ -1,0 +1,75 @@
+"""
+Génère les hash à coller dans secrets.toml (section [auth]).
+
+Utilisation :
+    python generer_hash.py
+
+Le script demande chaque mot de passe via getpass (donc il ne s'affiche
+PAS à l'écran et n'est jamais écrit dans un fichier ou envoyé nulle part).
+Il affiche ensuite un bloc TOML prêt à copier-coller.
+
+Tu peux exécuter ce script sur TON ordinateur (pas besoin de me donner
+tes mots de passe) : il ne fait que du calcul local, aucune connexion réseau.
+"""
+
+import hashlib
+import secrets as secrets_lib
+import getpass
+
+_PBKDF2_ITERATIONS = 200_000
+
+
+def hacher_mot_de_passe(mot_de_passe: str, sel: bytes = None) -> str:
+    """Retourne 'sel_hex$hash_hex' à stocker dans st.secrets."""
+    if sel is None:
+        sel = secrets_lib.token_bytes(16)
+    h = hashlib.pbkdf2_hmac("sha256", mot_de_passe.encode("utf-8"), sel, _PBKDF2_ITERATIONS)
+    return f"{sel.hex()}${h.hex()}"
+
+
+def demander_mot_de_passe(label: str) -> str:
+    while True:
+        mdp1 = getpass.getpass(f"Mot de passe pour {label} : ")
+        if not mdp1:
+            print("  -> vide, on passe (pas de changement pour ce compte).")
+            return ""
+        mdp2 = getpass.getpass(f"Confirme le mot de passe pour {label} : ")
+        if mdp1 == mdp2:
+            return mdp1
+        print("  -> Les deux saisies ne correspondent pas, réessaie.")
+
+
+def main():
+    comptes = ["Admin", "SABER", "HSE", "AICHA", "CHAFIK"]
+    resultats = {}
+
+    print("=== Génération des hash de mots de passe ===")
+    print("(laisse vide et appuie sur Entrée pour ne pas changer un compte)\n")
+
+    for compte in comptes:
+        mdp = demander_mot_de_passe(compte)
+        if mdp:
+            resultats[compte] = hacher_mot_de_passe(mdp)
+
+    if not resultats:
+        print("\nAucun mot de passe saisi, rien à générer.")
+        return
+
+    print("\n\n=== Colle ceci dans ton fichier secrets.toml ===\n")
+    if "Admin" in resultats:
+        print("[auth]")
+        print(f'admin_hash = "{resultats["Admin"]}"\n')
+
+    autres = {k: v for k, v in resultats.items() if k != "Admin"}
+    if autres:
+        print("[auth.responsables]")
+        for compte, h in autres.items():
+            print(f'{compte} = "{h}"')
+
+    print("\n=== Fin ===")
+    print("Remplace bien les lignes correspondantes dans tes secrets ")
+    print("(sur Streamlit Cloud : App -> Settings -> Secrets).")
+
+
+if __name__ == "__main__":
+    main()
