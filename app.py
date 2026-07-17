@@ -2724,30 +2724,6 @@ if acces_autorise:
 
     st.markdown("<br>",unsafe_allow_html=True)
 
-    # ---- Recherche globale transverse (Rapports / Planning / Exigences) ----
-    with st.expander("🔎 Recherche globale (code, désignation, site...)"):
-        terme_recherche = st.text_input("Rechercher :", placeholder="ex: B2, incendie, MEG, extincteur...",
-                                          label_visibility="collapsed", key="terme_recherche_globale")
-        if terme_recherche.strip():
-            terme_norm = _normaliser(terme_recherche)
-            sources_recherche = {
-                "📋 Rapports": df_rapports,
-                "📅 Planning": df_planning,
-                "📌 Exigences": lire_exigences(),
-            }
-            nb_total_resultats = 0
-            for nom_source, df_source in sources_recherche.items():
-                if df_source is None or df_source.empty:
-                    continue
-                masque = df_source.astype(str).apply(lambda col: col.map(_normaliser).str.contains(terme_norm, na=False))
-                df_resultat = df_source[masque.any(axis=1)]
-                if not df_resultat.empty:
-                    nb_total_resultats += len(df_resultat)
-                    st.markdown(f"**{nom_source}** — {len(df_resultat)} résultat(s)")
-                    st.dataframe(df_resultat, hide_index=True, use_container_width=True)
-            if nb_total_resultats == 0:
-                st.info("Aucun résultat pour cette recherche.")
-
     afficher_suivi_actions = (role == "Admin" and password_correct) or (role == "Responsable" and st.session_state.responsable_connecte)
 
     liste_onglets = ["📋 Rapports CR","📅 Planification","📌 Exigences"]
