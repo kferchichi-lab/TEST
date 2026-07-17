@@ -3610,6 +3610,7 @@ if acces_autorise:
                     hide_index=True,use_container_width=True)
 
             # ---- Journal d'audit (traçabilité des actions de modification) ----
+            st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
             st.markdown("<br>",unsafe_allow_html=True)
             st.markdown("### 🧾 Journal d'audit")
             st.caption("Historique des créations, modifications, suppressions effectuées dans l'application.")
