@@ -29,7 +29,7 @@ import fitz
 # supplémentaire à installer). Le hash stocké a la forme "sel_hex$hash_hex".
 #
 # Pour générer le hash d'un mot de passe (une seule fois, en local) :
-#   python3 -c "from app import hacher_mot_de_passe; print(hacher_mot_de_passe('MonMotDePasse123*'))"
+from app import hacher_mot_de_passe; print(hacher_mot_de_passe('MonMotDePasse123*'))"
 # puis copier la chaîne obtenue dans .streamlit/secrets.toml (voir plus bas).
 _PBKDF2_ITERATIONS = 200_000
 
