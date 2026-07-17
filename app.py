@@ -3776,40 +3776,6 @@ if acces_autorise:
                     else:
                         st.info("Aucune visite réalisée à ce jour.")
 
-                # ---- Dashboard comparatif multi-sites (SGB vs MEG) ----
-                st.markdown("<br>",unsafe_allow_html=True)
-                with st.expander("📊 Comparatif Sites — SGB vs MEG", expanded=False):
-                    df_comp = pd.DataFrame([
-                        {"Site": s, "Taux de réalisation (%)": v["taux_realisation"], "Taux de respect délai (%)": v["taux_delai"],
-                         "Visites réalisées 2026": v["visites"]}
-                        for s, v in comparatif_sites.items()
-                    ])
-                    cbar, cbadges = st.columns([3, 1])
-                    with cbar:
-                        fig_comp = go.Figure()
-                        fig_comp.add_trace(go.Bar(name="Taux de réalisation", x=df_comp["Site"], y=df_comp["Taux de réalisation (%)"],
-                                                    marker_color=[COULEUR_SITE.get(s, {}).get("principale", "#64748B") for s in df_comp["Site"]],
-                                                    text=df_comp["Taux de réalisation (%)"].astype(str) + "%", textposition="outside"))
-                        fig_comp.add_trace(go.Bar(name="Respect du délai", x=df_comp["Site"], y=df_comp["Taux de respect délai (%)"],
-                                                    marker_color=[COULEUR_SITE.get(s, {}).get("claire", "#E2E8F0") for s in df_comp["Site"]],
-                                                    marker_line_color=[COULEUR_SITE.get(s, {}).get("principale", "#64748B") for s in df_comp["Site"]],
-                                                    marker_line_width=1.5,
-                                                    text=df_comp["Taux de respect délai (%)"].astype(str) + "%", textposition="outside"))
-                        fig_comp.update_layout(barmode="group", height=320, yaxis=dict(range=[0, 110], title="%"),
-                                                margin=dict(t=30, b=10, l=10, r=10),
-                                                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                                                transition_duration=500, transition_easing="cubic-in-out")
-                        st.plotly_chart(fig_comp, use_container_width=True, config={'displayModeBar': False})
-                    with cbadges:
-                        for s, v in comparatif_sites.items():
-                            st.markdown(f"""<div style="background:{COULEUR_SITE.get(s,{}).get('claire','#F1F5F9')};padding:12px;border-radius:10px;margin-bottom:10px;">
-                                <p style="margin:0;">{badge_site(s)}</p>
-                                <p style="margin:6px 0 0 0;font-size:12px;color:#334155;">Réalisation : <b>{v['taux_realisation']}%</b></p>
-                                <p style="margin:2px 0 0 0;font-size:12px;color:#334155;">Délai respecté : <b>{v['taux_delai']}%</b></p>
-                                <p style="margin:2px 0 0 0;font-size:12px;color:#334155;">Visites 2026 : <b>{v['visites']}</b></p>
-                            </div>""", unsafe_allow_html=True)
-
             st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
 
             # ================= TAUX DE NON-CONFORMITÉ DE SITE (CARTOGRAPHIE) =================
