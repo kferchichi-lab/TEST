@@ -3259,7 +3259,7 @@ if acces_autorise:
                     corps = construire_message_relance(echeances_proches)
                     nb_ok, nb_ko = 0, 0
                     for dest in emails:
-                        ok_env, err_env = envoyer_email(dest, "Relance — Échéances de contrôle réglementaire", corps)
+                        ok_env, err_env = envoyer_email(dest, "Relance — Echéances de contrôle réglementaire", corps)
                         nb_ok += 1 if ok_env else 0
                         nb_ko += 0 if ok_env else 1
                     if nb_ok:
