@@ -895,6 +895,42 @@ def generer_calendrier_controle_excel(df_calendrier: pd.DataFrame, annee_referen
     return HTML(string=html_content).write_pdf()
 
 
+def generer_export_global_excel() -> bytes:
+    """Génère un classeur Excel unique regroupant toutes les données de l'application
+    (rapports, planification, exigences, points de réserve, suivi des actions), un onglet
+    par jeu de données — utile pour un export/archivage complet en un clic."""
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    def _ecrire_feuille(writer, df, nom_feuille):
+        df_export = df.copy() if df is not None else pd.DataFrame()
+        if df_export.empty:
+            df_export = pd.DataFrame({"Info": ["Aucune donnée disponible"]})
+        df_export.to_excel(writer, index=False, sheet_name=nom_feuille[:31])
+        ws = writer.sheets[nom_feuille[:31]]
+        header_fill = PatternFill("solid", fgColor="1E3A8A")
+        header_font = Font(color="FFFFFF", bold=True)
+        for col_idx in range(1, len(df_export.columns) + 1):
+            cell = ws.cell(row=1, column=col_idx)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        for col_idx, col_name in enumerate(df_export.columns, start=1):
+            largeur = min(max(len(str(col_name)), df_export[col_name].astype(str).str.len().max() if len(df_export) else 0) + 4, 45)
+            ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = largeur
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        _ecrire_feuille(writer, df_rapports, "Rapports")
+        _ecrire_feuille(writer, df_planning, "Planning")
+        _ecrire_feuille(writer, lire_exigences(), "Exigences")
+        _ecrire_feuille(writer, lire_points_reserve(), "PointsReserve")
+        _ecrire_feuille(writer, lire_points_reserve_nature(), "PointsReserveNature")
+        _ecrire_feuille(writer, lire_suivi_encours(), "SuiviActions")
+        _ecrire_feuille(writer, lire_actions_realisees(), "ActionsRealisees")
+    output.seek(0)
+    return output.getvalue()
+
+
 def generer_rapport_kpi_pdf(kpi_data, df_reserve, df_nature, carto_b64, logo_url):
     """
     Génère un rapport PDF premium regroupant tous les KPI de l'onglet KPI :
@@ -2726,6 +2762,30 @@ if acces_autorise:
 
     st.markdown("<br>",unsafe_allow_html=True)
 
+    # ---- Recherche globale transverse (Rapports / Planning / Exigences) ----
+    with st.expander("🔎 Recherche globale (code, désignation, site...)"):
+        terme_recherche = st.text_input("Rechercher :", placeholder="ex: B2, incendie, MEG, extincteur...",
+                                          label_visibility="collapsed", key="terme_recherche_globale")
+        if terme_recherche.strip():
+            terme_norm = _normaliser(terme_recherche)
+            sources_recherche = {
+                "📋 Rapports": df_rapports,
+                "📅 Planning": df_planning,
+                "📌 Exigences": lire_exigences(),
+            }
+            nb_total_resultats = 0
+            for nom_source, df_source in sources_recherche.items():
+                if df_source is None or df_source.empty:
+                    continue
+                masque = df_source.astype(str).apply(lambda col: col.map(_normaliser).str.contains(terme_norm, na=False))
+                df_resultat = df_source[masque.any(axis=1)]
+                if not df_resultat.empty:
+                    nb_total_resultats += len(df_resultat)
+                    st.markdown(f"**{nom_source}** — {len(df_resultat)} résultat(s)")
+                    st.dataframe(df_resultat, hide_index=True, use_container_width=True)
+            if nb_total_resultats == 0:
+                st.info("Aucun résultat pour cette recherche.")
+
     afficher_suivi_actions = (role == "Admin" and password_correct) or (role == "Responsable" and st.session_state.responsable_connecte)
 
     liste_onglets = ["📋 Rapports CR","📅 Planification","📌 Exigences"]
@@ -3729,6 +3789,27 @@ if acces_autorise:
                 nb_non_respectes = nb_visites_realisees - nb_respectes
                 taux2 = round(nb_respectes/nb_visites_realisees*100,1) if nb_visites_realisees>0 else 0
 
+                # ---- Sous-totaux PAR SITE, pour le dashboard comparatif SGB vs MEG ----
+                comparatif_sites = {}
+                for site_c in SITES_SUIVIS:
+                    total_site_c = sum(nb_campagnes_attendues(ins) for ins in INSTALLATIONS_SUIVIES)
+                    realises_site_c = 0
+                    for ins in INSTALLATIONS_SUIVIES:
+                        attendu_c = nb_campagnes_attendues(ins)
+                        df_grp_c = df_realises_2026[df_realises_2026[col_ins_k[0]].astype(str).str.strip() == ins]
+                        if col_site_k:
+                            df_grp_c = df_grp_c[df_grp_c[col_site_k[0]].astype(str).str.strip() == site_c]
+                        realises_site_c += min(df_grp_c["_date_brute"].nunique() if not df_grp_c.empty else 0, attendu_c)
+                    df_realises_site_c = df_realises_k[df_realises_k[col_site_k[0]].astype(str).str.strip() == site_c] if col_site_k else df_realises_k.iloc[0:0]
+                    nb_visites_site_c = len(df_realises_site_c)
+                    nb_respectes_site_c = int((df_realises_site_c["_ecart"] <= 31).sum()) if nb_visites_site_c > 0 and "_ecart" in df_realises_site_c.columns else 0
+                    comparatif_sites[site_c] = {
+                        "taux_realisation": round(realises_site_c/total_site_c*100,1) if total_site_c else 0,
+                        "realises": realises_site_c, "total": total_site_c,
+                        "taux_delai": round(nb_respectes_site_c/nb_visites_site_c*100,1) if nb_visites_site_c else 0,
+                        "visites": nb_visites_site_c,
+                    }
+
 
 
                 kpi_data = {
@@ -3770,6 +3851,40 @@ if acces_autorise:
                         st.markdown(f"<p style='text-align:center;font-size:13px;color:#64748B;'>{taux2}% respectés ({nb_respectes}/{nb_visites_realisees})</p>",unsafe_allow_html=True)
                     else:
                         st.info("Aucune visite réalisée à ce jour.")
+
+                # ---- Dashboard comparatif multi-sites (SGB vs MEG) ----
+                st.markdown("<br>",unsafe_allow_html=True)
+                with st.expander("📊 Comparatif Sites — SGB vs MEG", expanded=False):
+                    df_comp = pd.DataFrame([
+                        {"Site": s, "Taux de réalisation (%)": v["taux_realisation"], "Taux de respect délai (%)": v["taux_delai"],
+                         "Visites réalisées 2026": v["visites"]}
+                        for s, v in comparatif_sites.items()
+                    ])
+                    cbar, cbadges = st.columns([3, 1])
+                    with cbar:
+                        fig_comp = go.Figure()
+                        fig_comp.add_trace(go.Bar(name="Taux de réalisation", x=df_comp["Site"], y=df_comp["Taux de réalisation (%)"],
+                                                    marker_color=[COULEUR_SITE.get(s, {}).get("principale", "#64748B") for s in df_comp["Site"]],
+                                                    text=df_comp["Taux de réalisation (%)"].astype(str) + "%", textposition="outside"))
+                        fig_comp.add_trace(go.Bar(name="Respect du délai", x=df_comp["Site"], y=df_comp["Taux de respect délai (%)"],
+                                                    marker_color=[COULEUR_SITE.get(s, {}).get("claire", "#E2E8F0") for s in df_comp["Site"]],
+                                                    marker_line_color=[COULEUR_SITE.get(s, {}).get("principale", "#64748B") for s in df_comp["Site"]],
+                                                    marker_line_width=1.5,
+                                                    text=df_comp["Taux de respect délai (%)"].astype(str) + "%", textposition="outside"))
+                        fig_comp.update_layout(barmode="group", height=320, yaxis=dict(range=[0, 110], title="%"),
+                                                margin=dict(t=30, b=10, l=10, r=10),
+                                                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                                                transition_duration=500, transition_easing="cubic-in-out")
+                        st.plotly_chart(fig_comp, use_container_width=True, config={'displayModeBar': False})
+                    with cbadges:
+                        for s, v in comparatif_sites.items():
+                            st.markdown(f"""<div style="background:{COULEUR_SITE.get(s,{}).get('claire','#F1F5F9')};padding:12px;border-radius:10px;margin-bottom:10px;">
+                                <p style="margin:0;">{badge_site(s)}</p>
+                                <p style="margin:6px 0 0 0;font-size:12px;color:#334155;">Réalisation : <b>{v['taux_realisation']}%</b></p>
+                                <p style="margin:2px 0 0 0;font-size:12px;color:#334155;">Délai respecté : <b>{v['taux_delai']}%</b></p>
+                                <p style="margin:2px 0 0 0;font-size:12px;color:#334155;">Visites 2026 : <b>{v['visites']}</b></p>
+                            </div>""", unsafe_allow_html=True)
 
             st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
 
