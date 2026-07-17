@@ -2450,6 +2450,25 @@ df_planning = charger_donnees_sheet("Planning")
 # SIDEBAR
 # ==========================================
 with st.sidebar:
+    # ---- Force la sidebar à occuper toute la hauteur de l'écran en colonne flex,
+    # afin que le pied de page (#tpr-sidebar-footer) reste TOUJOURS collé tout en bas,
+    # peu importe la quantité de contenu affichée au-dessus (Visiteur/Responsable/Admin). ----
+    st.markdown("""<style>
+        section[data-testid="stSidebar"] > div:first-child{
+            height:100vh!important;
+        }
+        section[data-testid="stSidebar"] div[data-testid="stSidebarUserContent"]{
+            display:flex!important;
+            flex-direction:column!important;
+            min-height:100vh!important;
+        }
+        section[data-testid="stSidebar"] div[data-testid="stSidebarUserContent"] > div:has(#tpr-sidebar-footer){
+            margin-top:auto!important;
+        }
+        #tpr-sidebar-footer{
+            padding-top:20px!important;
+        }
+    </style>""",unsafe_allow_html=True)
     st.markdown("<br>",unsafe_allow_html=True)
     _,c2,_=st.columns([1,4,1])
     with c2:
@@ -2531,9 +2550,11 @@ with st.sidebar:
                 st.session_state.responsable_actif=None
 
     # ---- Pied de page de la sidebar : version de l'application + copyright ----
+    # id="tpr-sidebar-footer" est utilisé par le CSS ci-dessus (margin-top:auto) pour
+    # forcer ce bloc tout en bas de la sidebar, sans jamais se déplacer.
     APP_VERSION = "v1.0.0"
-    st.markdown(f"""<div style="position:sticky;bottom:0;text-align:center;margin-top:40px;padding-top:12px;border-top:1px solid #E2E8F0;">
-        <p style="font-size:0.75rem;color:#94A3B8;margin:0;font-weight:600;letter-spacing:0.3px;">{APP_VERSION}</p>
+    st.markdown(f"""<div id="tpr-sidebar-footer" style="text-align:center;padding-bottom:18px;border-top:1px solid #E2E8F0;">
+        <p style="font-size:0.75rem;color:#94A3B8;margin:12px 0 0 0;font-weight:600;letter-spacing:0.3px;">{APP_VERSION}</p>
         <p style="font-size:0.72rem;color:#94A3B8;margin:2px 0 0 0;">© 2026 TPR - Application de Suivi Réglementaire</p>
     </div>""", unsafe_allow_html=True)
 
