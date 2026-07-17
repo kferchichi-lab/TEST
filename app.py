@@ -2450,18 +2450,18 @@ df_planning = charger_donnees_sheet("Planning")
 # SIDEBAR
 # ==========================================
 with st.sidebar:
-    # ---- Le pied de page (#tpr-sidebar-footer) est épinglé tout en bas de la sidebar via
-    # position:fixed. Comme Streamlit applique un `transform` sur la section de la sidebar
-    # (pour son animation d'ouverture/fermeture), ce `transform` crée un nouveau repère de
-    # positionnement : bottom:0 se cale donc sur le bas de la SIDEBAR elle-même (et non sur
-    # le bas de la page). Le contenu au-dessus (logo, titre, champs) garde ainsi toujours
-    # exactement la même position, quel que soit le profil sélectionné. ----
+    # ---- Le pied de page (#tpr-sidebar-footer) est épinglé tout en bas de la sidebar.
+    # On rend la sidebar elle-même "position:relative" pour qu'elle serve de repère de
+    # positionnement, puis le pied de page utilise "position:absolute" (et non "fixed",
+    # qui se serait calé sur toute la page). Ainsi le pied de page reste bien confiné à la
+    # largeur/hauteur réelles de la sidebar, sans jamais déplacer le contenu au-dessus. ----
     st.markdown("""<style>
         section[data-testid="stSidebar"]{
+            position:relative!important;
             overflow:hidden!important;
         }
         #tpr-sidebar-footer{
-            position:fixed!important;
+            position:absolute!important;
             bottom:0!important;
             left:0!important;
             width:100%!important;
