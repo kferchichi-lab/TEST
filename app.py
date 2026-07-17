@@ -2454,13 +2454,18 @@ with st.sidebar:
     # afin que le pied de page (#tpr-sidebar-footer) reste TOUJOURS collé tout en bas,
     # peu importe la quantité de contenu affichée au-dessus (Visiteur/Responsable/Admin). ----
     st.markdown("""<style>
+        section[data-testid="stSidebar"]{
+            overflow:hidden!important;
+        }
         section[data-testid="stSidebar"] > div:first-child{
             height:100vh!important;
+            overflow:hidden!important;
         }
         section[data-testid="stSidebar"] div[data-testid="stSidebarUserContent"]{
             display:flex!important;
             flex-direction:column!important;
-            min-height:100vh!important;
+            height:100vh!important;
+            overflow:hidden!important;
         }
         section[data-testid="stSidebar"] div[data-testid="stSidebarUserContent"] > div:has(#tpr-sidebar-footer){
             margin-top:auto!important;
