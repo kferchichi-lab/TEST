@@ -3301,7 +3301,7 @@ if acces_autorise:
                 st.info("Aucun contrat n'a encore été ajouté.")
 
         if role == "Admin" and password_correct:
-            with st.expander("✏️ Gérer le contrat (Admin)"):
+            with st.expander("✏️ Gérer le contrat"):
                 nouveau_lien = st.text_input("Lien Google Drive du contrat PDF :",
                     value=lien_contrat if lien_contrat.lower() != "nan" else "",
                     placeholder="https://drive.google.com/file/d/...")
@@ -3414,7 +3414,7 @@ if acces_autorise:
 
             # Gestion (ajout/suppression) — admin uniquement
                 if role == "Admin" and password_correct:
-                    with st.expander("✏️ Gérer les sous-équipements (Admin)"):
+                    with st.expander("✏️ Gérer les sous-équipements"):
                         st.markdown("**Ajouter un sous-équipement :**")
                         ac1, ac2, ac3 = st.columns([2, 1, 1])
                         with ac1:
