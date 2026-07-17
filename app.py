@@ -2477,21 +2477,6 @@ with st.sidebar:
     role=st.selectbox("Profil :",["Visiteur","Responsable","Admin"],label_visibility="collapsed")
     password_correct=False
 
-    # ---- Comptes Responsable (identifiant + mot de passe) ----
-    # Les mots de passe ne sont plus stockés en clair : seul un hash PBKDF2 (sel + hash)
-    # figure dans le code, et il est prioritairement lu depuis st.secrets["auth"] si
-    # configuré (recommandé). Les valeurs ci-dessous sont les hashs des anciens mots de
-    # passe (admin123*, SABER123*, HSE123*, AICHA123*, chafik123*) — change-les dès que
-    # possible en générant de nouveaux hashs avec `hacher_mot_de_passe("...")`.
-    #
-    # Pour passer entièrement par secrets.toml (recommandé), ajoute dans
-    # .streamlit/secrets.toml :
-    #   [auth]
-    #   admin_hash = "sel_hex$hash_hex"
-    #   [auth.responsables]
-    #   SABER = "sel_hex$hash_hex"
-    #   HSE   = "sel_hex$hash_hex"
-    #   ...
     ADMIN_HASH_DEFAUT = "69d097edbe715222649bfc7296f14331$ed69ae3c1298c0254a053fa6650745b588637332095855e2541c1aeb784fff98"
     RESPONSABLES={
         "SABER": {"hash":"df08cf138fa54315e428e454a2bfcd91$2a12dbc095764565b0fe5682001a39eb738dc01c1b8c4fbedead2a9d170b3a13","nom":"Saber BEN CHAABEN","entites":["Maintenance"],"site":"MEG"},
