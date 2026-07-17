@@ -21,16 +21,7 @@ from email.mime.text import MIMEText
 from weasyprint import HTML
 import fitz
 
-# ==========================================
-# SÉCURITÉ : HACHAGE DES MOTS DE PASSE
-# ==========================================
-# Les mots de passe ne doivent JAMAIS être stockés/comparés en clair dans le code.
-# On utilise PBKDF2-HMAC-SHA256 (module standard `hashlib`, aucune dépendance
-# supplémentaire à installer). Le hash stocké a la forme "sel_hex$hash_hex".
-#
-# Pour générer le hash d'un mot de passe (une seule fois, en local) :
-from app import hacher_mot_de_passe; print(hacher_mot_de_passe('MonMotDePasse123*'))"
-# puis copier la chaîne obtenue dans .streamlit/secrets.toml (voir plus bas).
+
 _PBKDF2_ITERATIONS = 200_000
 
 def hacher_mot_de_passe(mot_de_passe: str, sel: bytes = None) -> str:
