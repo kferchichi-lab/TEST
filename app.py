@@ -3254,39 +3254,41 @@ if acces_autorise:
                     use_container_width=True, key="dl_calendrier_excel",
                 )
         # ---- Relance des échéances proches (notification manuelle par e-mail) ----
-            st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
-            st.markdown("<br>",unsafe_allow_html=True)
-            st.markdown("### 📧 Relance des échéances")
-            st.caption("Envoie un e-mail récapitulatif des contrôles en retard ou à venir sous 30 jours. ")
-            df_calendrier_relance = construire_calendrier_controle(df_rapports)
-            echeances_proches = extraire_echeances_proches(df_calendrier_relance, jours_horizon=30)
-            if echeances_proches:
-                st.warning(f"⚠️ {len(echeances_proches)} échéance(s) en retard ou à venir sous 30 jours.")
-            else:
-                st.success("✅ Aucune échéance en retard ou à venir sous 30 jours.")
-            destinataires_defaut = ""
-            try:
-                destinataires_defaut = ", ".join(st.secrets["notifications"]["destinataires"])
-            except Exception:
-                pass
-            destinataires_saisis = st.text_input("Destinataires (séparés par des virgules) :",
-                                                   value=destinataires_defaut, placeholder="a@domaine.com, b@domaine.com")
-            if st.button("📧 Envoyer la relance maintenant", use_container_width=True, disabled=not echeances_proches):
-                emails = [e.strip() for e in destinataires_saisis.split(",") if format_email_valide(e.strip())]
-                if not emails:
-                    st.error("Aucune adresse e-mail valide renseignée.")
+        # Réservé au profil Admin uniquement.
+            if role == "Admin" and password_correct:
+                st.markdown("<br><hr style='border-color:#E2E8F0;'>",unsafe_allow_html=True)
+                st.markdown("<br>",unsafe_allow_html=True)
+                st.markdown("### 📧 Relance des échéances")
+                st.caption("Envoie un e-mail récapitulatif des contrôles en retard ou à venir sous 30 jours. ")
+                df_calendrier_relance = construire_calendrier_controle(df_rapports)
+                echeances_proches = extraire_echeances_proches(df_calendrier_relance, jours_horizon=30)
+                if echeances_proches:
+                    st.warning(f"⚠️ {len(echeances_proches)} échéance(s) en retard ou à venir sous 30 jours.")
                 else:
-                    corps = construire_message_relance(echeances_proches)
-                    nb_ok, nb_ko = 0, 0
-                    for dest in emails:
-                        ok_env, err_env = envoyer_email(dest, "Relance — Echéances de contrôle réglementaire", corps)
-                        nb_ok += 1 if ok_env else 0
-                        nb_ko += 0 if ok_env else 1
-                    if nb_ok:
-                        st.success(f"✅ Relance envoyée à {nb_ok} destinataire(s).")
-                        journaliser_action(utilisateur_courant(), "Relance échéances envoyée", f"{nb_ok} destinataire(s)")
-                    if nb_ko:
-                        st.error(f"❌ Échec d'envoi pour {nb_ko} destinataire(s) (vérifier la configuration SMTP).")
+                    st.success("✅ Aucune échéance en retard ou à venir sous 30 jours.")
+                destinataires_defaut = ""
+                try:
+                    destinataires_defaut = ", ".join(st.secrets["notifications"]["destinataires"])
+                except Exception:
+                    pass
+                destinataires_saisis = st.text_input("Destinataires (séparés par des virgules) :",
+                                                       value=destinataires_defaut, placeholder="a@domaine.com, b@domaine.com")
+                if st.button("📧 Envoyer la relance maintenant", use_container_width=True, disabled=not echeances_proches):
+                    emails = [e.strip() for e in destinataires_saisis.split(",") if format_email_valide(e.strip())]
+                    if not emails:
+                        st.error("Aucune adresse e-mail valide renseignée.")
+                    else:
+                        corps = construire_message_relance(echeances_proches)
+                        nb_ok, nb_ko = 0, 0
+                        for dest in emails:
+                            ok_env, err_env = envoyer_email(dest, "Relance — Echéances de contrôle réglementaire", corps)
+                            nb_ok += 1 if ok_env else 0
+                            nb_ko += 0 if ok_env else 1
+                        if nb_ok:
+                            st.success(f"✅ Relance envoyée à {nb_ok} destinataire(s).")
+                            journaliser_action(utilisateur_courant(), "Relance échéances envoyée", f"{nb_ok} destinataire(s)")
+                        if nb_ko:
+                            st.error(f"❌ Échec d'envoi pour {nb_ko} destinataire(s) (vérifier la configuration SMTP).")
 
 
     # ---- ONGLET EXIGENCES ----
