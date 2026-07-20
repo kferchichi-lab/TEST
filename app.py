@@ -1831,6 +1831,9 @@ def obtenir_access_token():
 def sheets_append(onglet, valeurs):
     token = obtenir_access_token()
     if not token: return False,"Token invalide"
+    # Filet de sécurité : un NaN pandas glissé dans `valeurs` fait échouer json.dumps(allow_nan=False)
+    # utilisé en interne par `requests`, ce qui faisait échouer l'écriture avec un message trompeur.
+    valeurs = [("" if (v is None or (isinstance(v, float) and v != v)) else v) for v in valeurs]
     try:
         url = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values/{onglet}!A:Z:append"
         resp = requests.post(url,headers={"Authorization":f"Bearer {token}","Content-Type":"application/json"},
@@ -2124,6 +2127,24 @@ def codif_charger_toutes_actions():
     return pd.concat(frames, ignore_index=True), (" / ".join(erreurs) if erreurs else None)
 
 
+def _valeur_sheet(v):
+    """Convertit une valeur de ligne pandas en valeur sûre pour l'API Sheets/JSON.
+    Une cellule vide dans un DataFrame pandas peut être un float NaN (pas une chaîne vide) ;
+    or json.dumps(..., allow_nan=False) — utilisé par `requests` — lève une exception sur NaN,
+    ce qui faisait échouer silencieusement CHAQUE écriture concernée ('Out of range float
+    values are not JSON compliant: nan'). On neutralise donc tout NaN/None en chaîne vide."""
+    if v is None:
+        return ""
+    try:
+        if isinstance(v, float) and math.isnan(v):
+            return ""
+        if pd.isna(v):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    return v
+
+
 def _cle_action(row):
     """Clé unique identifiant une action précise, utilisée pour repérer les actions déjà réalisées."""
     return "||".join(str(row.get(c, "")).strip().upper() for c in
@@ -2144,8 +2165,9 @@ def marquer_actions_realisees(df_lignes, responsable_nom):
     erreurs = []
     for _, row in df_lignes.iterrows():
         ok, msg = sheets_append("ActionsRealisees", [
-            row.get("Site", ""), row.get("Installation", ""), row.get("Désignation", ""),
-            row.get("Observation", ""), row.get("Code", ""), row.get("Pilote", ""),
+            _valeur_sheet(row.get("Site", "")), _valeur_sheet(row.get("Installation", "")),
+            _valeur_sheet(row.get("Désignation", "")), _valeur_sheet(row.get("Observation", "")),
+            _valeur_sheet(row.get("Code", "")), _valeur_sheet(row.get("Pilote", "")),
             responsable_nom, date_str
         ])
         ok_total = ok_total and ok
@@ -2175,9 +2197,10 @@ def enregistrer_statut_en_cours(row, type_suivi, commentaire, responsable_nom):
     de suivi (Immédiat / Sous-traitance / Planifié) et un commentaire libre facultatif."""
     date_str = datetime.datetime.now(TZ).strftime("%d/%m/%Y %H:%M")
     ok, msg = sheets_append("SuiviActions", [
-        row.get("Site", ""), row.get("Installation", ""), row.get("Désignation", ""),
-        row.get("Observation", ""), row.get("Code", ""), row.get("Pilote", ""),
-        "En cours", type_suivi, commentaire, responsable_nom, date_str
+        _valeur_sheet(row.get("Site", "")), _valeur_sheet(row.get("Installation", "")),
+        _valeur_sheet(row.get("Désignation", "")), _valeur_sheet(row.get("Observation", "")),
+        _valeur_sheet(row.get("Code", "")), _valeur_sheet(row.get("Pilote", "")),
+        "En cours", _valeur_sheet(type_suivi), _valeur_sheet(commentaire), responsable_nom, date_str
     ])
     if ok:
         journaliser_action(utilisateur_courant(), "Action mise à jour (En cours)",
@@ -4818,3 +4841,4 @@ if acces_autorise:
                                 st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
                             else:
                                 st.info("Aucune action en cours.")
+                                
