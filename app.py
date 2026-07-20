@@ -2136,20 +2136,25 @@ def lire_actions_realisees():
 
 
 def marquer_actions_realisees(df_lignes, responsable_nom):
-    """Enregistre chaque action cochée comme réalisée (une ligne par action) dans l'onglet ActionsRealisees."""
+    """Enregistre chaque action cochée comme réalisée (une ligne par action) dans l'onglet ActionsRealisees.
+    Retourne (ok_total, liste_des_messages_erreur) — le détail permet d'afficher la vraie cause
+    (onglet introuvable, droits insuffisants, etc.) au lieu d'un message générique."""
     date_str = datetime.datetime.now(TZ).strftime("%d/%m/%Y %H:%M")
     ok_total = True
+    erreurs = []
     for _, row in df_lignes.iterrows():
-        ok, _msg = sheets_append("ActionsRealisees", [
+        ok, msg = sheets_append("ActionsRealisees", [
             row.get("Site", ""), row.get("Installation", ""), row.get("Désignation", ""),
             row.get("Observation", ""), row.get("Code", ""), row.get("Pilote", ""),
             responsable_nom, date_str
         ])
         ok_total = ok_total and ok
+        if not ok:
+            erreurs.append(msg)
     if ok_total and not df_lignes.empty:
         journaliser_action(utilisateur_courant(), "Action marquée réalisée",
                             f"{len(df_lignes)} action(s), pilote={responsable_nom}")
-    return ok_total
+    return ok_total, erreurs
 
 
 def lire_suivi_encours():
@@ -2169,7 +2174,7 @@ def enregistrer_statut_en_cours(row, type_suivi, commentaire, responsable_nom):
     """Enregistre (nouvelle ligne d'historique) le statut « En cours » d'une action, avec son type
     de suivi (Immédiat / Sous-traitance / Planifié) et un commentaire libre facultatif."""
     date_str = datetime.datetime.now(TZ).strftime("%d/%m/%Y %H:%M")
-    ok, _msg = sheets_append("SuiviActions", [
+    ok, msg = sheets_append("SuiviActions", [
         row.get("Site", ""), row.get("Installation", ""), row.get("Désignation", ""),
         row.get("Observation", ""), row.get("Code", ""), row.get("Pilote", ""),
         "En cours", type_suivi, commentaire, responsable_nom, date_str
@@ -2177,7 +2182,7 @@ def enregistrer_statut_en_cours(row, type_suivi, commentaire, responsable_nom):
     if ok:
         journaliser_action(utilisateur_courant(), "Action mise à jour (En cours)",
                             f"{row.get('Code','')} — {type_suivi} — pilote={responsable_nom}")
-    return ok
+    return ok, msg
 
 
 def _lignes_avec_rowspan(d_ins):
@@ -4687,6 +4692,7 @@ if acces_autorise:
                                              use_container_width=True, key="btn_valider_suivi"):
                                     erreur_maj = False
                                     nb_termine_ok, nb_encours_ok = 0, 0
+                                    messages_erreur = []
                                     for idx, row_edit in df_edit_out.iterrows():
                                         row_orig = df_affiche_suivi.loc[idx].copy()
                                         row_orig["Pilote"] = pilote_suivi_choisi
@@ -4694,21 +4700,29 @@ if acces_autorise:
                                         type_c = row_edit.get("Type de suivi")
                                         commentaire_c = row_edit.get("Commentaire", "")
                                         if statut_c == "Terminé":
-                                            ok = marquer_actions_realisees(pd.DataFrame([row_orig]), nom_responsable_suivi)
+                                            ok, msgs = marquer_actions_realisees(pd.DataFrame([row_orig]), nom_responsable_suivi)
                                             erreur_maj = erreur_maj or not ok
                                             nb_termine_ok += 1 if ok else 0
+                                            if not ok:
+                                                messages_erreur.extend(msgs)
                                         else:
                                             info_prealable = info_encours_par_cle.get(row_orig["Cle"], {})
                                             type_defaut = info_prealable.get("Type", "")
                                             commentaire_defaut = info_prealable.get("Commentaire", "")
                                             if (type_c or "") == (type_defaut or "") and (commentaire_c or "") == (commentaire_defaut or ""):
                                                 continue  # rien n'a changé pour cette action, inutile de ré-écrire
-                                            ok = enregistrer_statut_en_cours(row_orig, type_c or TYPES_SUIVI[0], commentaire_c or "", nom_responsable_suivi)
+                                            ok, msg = enregistrer_statut_en_cours(row_orig, type_c or TYPES_SUIVI[0], commentaire_c or "", nom_responsable_suivi)
                                             erreur_maj = erreur_maj or not ok
                                             nb_encours_ok += 1 if ok else 0
+                                            if not ok:
+                                                messages_erreur.append(msg)
 
                                     if erreur_maj:
                                         st.error("Une erreur est survenue lors de l'enregistrement (vérifiez les onglets « ActionsRealisees » / « SuiviActions »).")
+                                        if messages_erreur:
+                                            with st.expander("Détail technique de l'erreur (à transmettre à l'administrateur)"):
+                                                for m in messages_erreur:
+                                                    st.code(str(m))
                                     else:
                                         st.success(f"{nb_termine_ok} action(s) marquée(s) terminée(s), {nb_encours_ok} mise(s) à jour « en cours ».")
                                         st.cache_data.clear()
