@@ -2763,19 +2763,19 @@ if acces_autorise:
             c_global = _couleur_taux(taux_conformite_global)
             c_meg    = _couleur_taux(taux_conformite_meg)
             c_sgb    = _couleur_taux(taux_conformite_sgb)
-            st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #1E3A8A;height:118px;box-sizing:border-box;display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:14px;">
-                <div style="display:flex;flex-direction:column;justify-content:center;">
-                    <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Taux de Conformité Global</p>
+            st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #1E3A8A;height:118px;box-sizing:border-box;display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:20px;">
+                <div style="display:flex;flex-direction:column;justify-content:center;flex-shrink:0;">
+                    <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">Taux de Conformité Global</p>
                     <p style="margin:8px 0 0 0;font-size:34px;color:{c_global};font-weight:700;line-height:1;">{taux_conformite_global}%</p>
                 </div>
-                <div style="display:flex;gap:10px;">
-                    <div style="text-align:center;background:{COULEUR_SITE['MEG']['claire']};border-radius:10px;padding:8px 12px;min-width:80px;">
-                        <div style="margin-bottom:2px;">{badge_site("MEG")}</div>
-                        <p style="margin:4px 0 0 0;font-size:20px;font-weight:700;color:{c_meg};line-height:1;">{taux_conformite_meg}%</p>
+                <div style="display:flex;gap:14px;flex:1;">
+                    <div style="text-align:center;background:{COULEUR_SITE['MEG']['claire']};border-radius:10px;padding:10px 14px;flex:1;">
+                        <div style="margin-bottom:4px;">{badge_site("MEG")}</div>
+                        <p style="margin:4px 0 0 0;font-size:24px;font-weight:700;color:{c_meg};line-height:1;">{taux_conformite_meg}%</p>
                     </div>
-                    <div style="text-align:center;background:{COULEUR_SITE['SGB']['claire']};border-radius:10px;padding:8px 12px;min-width:80px;">
-                        <div style="margin-bottom:2px;">{badge_site("SGB")}</div>
-                        <p style="margin:4px 0 0 0;font-size:20px;font-weight:700;color:{c_sgb};line-height:1;">{taux_conformite_sgb}%</p>
+                    <div style="text-align:center;background:{COULEUR_SITE['SGB']['claire']};border-radius:10px;padding:10px 14px;flex:1;">
+                        <div style="margin-bottom:4px;">{badge_site("SGB")}</div>
+                        <p style="margin:4px 0 0 0;font-size:24px;font-weight:700;color:{c_sgb};line-height:1;">{taux_conformite_sgb}%</p>
                     </div>
                 </div></div>""",unsafe_allow_html=True)
         else:
