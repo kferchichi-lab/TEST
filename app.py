@@ -104,9 +104,9 @@ def utilisateur_courant() -> str:
         if role == "Admin" and password_correct:
             return "Admin"
         if role == "Responsable" and st.session_state.get("responsable_connecte"):
-            return f"Responsable:{st.session_state.get('responsable_actif','?')}"
+            return f"Responsable : {st.session_state.get('responsable_actif','?')}"
         if role == "Visiteur" and st.session_state.get("email_visiteur"):
-            return f"Visiteur:{st.session_state.get('email_visiteur')}"
+            return f"Visiteur : {st.session_state.get('email_visiteur')}"
     except NameError:
         pass
     return "inconnu"
@@ -902,8 +902,6 @@ def generer_export_global_excel() -> bytes:
         _ecrire_feuille(writer, lire_exigences(), "Exigences")
         _ecrire_feuille(writer, lire_points_reserve(), "PointsReserve")
         _ecrire_feuille(writer, lire_points_reserve_nature(), "PointsReserveNature")
-        _ecrire_feuille(writer, lire_suivi_encours(), "SuiviActions")
-        _ecrire_feuille(writer, lire_actions_realisees(), "ActionsRealisees")
     output.seek(0)
     return output.getvalue()
 
@@ -2582,9 +2580,12 @@ MAINTENANCE_ICON_PATH = "unnamed.png"
 col_titre, col_icone = st.columns([5,1])
 with col_titre:
     st.markdown("""<div class="app-header-block" style="width:100%;margin:10px auto 0 auto;">
-    <h1 style="text-align:center;font-size:2.6rem;font-weight:800;color:#0F172A;margin:0 0 6px 0;letter-spacing:-1px;line-height:1.2;">Tableau de Bord Réglementaire</h1>
-    <p style="text-align:center;font-size:1.05rem;color:#64748B;margin:0 auto;font-weight:400;line-height:1.5;max-width:800px;">L'amélioration continue.. Notre trajectoire..</p>
-</div>""",unsafe_allow_html=True)
+    <div style="display:flex;justify-content:center;align-items:baseline;gap:8px;">
+        <h1 style="font-size:2.6rem;font-weight:800;color:#0F172A;margin:0;letter-spacing:-1px;line-height:1.2;">Tableau de Bord Réglementaire</h1>
+        <span style="font-size:0.75rem;color:#94A3B8;font-weight:400;white-space:nowrap;">v1.1.0</span>
+    </div>
+    <p style="text-align:center;font-size:0.85rem;color:#64748B;margin:6px auto 0 auto;font-weight:400;line-height:1.5;max-width:800px;">L'amélioration continue.. Notre trajectoire..</p>
+    </div>""",unsafe_allow_html=True)
 with col_icone:
     st.image(MAINTENANCE_ICON_PATH, use_container_width=True)
 
@@ -2747,28 +2748,64 @@ if acces_autorise:
     pct_sgb, couleur_sgb = _pct_et_couleur(nb_ctrl_site["SGB"], TOTAL_CATEGORIES_PAR_SITE)
     pct_meg, couleur_meg = _pct_et_couleur(nb_ctrl_site["MEG"]-1, TOTAL_CATEGORIES_PAR_SITE)
 
-    k1,k2=st.columns(2)
-    with k1:
-        st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #1E3A8A;height:118px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;">
-            <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Total Rapports Archivés</p>
-            <p style="margin:8px 0 0 0;font-size:34px;color:#0F172A;font-weight:700;line-height:1;">{val_total}</p></div>""",unsafe_allow_html=True)
-    with k2:
-        st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #0EA5E9;height:118px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:8px;">
-            <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Contrôles Réalisés 2026</p>
-            <div style="display:flex;align-items:center;gap:8px;">
-                <span>{badge_site("SGB")}</span>
-                <div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden;">
-                    <div style="width:{pct_sgb}%;height:100%;background:{COULEUR_SITE['SGB']['principale']};border-radius:4px;transition:width 0.6s ease-in-out;"></div>
+    if role == "Visiteur":
+        # ---- Indicateurs spécifiques Visiteur : taux de conformité (global + par site) ----
+        taux_conf_global = round(100 - 40.23, 2)
+        taux_conf_meg    = round(100 - 35.14, 2)
+        taux_conf_sgb    = round(100 - 46.27, 2)
+
+        def _couleur_taux(pct):
+            return "#10B981" if pct>=80 else "#F97316" if pct>=50 else "#EF4444"
+
+        couleur_global = _couleur_taux(taux_conf_global)
+        couleur_meg_c  = _couleur_taux(taux_conf_meg)
+        couleur_sgb_c  = _couleur_taux(taux_conf_sgb)
+
+        k1,k2=st.columns(2)
+        with k1:
+            st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #1E3A8A;height:118px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;">
+                <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Taux de Conformité Global</p>
+                <p style="margin:8px 0 0 0;font-size:34px;color:{couleur_global};font-weight:700;line-height:1;">{taux_conf_global}%</p></div>""",unsafe_allow_html=True)
+        with k2:
+            st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #0EA5E9;height:118px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:8px;">
+                <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Taux de Conformité par Site</p>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span>{badge_site("SGB")}</span>
+                    <div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden;">
+                        <div style="width:{taux_conf_sgb}%;height:100%;background:{COULEUR_SITE['SGB']['principale']};border-radius:4px;transition:width 0.6s ease-in-out;"></div>
+                    </div>
+                    <span style="font-size:11px;color:{couleur_sgb_c};font-weight:700;white-space:nowrap;width:70px;text-align:right;">{taux_conf_sgb}%</span>
                 </div>
-                <span style="font-size:11px;color:{couleur_sgb};font-weight:700;white-space:nowrap;width:70px;text-align:right;">{nb_ctrl_site["SGB"]}/{TOTAL_CATEGORIES_PAR_SITE} ({pct_sgb}%)</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-                <span>{badge_site("MEG")}</span>
-                <div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden;">
-                    <div style="width:{pct_meg}%;height:100%;background:{COULEUR_SITE['MEG']['principale']};border-radius:4px;transition:width 0.6s ease-in-out;"></div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span>{badge_site("MEG")}</span>
+                    <div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden;">
+                        <div style="width:{taux_conf_meg}%;height:100%;background:{COULEUR_SITE['MEG']['principale']};border-radius:4px;transition:width 0.6s ease-in-out;"></div>
+                    </div>
+                    <span style="font-size:11px;color:{couleur_meg_c};font-weight:700;white-space:nowrap;width:70px;text-align:right;">{taux_conf_meg}%</span>
+                </div></div>""",unsafe_allow_html=True)
+    else:
+        k1,k2=st.columns(2)
+        with k1:
+            st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #1E3A8A;height:118px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;">
+                <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Total Rapports Archivés</p>
+                <p style="margin:8px 0 0 0;font-size:34px;color:#0F172A;font-weight:700;line-height:1;">{val_total}</p></div>""",unsafe_allow_html=True)
+        with k2:
+            st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #0EA5E9;height:118px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:8px;">
+                <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Contrôles Réalisés 2026</p>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span>{badge_site("SGB")}</span>
+                    <div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden;">
+                        <div style="width:{pct_sgb}%;height:100%;background:{COULEUR_SITE['SGB']['principale']};border-radius:4px;transition:width 0.6s ease-in-out;"></div>
+                    </div>
+                    <span style="font-size:11px;color:{couleur_sgb};font-weight:700;white-space:nowrap;width:70px;text-align:right;">{nb_ctrl_site["SGB"]}/{TOTAL_CATEGORIES_PAR_SITE} ({pct_sgb}%)</span>
                 </div>
-                <span style="font-size:11px;color:{couleur_meg};font-weight:700;white-space:nowrap;width:70px;text-align:right;">{nb_ctrl_site["MEG"]-1}/{TOTAL_CATEGORIES_PAR_SITE} ({pct_meg}%)</span>
-            </div></div>""",unsafe_allow_html=True)
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span>{badge_site("MEG")}</span>
+                    <div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden;">
+                        <div style="width:{pct_meg}%;height:100%;background:{COULEUR_SITE['MEG']['principale']};border-radius:4px;transition:width 0.6s ease-in-out;"></div>
+                    </div>
+                    <span style="font-size:11px;color:{couleur_meg};font-weight:700;white-space:nowrap;width:70px;text-align:right;">{nb_ctrl_site["MEG"]-1}/{TOTAL_CATEGORIES_PAR_SITE} ({pct_meg}%)</span>
+                </div></div>""",unsafe_allow_html=True)
 
     st.markdown("<br>",unsafe_allow_html=True)
 
@@ -3037,7 +3074,7 @@ if acces_autorise:
                                         else:
                                             erreurs.append(f"Ligne {num_ligne_sheet}: {msg}")
 
-                                    # -- Prochaine échéance (surcharge manuelle) --
+                                    # -- Prochaine échéance --
                                     if col_prochaine_r:
                                         nouvelle_prochaine=row_edit["Prochaine échéance"]
                                         ancienne_prochaine=df_editable.loc[idx,"Prochaine échéance"]
@@ -3045,10 +3082,23 @@ if acces_autorise:
                                         if pd.isna(nouvelle_prochaine) and pd.isna(ancienne_prochaine): prochaine_diff=False
                                         elif pd.isna(nouvelle_prochaine)!=pd.isna(ancienne_prochaine): prochaine_diff=True
                                         elif not pd.isna(nouvelle_prochaine) and nouvelle_prochaine!=ancienne_prochaine: prochaine_diff=True
+
+                                        # Si l'utilisateur a modifié l'échéance lui-même, cette saisie manuelle
+                                        # est prioritaire. Sinon, si la date de dernière visite vient de changer,
+                                        # on recalcule automatiquement l'échéance (date + périodicité) au lieu
+                                        # de laisser l'ancienne valeur (potentiellement obsolète) figée dans le Sheet.
                                         if prochaine_diff and not pd.isna(nouvelle_prochaine):
+                                            prochaine_a_ecrire=nouvelle_prochaine
+                                        elif dates_diff and not pd.isna(nouvelle_date):
+                                            mois_recalc=PERIODICITE.get(str(row_edit[col_ins_r[0]]).strip(),12)
+                                            prochaine_a_ecrire=nouvelle_date+pd.DateOffset(months=mois_recalc)
+                                        else:
+                                            prochaine_a_ecrire=None
+
+                                        if prochaine_a_ecrire is not None:
                                             num_col_p=df_rapports.columns.tolist().index(col_prochaine_r[0])+1
                                             lettre_col_p=chr(64+num_col_p)
-                                            prochaine_str=nouvelle_prochaine.strftime("%d/%m/%Y")
+                                            prochaine_str=prochaine_a_ecrire.strftime("%d/%m/%Y")
                                             ok_p, msg_p = sheets_ecrire_cellule_v2("Rapports",f"{lettre_col_p}{num_ligne_sheet}",prochaine_str)
                                             if ok_p:
                                                 nb_maj+=1
@@ -3248,7 +3298,7 @@ if acces_autorise:
                 fig_gauge = go.Figure(go.Indicator(
                     mode="gauge+number",
                     value=taux_global,
-                    number={'suffix': "%", 'font': {'size': 100, 'color': "#0F172A"}},
+                    number={'suffix': "%", 'font': {'size': 70, 'color': "#0F172A"}},
                     title={'text': f"Taux global {annee_ref_calendrier}", 'font': {'size': 14, 'color': "#334155"}},
                     gauge={
                         'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "#94A3B8"},
@@ -3876,7 +3926,11 @@ if acces_autorise:
                         apply();
                     }}
 
-                    if(img.complete && img.naturalWidth){{ fitToView(); }}
+                    function tryFit(attempts){{
+                        if(img.naturalWidth){{ fitToView(); }}
+                        else if(attempts>0){{ setTimeout(function(){{ tryFit(attempts-1); }}, 30); }}
+                    }}
+                    tryFit(100);
                     img.addEventListener('load', fitToView);
 
                     document.getElementById('carto-zoom-in').addEventListener('click', function(){{ zoom(1.25); }});
@@ -4448,9 +4502,21 @@ if acces_autorise:
                 entite_pdf_choisie = st.selectbox("Périmètre", entites_resp, key="entite_pdf_responsable")
             else:
                 entite_pdf_choisie = entites_resp[0] if entites_resp else None
-                
 
-            if st.button("Générer mon rapport", use_container_width=True, key="btn_gen_rapport_responsable", type="primary") and entite_pdf_choisie:
+            # Filtre de site pour les responsables sans site fixe (ex : HSE, Aïcha) :
+            # ils peuvent choisir de générer le rapport pour MEG, SGB, ou les deux sites (Tous)
+            site_filtre_pdf_resp = None
+            if not site_resp:
+                bcol1, bcol2 = st.columns([2,1])
+                with bcol1:
+                    site_filtre_pdf_resp = st.selectbox("Site", ["Tous","MEG","SGB"], key="site_pdf_responsable")
+                with bcol2:
+                    st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+                    bouton_generer_resp = st.button("Générer mon rapport", use_container_width=True, key="btn_gen_rapport_responsable", type="primary")
+            else:
+                bouton_generer_resp = st.button("Générer mon rapport", use_container_width=True, key="btn_gen_rapport_responsable", type="primary")
+
+            if bouton_generer_resp and entite_pdf_choisie:
                 with st.spinner("Lecture des classeurs de codification (MEG et SGB)..."):
                     df_codif_r, err = codif_charger_toutes_actions()
                     if err and df_codif_r.empty:
@@ -4470,9 +4536,12 @@ if acces_autorise:
                         df_filtre_codif_r = df_codif_r[df_codif_r["Code"].isin(codes_ok_r)]
                         if site_resp and "Site" in df_filtre_codif_r.columns:
                             df_filtre_codif_r = df_filtre_codif_r[df_filtre_codif_r["Site"].astype(str).str.strip().str.upper() == site_resp.upper()]
+                        elif site_filtre_pdf_resp and site_filtre_pdf_resp != "Tous" and "Site" in df_filtre_codif_r.columns:
+                            df_filtre_codif_r = df_filtre_codif_r[df_filtre_codif_r["Site"].astype(str).str.strip().str.upper() == site_filtre_pdf_resp.upper()]
                         if df_filtre_codif_r.empty:
+                            _site_msg = site_resp or (site_filtre_pdf_resp if site_filtre_pdf_resp and site_filtre_pdf_resp != "Tous" else None)
                             st.session_state["pdf_responsable"] = None
-                            st.info(f"Aucune action restante pour « {entite_pdf_choisie} »" + (f" — site {site_resp}." if site_resp else "."))
+                            st.info(f"Aucune action restante pour « {entite_pdf_choisie} »" + (f" — site {_site_msg}." if _site_msg else "."))
                         else:
                             try:
                                 st.session_state["pdf_responsable"] = generer_rapport_pilote_pdf(
@@ -4841,4 +4910,3 @@ if acces_autorise:
                                 st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
                             else:
                                 st.info("Aucune action en cours.")
-                                
