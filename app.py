@@ -2748,64 +2748,57 @@ if acces_autorise:
     pct_sgb, couleur_sgb = _pct_et_couleur(nb_ctrl_site["SGB"], TOTAL_CATEGORIES_PAR_SITE)
     pct_meg, couleur_meg = _pct_et_couleur(nb_ctrl_site["MEG"]-1, TOTAL_CATEGORIES_PAR_SITE)
 
-    if role == "Visiteur":
-        # ---- Indicateurs spécifiques Visiteur : taux de conformité (global + par site) ----
-        taux_conf_global = round(100 - 40.23, 2)
-        taux_conf_meg    = round(100 - 35.14, 2)
-        taux_conf_sgb    = round(100 - 46.27, 2)
-
-        def _couleur_taux(pct):
-            return "#10B981" if pct>=80 else "#F97316" if pct>=50 else "#EF4444"
-
-        couleur_global = _couleur_taux(taux_conf_global)
-        couleur_meg_c  = _couleur_taux(taux_conf_meg)
-        couleur_sgb_c  = _couleur_taux(taux_conf_sgb)
-
-        k1,k2=st.columns(2)
-        with k1:
-            st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #1E3A8A;height:118px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;">
-                <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Taux de Conformité Global</p>
-                <p style="margin:8px 0 0 0;font-size:34px;color:{couleur_global};font-weight:700;line-height:1;">{taux_conf_global}%</p></div>""",unsafe_allow_html=True)
-        with k2:
-            st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #0EA5E9;height:118px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:8px;">
-                <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Taux de Conformité par Site</p>
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <span>{badge_site("SGB")}</span>
-                    <div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden;">
-                        <div style="width:{taux_conf_sgb}%;height:100%;background:{COULEUR_SITE['SGB']['principale']};border-radius:4px;transition:width 0.6s ease-in-out;"></div>
-                    </div>
-                    <span style="font-size:11px;color:{couleur_sgb_c};font-weight:700;white-space:nowrap;width:70px;text-align:right;">{taux_conf_sgb}%</span>
+    k1,k2=st.columns(2)
+    with k1:
+        if role == "Visiteur":
+            # ---- Taux de conformité global + par site (MEG / SGB), affiché uniquement côté Visiteur ----
+            taux_non_conformite_global = 40.23
+            taux_non_conformite_meg    = 35.14
+            taux_non_conformite_sgb    = 46.27
+            taux_conformite_global = round(100 - taux_non_conformite_global, 2)
+            taux_conformite_meg    = round(100 - taux_non_conformite_meg, 2)
+            taux_conformite_sgb    = round(100 - taux_non_conformite_sgb, 2)
+            def _couleur_taux(t):
+                return "#10B981" if t>=80 else "#F97316" if t>=50 else "#EF4444"
+            c_global = _couleur_taux(taux_conformite_global)
+            c_meg    = _couleur_taux(taux_conformite_meg)
+            c_sgb    = _couleur_taux(taux_conformite_sgb)
+            st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #1E3A8A;height:118px;box-sizing:border-box;display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:14px;">
+                <div style="display:flex;flex-direction:column;justify-content:center;">
+                    <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Taux de Conformité Global</p>
+                    <p style="margin:8px 0 0 0;font-size:34px;color:{c_global};font-weight:700;line-height:1;">{taux_conformite_global}%</p>
                 </div>
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <span>{badge_site("MEG")}</span>
-                    <div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden;">
-                        <div style="width:{taux_conf_meg}%;height:100%;background:{COULEUR_SITE['MEG']['principale']};border-radius:4px;transition:width 0.6s ease-in-out;"></div>
+                <div style="display:flex;gap:10px;">
+                    <div style="text-align:center;background:{COULEUR_SITE['MEG']['claire']};border-radius:10px;padding:8px 12px;min-width:80px;">
+                        <div style="margin-bottom:2px;">{badge_site("MEG")}</div>
+                        <p style="margin:4px 0 0 0;font-size:20px;font-weight:700;color:{c_meg};line-height:1;">{taux_conformite_meg}%</p>
                     </div>
-                    <span style="font-size:11px;color:{couleur_meg_c};font-weight:700;white-space:nowrap;width:70px;text-align:right;">{taux_conf_meg}%</span>
+                    <div style="text-align:center;background:{COULEUR_SITE['SGB']['claire']};border-radius:10px;padding:8px 12px;min-width:80px;">
+                        <div style="margin-bottom:2px;">{badge_site("SGB")}</div>
+                        <p style="margin:4px 0 0 0;font-size:20px;font-weight:700;color:{c_sgb};line-height:1;">{taux_conformite_sgb}%</p>
+                    </div>
                 </div></div>""",unsafe_allow_html=True)
-    else:
-        k1,k2=st.columns(2)
-        with k1:
+        else:
             st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #1E3A8A;height:118px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;">
                 <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Total Rapports Archivés</p>
                 <p style="margin:8px 0 0 0;font-size:34px;color:#0F172A;font-weight:700;line-height:1;">{val_total}</p></div>""",unsafe_allow_html=True)
-        with k2:
-            st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #0EA5E9;height:118px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:8px;">
-                <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Contrôles Réalisés 2026</p>
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <span>{badge_site("SGB")}</span>
-                    <div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden;">
-                        <div style="width:{pct_sgb}%;height:100%;background:{COULEUR_SITE['SGB']['principale']};border-radius:4px;transition:width 0.6s ease-in-out;"></div>
-                    </div>
-                    <span style="font-size:11px;color:{couleur_sgb};font-weight:700;white-space:nowrap;width:70px;text-align:right;">{nb_ctrl_site["SGB"]}/{TOTAL_CATEGORIES_PAR_SITE} ({pct_sgb}%)</span>
+    with k2:
+        st.markdown(f"""<div style="background:white;padding:22px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-left:5px solid #0EA5E9;height:118px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:8px;">
+            <p style="margin:0;font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Contrôles Réalisés 2026</p>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span>{badge_site("SGB")}</span>
+                <div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden;">
+                    <div style="width:{pct_sgb}%;height:100%;background:{COULEUR_SITE['SGB']['principale']};border-radius:4px;transition:width 0.6s ease-in-out;"></div>
                 </div>
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <span>{badge_site("MEG")}</span>
-                    <div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden;">
-                        <div style="width:{pct_meg}%;height:100%;background:{COULEUR_SITE['MEG']['principale']};border-radius:4px;transition:width 0.6s ease-in-out;"></div>
-                    </div>
-                    <span style="font-size:11px;color:{couleur_meg};font-weight:700;white-space:nowrap;width:70px;text-align:right;">{nb_ctrl_site["MEG"]-1}/{TOTAL_CATEGORIES_PAR_SITE} ({pct_meg}%)</span>
-                </div></div>""",unsafe_allow_html=True)
+                <span style="font-size:11px;color:{couleur_sgb};font-weight:700;white-space:nowrap;width:70px;text-align:right;">{nb_ctrl_site["SGB"]}/{TOTAL_CATEGORIES_PAR_SITE} ({pct_sgb}%)</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span>{badge_site("MEG")}</span>
+                <div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden;">
+                    <div style="width:{pct_meg}%;height:100%;background:{COULEUR_SITE['MEG']['principale']};border-radius:4px;transition:width 0.6s ease-in-out;"></div>
+                </div>
+                <span style="font-size:11px;color:{couleur_meg};font-weight:700;white-space:nowrap;width:70px;text-align:right;">{nb_ctrl_site["MEG"]-1}/{TOTAL_CATEGORIES_PAR_SITE} ({pct_meg}%)</span>
+            </div></div>""",unsafe_allow_html=True)
 
     st.markdown("<br>",unsafe_allow_html=True)
 
@@ -4503,20 +4496,20 @@ if acces_autorise:
             else:
                 entite_pdf_choisie = entites_resp[0] if entites_resp else None
 
-            # Filtre de site pour les responsables sans site fixe (ex : HSE, Aïcha) :
-            # ils peuvent choisir de générer le rapport pour MEG, SGB, ou les deux sites (Tous)
-            site_filtre_pdf_resp = None
+            # ---- Filtre de site (MEG / SGB / Tous), réservé aux responsables multi-sites (HSE, Aïcha) ----
+            site_filtre_rapport_r = site_resp  # par défaut : site fixe du compte (Saber -> MEG, Chafik -> SGB)
             if not site_resp:
-                bcol1, bcol2 = st.columns([2,1])
-                with bcol1:
-                    site_filtre_pdf_resp = st.selectbox("Site", ["Tous","MEG","SGB"], key="site_pdf_responsable")
-                with bcol2:
-                    st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-                    bouton_generer_resp = st.button("Générer mon rapport", use_container_width=True, key="btn_gen_rapport_responsable", type="primary")
+                col_btn_r, col_filtre_site_r = st.columns([3,2])
+                with col_filtre_site_r:
+                    choix_site_rapport_r = st.selectbox(
+                        "Site", ["Tous","MEG","SGB"], key="site_filtre_rapport_responsable"
+                    )
+                site_filtre_rapport_r = None if choix_site_rapport_r == "Tous" else choix_site_rapport_r
+                bouton_generer_r = col_btn_r.button("Générer mon rapport", use_container_width=True, key="btn_gen_rapport_responsable", type="primary")
             else:
-                bouton_generer_resp = st.button("Générer mon rapport", use_container_width=True, key="btn_gen_rapport_responsable", type="primary")
+                bouton_generer_r = st.button("Générer mon rapport", use_container_width=True, key="btn_gen_rapport_responsable", type="primary")
 
-            if bouton_generer_resp and entite_pdf_choisie:
+            if bouton_generer_r and entite_pdf_choisie:
                 with st.spinner("Lecture des classeurs de codification (MEG et SGB)..."):
                     df_codif_r, err = codif_charger_toutes_actions()
                     if err and df_codif_r.empty:
@@ -4534,14 +4527,11 @@ if acces_autorise:
                         df_codif_r["Nature"] = df_codif_r["Code"].map(lambda c: NATURE_PILOTE.get(c,("",""))[0])
                         codes_ok_r = _codes_pour_pilote(entite_pdf_choisie)
                         df_filtre_codif_r = df_codif_r[df_codif_r["Code"].isin(codes_ok_r)]
-                        if site_resp and "Site" in df_filtre_codif_r.columns:
-                            df_filtre_codif_r = df_filtre_codif_r[df_filtre_codif_r["Site"].astype(str).str.strip().str.upper() == site_resp.upper()]
-                        elif site_filtre_pdf_resp and site_filtre_pdf_resp != "Tous" and "Site" in df_filtre_codif_r.columns:
-                            df_filtre_codif_r = df_filtre_codif_r[df_filtre_codif_r["Site"].astype(str).str.strip().str.upper() == site_filtre_pdf_resp.upper()]
+                        if site_filtre_rapport_r and "Site" in df_filtre_codif_r.columns:
+                            df_filtre_codif_r = df_filtre_codif_r[df_filtre_codif_r["Site"].astype(str).str.strip().str.upper() == site_filtre_rapport_r.upper()]
                         if df_filtre_codif_r.empty:
-                            _site_msg = site_resp or (site_filtre_pdf_resp if site_filtre_pdf_resp and site_filtre_pdf_resp != "Tous" else None)
                             st.session_state["pdf_responsable"] = None
-                            st.info(f"Aucune action restante pour « {entite_pdf_choisie} »" + (f" — site {_site_msg}." if _site_msg else "."))
+                            st.info(f"Aucune action restante pour « {entite_pdf_choisie} »" + (f" — site {site_filtre_rapport_r}." if site_filtre_rapport_r else "."))
                         else:
                             try:
                                 st.session_state["pdf_responsable"] = generer_rapport_pilote_pdf(
